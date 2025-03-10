@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>3D Shirt Studio</title>
+		<link rel="stylesheet" href="css/style.css" />
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+		/>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+			rel="stylesheet"
+		/>
+		<!-- Three.js -->
+		<script
+			async
+			src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"
+		></script>
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "https://unpkg.com/three@0.157.0/build/three.module.js",
+					"three/addons/": "https://unpkg.com/three@0.157.0/examples/jsm/"
+				}
+			}
+		</script>
+	</head>
+	<body>
+		<div class="app">
+			<!-- Main App Container -->
+			<div class="container">
+				<!-- Mobile Sidebar Toggle Button -->
+				<button class="sidebar-toggle" aria-label="Toggle Sidebar">
+					<i class="fas fa-bars"></i>
+				</button>
+
+				<!-- Mobile Backdrop -->
+				<div class="sidebar-backdrop"></div>
+
+				<!-- Sidebar -->
+				<div class="sidebar">
+					<!-- Logo -->
+					<div class="logo">
+						<img src="assets/threejs.png" alt="logo" />
+						<h1>3D Shirt <span>Studio</span></h1>
+
+						<!-- Theme Toggle Button -->
+						<button
+							id="theme-toggle"
+							class="theme-toggle"
+							aria-label="Toggle Theme"
+							title="Toggle Light/Dark Theme"
+						>
+							<i class="fas fa-sun"></i>
+						</button>
+					</div>
+
+					<!-- Customization Tabs -->
+					<div class="customizer-tabs">
+						<h2>Customize Your Shirt</h2>
+
+						<!-- Model Selection Section -->
+						<div class="section-header">
+							<i class="fas fa-tshirt"></i>
+							<h3>Choose Model Type</h3>
+						</div>
+
+						<div class="model-selector">
+							<div class="model-options">
+								<label class="model-option">
+									<input
+										type="radio"
+										name="model-type"
+										value="tshirt"
+										checked
+									/>
+									<span class="model-thumbnail tshirt-thumb">
+										<i class="fas fa-tshirt"></i>
+										<span>T-Shirt</span>
+									</span>
+								</label>
+								<label class="model-option">
+									<input type="radio" name="model-type" value="hoodie" />
+									<span class="model-thumbnail hoodie-thumb">
+										<i class="fas fa-mitten"></i>
+										<span>Hoodie</span>
+									</span>
+								</label>
+							</div>
+						</div>
+
+						<div class="section-divider"></div>
+
+						<!-- Design Options Section -->
+						<div class="section-header">
+							<i class="fas fa-palette"></i>
+							<h3>Design Options</h3>
+						</div>
+
+						<!-- Tab Navigation -->
+						<div class="tab-navigation">
+							<button
+								class="tab-btn active"
+								data-tab="color"
+								aria-label="Color Tab"
+							>
+								<i class="fas fa-palette"></i>
+								<span>Colors</span>
+							</button>
+							<button class="tab-btn" data-tab="file" aria-label="Upload Tab">
+								<i class="fas fa-image"></i>
+								<span>Upload</span>
+							</button>
+							<button class="tab-btn" data-tab="ai" aria-label="AI Design Tab">
+								<i class="fas fa-magic"></i>
+								<span>AI Design</span>
+							</button>
+						</div>
+
+						<!-- Tab Content -->
+						<div class="tab-content">
+							<!-- Color Picker -->
+							<div id="color-picker" class="tab-panel active">
+								<div class="section-title">
+									<h3>Choose a Color</h3>
+									<p>Select from the wheel or presets below</p>
+								</div>
+
+								<div class="color-wheel-container">
+									<input
+										type="color"
+										id="color-wheel"
+										value="#EFBD48"
+										aria-label="Color Wheel"
+									/>
+									<div class="selected-color-display">
+										<div class="color-preview" id="color-preview"></div>
+										<span id="color-hex">#EFBD48</span>
+									</div>
+								</div>
+
+								<div class="preset-colors">
+									<h4>Preset Colors</h4>
+									<div class="colors">
+										<!-- Colors will be added dynamically -->
+									</div>
+								</div>
+							</div>
+
+							<!-- File Upload -->
+							<div id="file-picker" class="tab-panel">
+								<div class="section-title">
+									<h3>Upload Design</h3>
+									<p>Use your own images for the shirt</p>
+								</div>
+
+								<div class="file-upload-container">
+									<label for="file-upload" class="file-upload-label">
+										<i class="fas fa-cloud-upload-alt"></i>
+										<span>Choose a file</span>
+									</label>
+									<input
+										type="file"
+										accept="image/*"
+										id="file-upload"
+										aria-label="File Upload"
+									/>
+									<p class="file-info">Supports: JPG, PNG, SVG (Max 5MB)</p>
+								</div>
+
+								<div class="preview">
+									<div class="empty-state">
+										<i class="fas fa-image"></i>
+										<p>Preview will appear here</p>
+									</div>
+								</div>
+							</div>
+
+							<!-- AI Generator -->
+							<div id="ai-picker" class="tab-panel">
+								<div class="section-title">
+									<h3>AI Design Generator</h3>
+									<p>Create unique designs with AI</p>
+								</div>
+
+								<div class="ai-input-container">
+									<textarea
+										id="ai-prompt"
+										placeholder="Describe your design idea... (e.g. 'A cosmic astronaut floating in space with stars and nebulae')"
+										aria-label="AI Prompt"
+									></textarea>
+									<button id="ai-generate" class="button primary">
+										<i class="fas fa-wand-magic-sparkles"></i>
+										Generate
+									</button>
+								</div>
+
+								<div class="ai-preview">
+									<div class="empty-state">
+										<i class="fas fa-robot"></i>
+										<p>AI generated designs will appear here</p>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div class="section-divider"></div>
+
+						<!-- Design Settings Section -->
+						<div class="section-header">
+							<i class="fas fa-sliders-h"></i>
+							<h3>Design Settings</h3>
+						</div>
+
+						<!-- Toggle Buttons -->
+						<div class="toggle-options">
+							<!-- Visibility Toggles Group -->
+							<div class="toggle-group">
+								<div class="toggle-group-title">
+									<i class="fas fa-eye"></i>
+									<span>Visibility Options</span>
+								</div>
+
+								<label class="toggle tooltip" data-tooltip="Show/Hide Logo">
+									<input
+										type="checkbox"
+										id="logo-toggle"
+										checked
+										aria-label="Toggle Logo"
+									/>
+									<span class="toggle-slider"></span>
+									<span class="toggle-label">Logo</span>
+								</label>
+
+								<label
+									class="toggle tooltip"
+									data-tooltip="Apply texture to entire shirt"
+								>
+									<input
+										type="checkbox"
+										id="texture-toggle"
+										aria-label="Toggle Texture"
+									/>
+									<span class="toggle-slider"></span>
+									<span class="toggle-label">Full Texture</span>
+								</label>
+							</div>
+
+							<!-- Logo Position Options -->
+							<div class="toggle-group">
+								<div class="toggle-group-title">
+									<i class="fas fa-crosshairs"></i>
+									<span>Logo Position</span>
+								</div>
+
+								<div class="position-buttons">
+									<button
+										id="center-logo"
+										class="position-btn active"
+										data-position="center"
+										aria-label="Center Logo"
+										data-tooltip="Center Front"
+									>
+										<i class="fas fa-bullseye"></i>
+										<span>Center</span>
+									</button>
+									<button
+										id="left-logo"
+										class="position-btn"
+										data-position="left"
+										aria-label="Left Logo"
+										data-tooltip="Left Chest"
+									>
+										<i class="fas fa-chevron-left"></i>
+										<span>Left</span>
+									</button>
+									<button
+										id="right-logo"
+										class="position-btn"
+										data-position="right"
+										aria-label="Right Logo"
+										data-tooltip="Right Chest"
+									>
+										<i class="fas fa-chevron-right"></i>
+										<span>Right</span>
+									</button>
+									<button
+										id="back-logo"
+										class="position-btn"
+										data-position="back"
+										aria-label="Back Logo"
+										data-tooltip="Center Back"
+									>
+										<i class="fas fa-arrow-down"></i>
+										<span>Back</span>
+									</button>
+								</div>
+							</div>
+						</div>
+
+						<div class="section-divider"></div>
+
+						<!-- Action Buttons Section -->
+						<div class="section-header">
+							<i class="fas fa-cogs"></i>
+							<h3>Actions</h3>
+						</div>
+
+						<div class="action-buttons">
+							<button id="download" class="button primary">
+								<i class="fas fa-download"></i>
+								Download
+							</button>
+							<button id="reset" class="button secondary">
+								<i class="fas fa-undo"></i>
+								Reset
+							</button>
+						</div>
+					</div>
+				</div>
+
+				<!-- Canvas Container -->
+				<div class="canvas-container">
+					<!-- Camera View Controls -->
+					<div class="camera-view-controls">
+						<button
+							id="front-view"
+							class="camera-view-btn active"
+							data-view="front"
+							aria-label="Front View"
+						>
+							<i class="fas fa-eye"></i>
+							<span>Front</span>
+						</button>
+						<button
+							id="back-view"
+							class="camera-view-btn"
+							data-view="back"
+							aria-label="Back View"
+						>
+							<i class="fas fa-eye"></i>
+							<span>Back</span>
+						</button>
+						<button
+							id="left-view"
+							class="camera-view-btn"
+							data-view="left"
+							aria-label="Left View"
+						>
+							<i class="fas fa-eye"></i>
+							<span>Left</span>
+						</button>
+						<button
+							id="right-view"
+							class="camera-view-btn"
+							data-view="right"
+							aria-label="Right View"
+						>
+							<i class="fas fa-eye"></i>
+							<span>Right</span>
+						</button>
+					</div>
+
+					<!-- Camera Controls -->
+					<div class="camera-controls">
+						<button
+							id="zoom-in"
+							class="control-btn"
+							aria-label="Zoom In"
+							title="Zoom In"
+							onclick="window.directZoomIn()"
+						>
+							<i class="fas fa-plus"></i>
+						</button>
+						<button
+							id="zoom-out"
+							class="control-btn"
+							aria-label="Zoom Out"
+							title="Zoom Out"
+							onclick="window.directZoomOut()"
+						>
+							<i class="fas fa-minus"></i>
+						</button>
+						<button
+							id="reset-camera"
+							class="control-btn"
+							aria-label="Reset Camera"
+							title="Reset Camera"
+							onclick="window.directResetCamera && window.directResetCamera()"
+						>
+							<i class="fas fa-sync-alt"></i>
+						</button>
+						<button
+							id="rotate-view"
+							class="control-btn"
+							aria-label="Auto Rotate"
+							title="Auto Rotate"
+							onclick="window.TOGGLE_ROTATION()"
+						>
+							<i class="fas fa-redo"></i>
+						</button>
+					</div>
+
+					<!-- Loading Overlay -->
+					<div class="loading-overlay">
+						<div class="spinner"></div>
+						<p>Loading 3D model...</p>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Script Imports -->
+		<script type="module" src="js/main.js"></script>
+
+		<!-- Debug Scripts (remove in production) -->
+		<script src="debug-texture-mapper.js"></script>
+
+		<!-- Direct camera control script -->
+		<script>
+			// Create direct zoom functions that bypass the regular event system
+			window.directZoomIn = function() {
+				console.log("Direct Zoom In clicked");
+				// Try to access the camera and controls from the global scope
+				if (window.directZoomCamera) {
+					window.directZoomCamera("in");
+					return;
+				}
+				
+				// Find the scene from the window or document
+				const camera = window.camera;
+				const controls = window.controls;
+				const renderer = window.renderer;
+				const scene = window.scene;
+				
+				if (camera) {
+					// Get zoom direction
+					const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+					// Move camera forward along view direction
+					camera.position.addScaledVector(direction, 0.3);
+					
+					// Update controls if available
+					if (controls) controls.update();
+					
+					// Render the scene
+					if (renderer && scene) renderer.render(scene, camera);
+					
+					console.log("Direct zoom in applied");
+				} else {
+					console.warn("Camera not found for direct zoom");
+				}
+			};
+			
+			window.directZoomOut = function() {
+				console.log("Direct Zoom Out clicked");
+				// Try to access the camera and controls from the global scope
+				if (window.directZoomCamera) {
+					window.directZoomCamera("out");
+					return;
+				}
+				
+				// Find the scene from the window or document
+				const camera = window.camera;
+				const controls = window.controls;
+				const renderer = window.renderer;
+				const scene = window.scene;
+				
+				if (camera) {
+					// Get zoom direction
+					const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+					// Move camera backward along view direction
+					camera.position.addScaledVector(direction, -0.3);
+					
+					// Update controls if available
+					if (controls) controls.update();
+					
+					// Render the scene
+					if (renderer && scene) renderer.render(scene, camera);
+					
+					console.log("Direct zoom out applied");
+				} else {
+					console.warn("Camera not found for direct zoom");
+				}
+			};
+		</script>
+	</body>
+</html>
