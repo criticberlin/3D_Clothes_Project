@@ -35,11 +35,20 @@ const modelConfig = {
                 name: "Right Sleeve"
             }
         },
-        fabricTextureStrength: 0.6,
-        bumpMapStrength: 0.05,
+        fabricTextureStrength: 0.8,
+        bumpMapStrength: 0.08,
         materialSettings: {
-            roughness: 0.7,
-            metalness: 0.05
+            roughness: 0.65,
+            metalness: 0.02,
+            clearcoat: 0.08,
+            clearcoatRoughness: 0.4,
+            transmission: 0.01,
+            thickness: 0.3,
+            envMapIntensity: 0.6,
+            anisotropy: 0.3,
+            normalScale: 0.7,
+            displacementScale: 0.02,
+            aoMapIntensity: 0.8
         }
     },
     hoodie: {
@@ -103,6 +112,162 @@ const textureLoader = new THREE.TextureLoader();
 
 // Array of available views for iteration
 const availableViews = ['front', 'back', 'left_arm', 'right_arm'];
+
+/**
+ * Predefined positions for texture placements
+ * These represent common placement options for images on clothing
+ */
+const predefinedPositions = {
+    center: { x: 0.5, y: 0.5, scale: 1.0, rotation: 0 },
+    top: { x: 0.5, y: 0.25, scale: 0.9, rotation: 0 },
+    bottom: { x: 0.5, y: 0.75, scale: 0.9, rotation: 0 },
+    left: { x: 0.25, y: 0.5, scale: 0.8, rotation: 0 },
+    right: { x: 0.75, y: 0.5, scale: 0.8, rotation: 0 },
+    top_left: { x: 0.25, y: 0.25, scale: 0.7, rotation: 0 },
+    top_right: { x: 0.75, y: 0.25, scale: 0.7, rotation: 0 },
+    bottom_left: { x: 0.25, y: 0.75, scale: 0.7, rotation: 0 },
+    bottom_right: { x: 0.75, y: 0.75, scale: 0.7, rotation: 0 },
+    pocket: { x: 0.35, y: 0.3, scale: 0.4, rotation: 0 },
+    sleeve: { x: 0.5, y: 0.5, scale: 0.6, rotation: 0 }
+};
+
+// Add new advanced texture utilities
+// Simplex noise implementation for realistic texture generation
+const SimplexNoise = {
+    grad3: [
+        [1, 1, 0], [-1, 1, 0], [1, -1, 0], [-1, -1, 0],
+        [1, 0, 1], [-1, 0, 1], [1, 0, -1], [-1, 0, -1],
+        [0, 1, 1], [0, -1, 1], [0, 1, -1], [0, -1, -1]
+    ],
+    p: [...Array(256)].map(() => Math.floor(Math.random() * 256)),
+
+    // Populate the permutation table
+    init() {
+        this.perm = [...Array(512)].map((_, i) => this.p[i & 255]);
+        return this;
+    },
+
+    // 2D simplex noise
+    noise2D(x, y) {
+        // Find unit grid cell containing point
+        let X = Math.floor(x);
+        let Y = Math.floor(y);
+
+        // Get relative xy coordinates of point within that cell
+        x = x - X;
+        y = y - Y;
+
+        // Wrap to 0-255
+        X = X & 255;
+        Y = Y & 255;
+
+        // Calculate noise contributions from each corner
+        const n0 = this.dot(this.grad3[this.perm[(X + this.perm[Y]) & 255] % 12], x, y);
+        const n1 = this.dot(this.grad3[this.perm[(X + 1 + this.perm[Y]) & 255] % 12], x - 1, y);
+        const n2 = this.dot(this.grad3[this.perm[(X + this.perm[Y + 1]) & 255] % 12], x, y - 1);
+        const n3 = this.dot(this.grad3[this.perm[(X + 1 + this.perm[Y + 1]) & 255] % 12], x - 1, y - 1);
+
+        // Linear interpolation
+        const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+        const u = fade(x);
+        const v = fade(y);
+
+        // Interpolate the four results
+        const nx0 = n0 + u * (n1 - n0);
+        const nx1 = n2 + u * (n3 - n2);
+        const nxy = nx0 + v * (nx1 - nx0);
+
+        // Convert to range [0, 1]
+        return (nxy + 1) * 0.5;
+    },
+
+    dot(g, x, y) {
+        return g[0] * x + g[1] * y;
+    }
+}.init();
+
+// Fractal Brownian Motion function for layered noise
+function fbm(x, y, octaves = 6, lacunarity = 2.0, gain = 0.5) {
+    let amplitude = 0.5;
+    let frequency = 1.0;
+    let sum = 0;
+    let sumOfAmplitudes = 0;
+
+    for (let i = 0; i < octaves; i++) {
+        sum += amplitude * SimplexNoise.noise2D(x * frequency, y * frequency);
+        sumOfAmplitudes += amplitude;
+        amplitude *= gain;
+        frequency *= lacunarity;
+    }
+
+    return sum / sumOfAmplitudes;
+}
+
+// Calculate ambient occlusion based on geometry factors
+function calculateAO(x, y, width, height, canvas, strength = 0.5) {
+    // Normalize coordinates to 0-1 range
+    const nx = x / canvas.width;
+    const ny = y / canvas.height;
+
+    // Get distance from edges (in UV space)
+    const distFromLeftEdge = nx;
+    const distFromRightEdge = 1 - nx;
+    const distFromTopEdge = ny;
+    const distFromBottomEdge = 1 - ny;
+
+    // Get minimum distance to edge
+    const minDist = Math.min(
+        distFromLeftEdge,
+        distFromRightEdge,
+        distFromTopEdge,
+        distFromBottomEdge
+    );
+
+    // Apply easing function to make the darkening more natural
+    const easedValue = Math.pow(Math.min(1, minDist * 15), 2.0);
+
+    // Scale by strength parameter
+    return 1 - ((1 - easedValue) * strength);
+}
+
+// Calculates fabric wrinkle density based on position
+function fabricWrinkleFactor(x, y, width, height, material) {
+    // Get normalized coordinates
+    const nx = x / width;
+    const ny = y / height;
+
+    // Define wrinkle factors based on material and position
+    const wrinkleIntensity = material.wrinkling || 0.3;
+
+    // Areas with more wrinkling (like under arms, curves)
+    const isWrinkleZone =
+        (nx < 0.2 || nx > 0.8) || // sides
+        (ny > 0.7 && (nx > 0.3 && nx < 0.7)); // bottom center
+
+    // Add noise-based detail to the wrinkle factor
+    const noiseValue = fbm(nx * 10, ny * 10, 4, 2.2, 0.5);
+
+    // Calculate the wrinkle factor
+    let factor = noiseValue * wrinkleIntensity;
+
+    // Increase factor in natural wrinkle zones
+    if (isWrinkleZone) {
+        factor *= 1.5;
+    }
+
+    return Math.min(1, factor);
+}
+
+// Calculate fabric displacement for 3D-like effects
+function calculateDisplacement(uvX, uvY, textureSize) {
+    // Multiple layers of noise at different frequencies
+    const largeScale = fbm(uvX * 2, uvY * 2, 3, 2.0, 0.5) * 0.7;
+    const mediumScale = fbm(uvX * 5, uvY * 5, 3, 2.0, 0.5) * 0.2;
+    const smallScale = fbm(uvX * 12, uvY * 15, 2, 2.0, 0.5) * 0.1;
+
+    // Combine the layers
+    return largeScale + mediumScale + smallScale;
+}
 
 /**
  * Initialize texture mapper with base textures
@@ -204,28 +369,120 @@ export function initTextureMapper(fabricTextureUrl, bumpMapUrl, modelType = 'tsh
 }
 
 /**
- * Create the base texture combining fabric texture and any custom images
+ * Creates a combined texture that includes the base fabric and all custom uploaded images
+ * Now with advanced fabric simulation and effects
  * @returns {THREE.Texture} The combined texture
  */
 function createBaseTexture() {
     // Create a canvas to draw the combined texture
     const canvas = document.createElement('canvas');
-    canvas.width = 1024;
-    canvas.height = 1024;
+    canvas.width = 2048; // Increased resolution for better detail
+    canvas.height = 2048;
     const ctx = canvas.getContext('2d');
 
-    // Draw base fabric texture
+    // Get material settings for current model
+    const materialSettings = modelConfig[textureState.currentModel].materialSettings || {};
+
+    // Create background with advanced fabric texture simulation
     if (textureState.fabricTexture && textureState.fabricTexture.image) {
+        // Draw base fabric texture with advanced blending
         ctx.globalAlpha = modelConfig[textureState.currentModel].fabricTextureStrength;
         ctx.drawImage(textureState.fabricTexture.image, 0, 0, canvas.width, canvas.height);
         ctx.globalAlpha = 1.0;
+
+        // Add detailed fabric structure with noise overlay
+        ctx.globalCompositeOperation = 'overlay';
+
+        // Draw fabric structure using noise functions
+        const baseColor = state.color || '#FFFFFF';
+        // Parse the base color to RGB values for manipulation
+        const colorMatch = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(baseColor);
+        const rgb = colorMatch ? {
+            r: parseInt(colorMatch[1], 16),
+            g: parseInt(colorMatch[2], 16),
+            b: parseInt(colorMatch[3], 16)
+        } : { r: 255, g: 255, b: 255 };
+
+        // Draw advanced fabric texture with micro-details
+        const pixelData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = pixelData.data;
+
+        for (let y = 0; y < canvas.height; y++) {
+            for (let x = 0; x < canvas.width; x++) {
+                const i = (y * canvas.width + x) * 4;
+
+                // Normalized coordinates for noise function
+                const nx = x / canvas.width;
+                const ny = y / canvas.height;
+
+                // Calculate various fabric effects
+                const noise = fbm(nx * 20, ny * 20, 6, 2.0, 0.5) * 0.15;
+                const largeNoise = fbm(nx * 4, ny * 3, 3, 2.0, 0.6) * 0.1;
+
+                // Calculate wrinkle factor for this position
+                const wrinkleFactor = fabricWrinkleFactor(x, y, canvas.width, canvas.height, materialSettings);
+
+                // Calculate ambient occlusion
+                const ao = calculateAO(x, y, canvas.width, canvas.height, canvas, 0.4);
+
+                // Calculate geometric displacement for 3D-like effect
+                const displacement = calculateDisplacement(nx, ny, canvas.width) * 0.2;
+
+                // Apply all effects
+                const totalEffect = 1.0 + noise + largeNoise - wrinkleFactor + displacement;
+                const aoFactor = ao * (1 - (wrinkleFactor * 0.5));
+
+                // Apply to pixel data
+                data[i] = Math.min(255, Math.max(0, data[i] * totalEffect * aoFactor));
+                data[i + 1] = Math.min(255, Math.max(0, data[i + 1] * totalEffect * aoFactor));
+                data[i + 2] = Math.min(255, Math.max(0, data[i + 2] * totalEffect * aoFactor));
+            }
+        }
+
+        ctx.putImageData(pixelData, 0, 0);
+        ctx.globalCompositeOperation = 'source-over';
     } else {
-        // Fill with default color if no fabric texture
+        // Fill with advanced procedural texture if no fabric texture
         ctx.fillStyle = state.color || '#FFFFFF';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Create procedural fabric texture
+        const pixelData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = pixelData.data;
+
+        for (let y = 0; y < canvas.height; y++) {
+            for (let x = 0; x < canvas.width; x++) {
+                const i = (y * canvas.width + x) * 4;
+
+                // Normalized coordinates for noise
+                const nx = x / canvas.width;
+                const ny = y / canvas.height;
+
+                // Multi-layered noise for realistic fabric
+                const baseNoise = fbm(nx * 20, ny * 20, 5, 2.0, 0.5);
+                const detailNoise = fbm(nx * 60, ny * 60, 3, 2.0, 0.5);
+                const largeNoise = fbm(nx * 4, ny * 4, 2, 2.0, 0.5);
+
+                // Calculate fabric features
+                const weavePattern = Math.sin(nx * Math.PI * 100) * Math.sin(ny * Math.PI * 100) * 0.05;
+
+                // Calculate AO
+                const ao = calculateAO(x, y, canvas.width, canvas.height, canvas, 0.5);
+
+                // Combine all effects
+                const totalFactor = (0.9 + (baseNoise * 0.2) + (detailNoise * 0.1) + weavePattern) * ao;
+
+                // Apply to pixel data
+                data[i] = Math.min(255, Math.max(0, data[i] * totalFactor));
+                data[i + 1] = Math.min(255, Math.max(0, data[i + 1] * totalFactor));
+                data[i + 2] = Math.min(255, Math.max(0, data[i + 2] * totalFactor));
+            }
+        }
+
+        ctx.putImageData(pixelData, 0, 0);
     }
 
-    // Composite custom images for each view
+    // Composite custom images for each view with advanced blending and effects
     for (const view of availableViews) {
         const imageData = textureState.customImages[view];
         if (imageData.texture && imageData.texture.image) {
@@ -245,18 +502,36 @@ function createBaseTexture() {
             const centerX = x + width / 2;
             const centerY = y + height / 2;
 
-            // Position adjustment based on image position
-            const posX = centerX + (imageData.position.x - 0.5) * width;
-            const posY = centerY + (imageData.position.y - 0.5) * height;
+            // Calculate optimal image placement based on UV map analysis
+            // This minimizes stretching and distortion
+            const uvAnalysis = analyzeUVArea(uvRect, view, textureState.currentModel);
+            const optimizedPosition = getOptimizedPosition(imageData.position, uvAnalysis);
 
-            // Apply transformations: translate to position, rotate, and scale
+            // Position adjustment based on optimized image position
+            const posX = centerX + (optimizedPosition.x - 0.5) * width;
+            const posY = centerY + (optimizedPosition.y - 0.5) * height;
+
+            // Apply transformations with advanced calculations
             ctx.translate(posX, posY);
             ctx.rotate(imageData.rotation * Math.PI / 180);
-            ctx.scale(imageData.scale, imageData.scale);
 
-            // Draw the image centered at origin
+            // Apply non-uniform scaling based on UV distortion analysis
+            const { scaleX, scaleY } = calculateNonUniformScale(
+                imageData.scale,
+                uvAnalysis.stretchFactorU,
+                uvAnalysis.stretchFactorV
+            );
+
+            // FIX: Apply vertical flip and scale
+            ctx.scale(scaleX, -scaleY);
+
+            // Draw the image with advanced blending and effects
             const imgWidth = imageData.texture.image.width;
             const imgHeight = imageData.texture.image.height;
+
+            // Apply special blending mode for more realistic integration with fabric
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.globalAlpha = 0.95;
             ctx.drawImage(
                 imageData.texture.image,
                 -imgWidth / 2,
@@ -264,6 +539,50 @@ function createBaseTexture() {
                 imgWidth,
                 imgHeight
             );
+
+            // Apply overlay to enhance colors
+            ctx.globalCompositeOperation = 'overlay';
+            ctx.globalAlpha = 0.3;
+            ctx.drawImage(
+                imageData.texture.image,
+                -imgWidth / 2,
+                -imgHeight / 2,
+                imgWidth,
+                imgHeight
+            );
+
+            // Reset composite operation and apply fabric texture overlay
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.globalAlpha = 0.2;
+
+            // Generate fabric overlay that will affect the printed image
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = imgWidth;
+            tempCanvas.height = imgHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            // Draw fabric grain overlay
+            for (let ty = 0; ty < imgHeight; ty += 2) {
+                for (let tx = 0; tx < imgWidth; tx += 2) {
+                    // Normalized coordinates
+                    const nx = tx / imgWidth;
+                    const ny = ty / imgHeight;
+
+                    // Calculate fabric grain pattern
+                    const grainNoise = SimplexNoise.noise2D(nx * 50, ny * 50) * 0.15;
+
+                    // Set pixel color based on noise
+                    const alpha = 0.1 + grainNoise;
+                    tempCtx.fillStyle = `rgba(240, 240, 240, ${alpha})`;
+                    tempCtx.fillRect(tx, ty, 2, 2);
+                }
+            }
+
+            // Apply the fabric grain overlay to make the image appear printed
+            ctx.drawImage(tempCanvas, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight);
+
+            // Reset alpha
+            ctx.globalAlpha = 1.0;
 
             // Restore context
             ctx.restore();
@@ -278,14 +597,97 @@ function createBaseTexture() {
     const debugTextureView = document.getElementById('texture-debug-view');
     if (debugTextureView) {
         debugTextureView.innerHTML = '';
-        const img = new Image();
-        img.src = canvas.toDataURL();
-        img.style.width = '100%';
-        img.style.height = 'auto';
-        debugTextureView.appendChild(img);
+
+        // Clone canvas to debug view for visualization
+        const debugCanvas = canvas.cloneNode();
+        debugCanvas.getContext('2d').drawImage(canvas, 0, 0);
+        debugTextureView.appendChild(debugCanvas);
     }
 
     return texture;
+}
+
+/**
+ * Analyzes a UV area to determine distortion and optimal placement
+ * @param {Object} uvRect - The UV rectangle
+ * @param {string} view - The view
+ * @param {string} modelType - The model type
+ * @returns {Object} Analysis data
+ */
+function analyzeUVArea(uvRect, view, modelType) {
+    // Calculate UV dimensions
+    const uWidth = uvRect.u2 - uvRect.u1;
+    const vHeight = uvRect.v2 - uvRect.v1;
+
+    // Get view-specific data
+    const viewConfig = modelConfig[modelType].views[view];
+
+    // Calculate stretch factors based on model geometry
+    // (This would ideally come from the 3D model, but we'll approximate)
+    let stretchFactorU = 1.0;
+    let stretchFactorV = 1.0;
+
+    // Approximate stretch factors based on view
+    switch (view) {
+        case 'front':
+        case 'back':
+            // These are usually mapped more directly
+            stretchFactorU = 1.0;
+            stretchFactorV = 1.0;
+            break;
+        case 'left_arm':
+        case 'right_arm':
+            // Arms usually have more horizontal stretch
+            stretchFactorU = 1.2;
+            stretchFactorV = 0.9;
+            break;
+    }
+
+    // Calculate optimal placement center point
+    // By default, center of the UV area
+    const optimalCenterU = 0.5;
+    const optimalCenterV = 0.5;
+
+    return {
+        uWidth,
+        vHeight,
+        stretchFactorU,
+        stretchFactorV,
+        optimalCenterU,
+        optimalCenterV
+    };
+}
+
+/**
+ * Calculate non-uniform scale based on UV stretch factors
+ * @param {number} baseScale - The base scale value
+ * @param {number} stretchU - U stretch factor
+ * @param {number} stretchV - V stretch factor
+ * @returns {Object} Scale factors for X and Y
+ */
+function calculateNonUniformScale(baseScale, stretchU, stretchV) {
+    // Calculate compensated scale to reduce distortion
+    const scaleX = baseScale / stretchU;
+    const scaleY = baseScale / stretchV;
+
+    return { scaleX, scaleY };
+}
+
+/**
+ * Get optimized position based on UV analysis
+ * @param {Object} position - Current position
+ * @param {Object} uvAnalysis - UV analysis data
+ * @returns {Object} Optimized position
+ */
+function getOptimizedPosition(position, uvAnalysis) {
+    // Calculate blend factor between user position and optimal position
+    const blendFactor = 0.2; // 20% optimal, 80% user choice
+
+    // Blend between user position and optimal position
+    const x = position.x * (1 - blendFactor) + uvAnalysis.optimalCenterU * blendFactor;
+    const y = position.y * (1 - blendFactor) + uvAnalysis.optimalCenterV * blendFactor;
+
+    return { x, y };
 }
 
 /**
@@ -360,6 +762,7 @@ function updateCombinedTexture() {
 
 /**
  * Set up interactive bounding boxes for each view
+ * Creates and positions visual boxes that represent each mappable area
  */
 function setupBoundingBoxes() {
     const container = document.querySelector('.canvas-container');
@@ -375,27 +778,93 @@ function setupBoundingBoxes() {
         boundingBox.className = `texture-bounding-box ${view}-view-box`;
         boundingBox.dataset.view = view;
         boundingBox.style.display = 'none';
+        boundingBox.style.opacity = '0.1'; // Set opacity to 10%
 
-        // Add title for the box
+        // Add title for the box with modern design
         const boxTitle = document.createElement('div');
         boxTitle.className = 'box-title';
         boxTitle.textContent = modelConfig[textureState.currentModel].views[view].name || view;
+        boxTitle.style.fontSize = '11px'; // Smaller font size
+        boxTitle.style.fontWeight = '600'; // Semibold
+        boxTitle.style.padding = '3px 6px';
+        boxTitle.style.borderRadius = '4px';
+        boxTitle.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+        boxTitle.style.color = 'white';
+        boxTitle.style.pointerEvents = 'none'; // Don't interfere with interactions
         boundingBox.appendChild(boxTitle);
 
-        // Create transform controls
+        // Minimalist drag indicator
+        const dragArea = document.createElement('div');
+        dragArea.className = 'drag-area';
+        dragArea.innerHTML = '<i class="fas fa-arrows-alt"></i>';
+        dragArea.style.fontSize = '10px';
+        dragArea.style.opacity = '0.8';
+        dragArea.style.position = 'absolute';
+        dragArea.style.top = '50%';
+        dragArea.style.left = '50%';
+        dragArea.style.transform = 'translate(-50%, -50%)';
+        dragArea.style.pointerEvents = 'none'; // Visual only
+        boundingBox.appendChild(dragArea);
+
+        // Create transform controls - smaller and minimalist
+        const controlsContainer = document.createElement('div');
+        controlsContainer.className = 'transform-controls-container';
+        controlsContainer.style.position = 'absolute';
+        controlsContainer.style.bottom = '3px';
+        controlsContainer.style.right = '3px';
+        controlsContainer.style.display = 'flex';
+        controlsContainer.style.gap = '5px';
+
         const rotateHandle = document.createElement('div');
         rotateHandle.className = 'transform-handle rotate-handle';
         rotateHandle.innerHTML = '<i class="fas fa-sync-alt"></i>';
+        rotateHandle.title = 'Rotate Image';
+        rotateHandle.style.fontSize = '8px';
+        rotateHandle.style.padding = '3px';
+        rotateHandle.style.borderRadius = '50%';
+        rotateHandle.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+        rotateHandle.style.color = '#333';
 
         const scaleHandle = document.createElement('div');
         scaleHandle.className = 'transform-handle scale-handle';
         scaleHandle.innerHTML = '<i class="fas fa-expand-arrows-alt"></i>';
+        scaleHandle.title = 'Scale Image';
+        scaleHandle.style.fontSize = '8px';
+        scaleHandle.style.padding = '3px';
+        scaleHandle.style.borderRadius = '50%';
+        scaleHandle.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+        scaleHandle.style.color = '#333';
 
-        boundingBox.appendChild(rotateHandle);
-        boundingBox.appendChild(scaleHandle);
+        // Add remove button for each view
+        const removeButton = document.createElement('div');
+        removeButton.className = 'transform-handle remove-handle';
+        removeButton.innerHTML = '<i class="fas fa-times"></i>';
+        removeButton.title = 'Remove Image';
+        removeButton.style.fontSize = '8px';
+        removeButton.style.padding = '3px';
+        removeButton.style.borderRadius = '50%';
+        removeButton.style.backgroundColor = 'rgba(255, 100, 100, 0.7)';
+        removeButton.style.color = 'white';
+
+        removeButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            clearCustomImage(view);
+        });
+
+        controlsContainer.appendChild(rotateHandle);
+        controlsContainer.appendChild(scaleHandle);
+        controlsContainer.appendChild(removeButton);
+        boundingBox.appendChild(controlsContainer);
 
         container.appendChild(boundingBox);
     }
+
+    // Update CSS for all boxes to make them smaller
+    document.querySelectorAll('.texture-bounding-box').forEach(box => {
+        box.style.border = '1px solid rgba(255, 255, 255, 0.3)';
+        box.style.boxShadow = '0 0 5px rgba(0, 0, 0, 0.1)';
+        box.style.transform = 'scale(0.8)'; // Make boxes smaller
+    });
 
     // Initial positioning based on model configuration
     updateBoundingBoxPositions();
@@ -412,6 +881,7 @@ function setupBoundingBoxes() {
 
 /**
  * Update the positions of all bounding boxes based on current model config
+ * This ensures bounding boxes match the UV mapping on the 3D model
  */
 function updateBoundingBoxPositions() {
     const container = document.querySelector('.canvas-container');
@@ -423,13 +893,17 @@ function updateBoundingBoxPositions() {
         const boundingBox = container.querySelector(`.texture-bounding-box.${view}-view-box`);
         if (!boundingBox) continue;
 
+        // Get specific bounds for this view from model config
         const bounds = modelConfig[textureState.currentModel].views[view].bounds;
 
-        // Calculate pixel positions
+        // Calculate pixel positions - make sure the boxes are correctly sized and positioned
         boundingBox.style.left = `${bounds.x * 100}%`;
         boundingBox.style.top = `${bounds.y * 100}%`;
         boundingBox.style.width = `${bounds.width * 100}%`;
         boundingBox.style.height = `${bounds.height * 100}%`;
+
+        // Add a visual indicator of the active area
+        boundingBox.style.boxShadow = 'inset 0 0 0 2px rgba(255,255,255,0.8)';
     }
 }
 
@@ -443,38 +917,203 @@ export function showBoundingBoxesForCameraView(cameraView) {
 
     // Hide all bounding boxes first
     const allBoxes = container.querySelectorAll('.texture-bounding-box');
-    allBoxes.forEach(box => box.style.display = 'none');
+    allBoxes.forEach(box => {
+        // Reset 3D transforms
+        box.style.transform = 'none';
+        box.style.display = 'none';
+        // Reset primary status
+        box.dataset.primaryView = 'false';
+    });
 
     // Determine which bounding boxes to show based on camera view
-    let boxesToShow = [];
+    // Now we'll allow multiple boxes to be visible based on the viewable areas
+    let visibleViews = [];
+    let primaryView = ''; // The main view in focus
 
     switch (cameraView) {
         case 'front':
-            boxesToShow = ['front', 'left_arm', 'right_arm'];
+            // Front angle shows front and partial arms
+            visibleViews = ['front', 'left_arm', 'right_arm'];
+            primaryView = 'front';
             break;
         case 'back':
-            boxesToShow = ['back'];
+            // Back angle shows back and partial arms
+            visibleViews = ['back', 'left_arm', 'right_arm'];
+            primaryView = 'back';
             break;
         case 'left':
-            boxesToShow = ['left_arm'];
+            // Left side shows left arm and partial front/back
+            visibleViews = ['left_arm', 'front', 'back'];
+            primaryView = 'left_arm';
             break;
         case 'right':
-            boxesToShow = ['right_arm'];
+            // Right side shows right arm and partial front/back
+            visibleViews = ['right_arm', 'front', 'back'];
+            primaryView = 'right_arm';
             break;
         default:
-            boxesToShow = [mapCameraViewToTextureView(cameraView)];
+            // For any custom views, map to the most relevant texture area
+            const mappedView = mapCameraViewToTextureView(cameraView);
+            visibleViews = [mappedView];
+            primaryView = mappedView;
     }
 
-    // Show the appropriate boxes
-    boxesToShow.forEach(view => {
+    // Show the visible boxes with 3D perspective effect
+    visibleViews.forEach((view, index) => {
         const box = container.querySelector(`.texture-bounding-box.${view}-view-box`);
-        if (box && textureState.customImages[view].texture) {
-            box.style.display = 'block';
+        if (box) {
+            // Only show if there's a texture or it's the active area
+            const isPrimary = view === primaryView;
+
+            if (textureState.customImages[view].texture ||
+                textureState.activeBoundingBox === view ||
+                isPrimary) {
+
+                box.style.display = 'block';
+
+                // Set primary view status
+                box.dataset.primaryView = isPrimary ? 'true' : 'false';
+
+                // Apply 3D perspective effect based on camera angle
+                apply3DPerspective(box, view, cameraView, isPrimary, index);
+            }
         }
     });
 
     // Update perspective transform based on camera view
     updatePerspectiveTransform(cameraView);
+
+    // Update the active view in the texture state
+    textureState.activeView = mapCameraViewToTextureView(cameraView);
+
+    // For debugging
+    console.log(`Camera view: ${cameraView}, Visible areas:`, visibleViews);
+}
+
+/**
+ * Apply 3D perspective effect to make boxes appear to float above the model
+ * @param {HTMLElement} box - The bounding box element
+ * @param {string} view - The view this box represents
+ * @param {string} cameraView - Current camera view
+ * @param {boolean} isPrimary - Whether this is the primary view
+ * @param {number} index - Index for staggered positioning
+ */
+function apply3DPerspective(box, view, cameraView, isPrimary, index) {
+    // Base elevation (px) - how far the box floats above the model
+    const baseElevation = isPrimary ? 50 : 30;
+
+    // Different transformations for each camera angle
+    let transform = '';
+    let zIndex = 100 + (isPrimary ? 10 : index);
+
+    // Calculate perspective strength based on angle
+    const perspectiveStrength = isPrimary ? 1 : 0.7;
+
+    // Apply appropriate transforms based on camera view and area
+    switch (cameraView) {
+        case 'front':
+            if (view === 'front') {
+                // Front box is directly facing camera
+                transform = `translateZ(${baseElevation}px)`;
+            } else if (view === 'left_arm') {
+                // Left arm box is angled to the left
+                transform = `translateZ(${baseElevation * 0.7}px) rotateY(-30deg) translateX(-20px)`;
+            } else if (view === 'right_arm') {
+                // Right arm box is angled to the right
+                transform = `translateZ(${baseElevation * 0.7}px) rotateY(30deg) translateX(20px)`;
+            }
+            break;
+
+        case 'back':
+            if (view === 'back') {
+                // Back box is directly facing camera when in back view
+                transform = `translateZ(${baseElevation}px)`;
+            } else if (view === 'left_arm') {
+                // Left arm is now on the right side when viewing from back
+                transform = `translateZ(${baseElevation * 0.7}px) rotateY(30deg) translateX(20px)`;
+            } else if (view === 'right_arm') {
+                // Right arm is now on the left side when viewing from back
+                transform = `translateZ(${baseElevation * 0.7}px) rotateY(-30deg) translateX(-20px)`;
+            }
+            break;
+
+        case 'left':
+            if (view === 'left_arm') {
+                // Left arm is primary when in left view
+                transform = `translateZ(${baseElevation}px)`;
+            } else if (view === 'front') {
+                // Front is angled when viewing from left
+                transform = `translateZ(${baseElevation * 0.7}px) rotateY(45deg) translateX(15px)`;
+            } else if (view === 'back') {
+                // Back is angled when viewing from left
+                transform = `translateZ(${baseElevation * 0.7}px) rotateY(-45deg) translateX(-15px)`;
+            }
+            break;
+
+        case 'right':
+            if (view === 'right_arm') {
+                // Right arm is primary when in right view
+                transform = `translateZ(${baseElevation}px)`;
+            } else if (view === 'front') {
+                // Front is angled when viewing from right
+                transform = `translateZ(${baseElevation * 0.7}px) rotateY(-45deg) translateX(-15px)`;
+            } else if (view === 'back') {
+                // Back is angled when viewing from right
+                transform = `translateZ(${baseElevation * 0.7}px) rotateY(45deg) translateX(15px)`;
+            }
+            break;
+    }
+
+    // Apply the 3D transform
+    box.style.transform = transform;
+    box.style.zIndex = zIndex;
+
+    // Add 3D appearance class
+    box.classList.add('box-3d');
+
+    // Add modern material design label with view name
+    if (!box.querySelector('.view-label')) {
+        const viewLabel = document.createElement('div');
+        viewLabel.className = 'view-label';
+        viewLabel.innerHTML = `
+            <i class="fas fa-layer-group"></i>
+            <span>${view.replace('_', ' ').toUpperCase()}</span>
+        `;
+        box.appendChild(viewLabel);
+    }
+
+    // Add modern snapping indicator badges
+    if (!box.querySelector('.snap-indicators')) {
+        const snapIndicators = document.createElement('div');
+        snapIndicators.className = 'snap-indicators';
+
+        // Add position badges that show available positions
+        const positions = ['center', 'top', 'bottom', 'left', 'right'];
+        positions.forEach(pos => {
+            const badge = document.createElement('div');
+            badge.className = `snap-badge snap-${pos}`;
+            badge.innerHTML = `<i class="fas fa-crosshairs"></i>`;
+            badge.title = `Snap to ${pos}`;
+            badge.addEventListener('click', (e) => {
+                e.stopPropagation();
+                setTexturePosition(pos, view);
+            });
+            snapIndicators.appendChild(badge);
+        });
+
+        box.appendChild(snapIndicators);
+    }
+
+    // Add float animation if primary
+    if (isPrimary) {
+        box.classList.add('box-float');
+
+        // Add a pulsing highlight effect for the primary box
+        box.style.animation = `floatBox 4s ease-in-out infinite${isPrimary ? ', pulseHighlight 2s ease-in-out infinite' : ''}`;
+    } else {
+        box.classList.remove('box-float');
+        box.style.animation = '';
+    }
 }
 
 /**
@@ -546,7 +1185,7 @@ function updatePerspectiveTransform(view) {
 }
 
 /**
- * Set up mouse/touch interactions for transforming images
+ * Set up event listeners for texture interactions
  */
 function setupInteractions() {
     const container = document.querySelector('.canvas-container');
@@ -567,27 +1206,79 @@ function setupInteractions() {
     // Handle camera view changes
     window.addEventListener('camera-view-change', (e) => {
         const view = e.detail.view;
-        textureState.activeView = mapCameraViewToTextureView(view);
+
+        // Map camera view to texture view
+        const mappedView = mapCameraViewToTextureView(view);
+
+        // Update active view but don't change the active bounding box
+        // This preserves the active editing area across view changes
+        textureState.activeView = mappedView;
 
         // Show the appropriate bounding boxes for this camera view
         showBoundingBoxesForCameraView(view);
+
+        // Add visual feedback about the camera change
+        const toastMessage = `Switched to ${view} view`;
+        if (typeof showToast === 'function') {
+            showToast(toastMessage);
+        } else {
+            console.log(toastMessage);
+        }
     });
 
     // Listen for model changes
     window.addEventListener('model-loaded', (e) => {
         if (e.detail && e.detail.model) {
             textureState.currentModel = e.detail.model;
+
+            // When model changes, update the bounding boxes
+            setupBoundingBoxes();
             updateBoundingBoxPositions();
             updateCombinedTexture();
+
+            // Show the appropriate bounding boxes for current view
+            showBoundingBoxesForCameraView(state.cameraView || 'front');
         }
     });
 
     // Add debug key shortcut to toggle texture debug view
     document.addEventListener('keydown', (e) => {
+        // Ctrl+Shift+D to toggle debug view
         if (e.ctrlKey && e.shiftKey && e.key === 'D') {
             const debugView = document.getElementById('texture-debug-view');
             if (debugView) {
                 debugView.style.display = debugView.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
+        // Ctrl+Shift+A to toggle all bounding boxes
+        if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+            const allBoxes = container.querySelectorAll('.texture-bounding-box');
+            const someHidden = Array.from(allBoxes).some(box => box.style.display === 'none');
+
+            allBoxes.forEach(box => {
+                box.style.display = someHidden ? 'block' : 'none';
+            });
+        }
+    });
+
+    // Add double-click to create a new image for a view
+    container.addEventListener('dblclick', (e) => {
+        const boundingBox = e.target.closest('.texture-bounding-box');
+        if (boundingBox) {
+            const view = boundingBox.dataset.view;
+            if (view) {
+                // Trigger file upload for this view
+                if (typeof triggerFileUploadForView === 'function') {
+                    triggerFileUploadForView(view);
+                } else {
+                    const fileInput = document.getElementById('file-upload');
+                    if (fileInput) {
+                        // Store the target view in a data attribute
+                        fileInput.dataset.targetView = view;
+                        fileInput.click();
+                    }
+                }
             }
         }
     });
@@ -613,6 +1304,15 @@ function startTransform(e) {
     if (!boundingBox) return;
 
     const view = boundingBox.dataset.view;
+
+    // If we already have an active bounding box, deactivate it
+    if (textureState.activeBoundingBox && textureState.activeBoundingBox !== view) {
+        const oldBox = document.querySelector(`.texture-bounding-box.${textureState.activeBoundingBox}-view-box`);
+        if (oldBox) {
+            oldBox.classList.remove('active');
+        }
+    }
+
     textureState.activeBoundingBox = view;
 
     // Get mouse/touch position
@@ -620,16 +1320,43 @@ function startTransform(e) {
     textureState.lastMousePosition = pos;
 
     // Determine the action based on what was clicked
-    if (target.classList.contains('rotate-handle')) {
+    if (target.classList.contains('rotate-handle') || target.closest('.rotate-handle')) {
         textureState.isRotating = true;
-    } else if (target.classList.contains('scale-handle')) {
+    } else if (target.classList.contains('scale-handle') || target.closest('.scale-handle')) {
         textureState.isScaling = true;
-    } else {
+    } else if (!target.classList.contains('transform-handle') && !target.closest('.transform-handle')) {
         textureState.isDragging = true;
     }
 
     // Add active class for visual feedback
     boundingBox.classList.add('active');
+
+    // Add visual feedback - bring this box to front
+    const allBoxes = document.querySelectorAll('.texture-bounding-box');
+    allBoxes.forEach(box => {
+        if (box !== boundingBox) {
+            const zIndex = parseInt(box.style.zIndex || '100');
+            box.style.zIndex = zIndex - 5;
+        } else {
+            // Bring active box to front
+            box.style.zIndex = '200';
+        }
+    });
+
+    // If this area doesn't have a texture yet, prompt for upload
+    if (!textureState.customImages[view].texture) {
+        // If there's no texture for this view, show a prompt
+        const fileInput = document.getElementById('file-upload');
+        if (fileInput) {
+            // Store the target view in a data attribute
+            fileInput.dataset.targetView = view;
+
+            // Add toast suggesting upload
+            if (typeof showToast === 'function') {
+                showToast(`Double-click to add an image to ${view} area`);
+            }
+        }
+    }
 }
 
 /**
@@ -660,9 +1387,22 @@ function moveTransform(e) {
         const boxWidth = boundingBox.offsetWidth;
         const boxHeight = boundingBox.offsetHeight;
 
-        // Update position, keeping within bounds
-        imageData.position.x = Math.max(0, Math.min(1, imageData.position.x + deltaX / boxWidth));
-        imageData.position.y = Math.max(0, Math.min(1, imageData.position.y + deltaY / boxHeight));
+        // Update position - and restrict to the bounding box
+        // This ensures the texture stays within the appropriate view area
+
+        // Calculate new position
+        const newPosX = imageData.position.x + deltaX / boxWidth;
+        const newPosY = imageData.position.y + deltaY / boxHeight;
+
+        // Get scale-adjusted boundaries to ensure image stays visible even when scaled
+        const scaleFactor = imageData.scale;
+        const maxBound = 1.0;
+        const minBound = 0.0;
+
+        // Apply constraints - prevent image from moving entirely out of bounds
+        // The constraints use the scale to determine how much of the image can move outside the box
+        imageData.position.x = Math.max(minBound, Math.min(maxBound, newPosX));
+        imageData.position.y = Math.max(minBound, Math.min(maxBound, newPosY));
     }
 
     // Handle rotation
@@ -704,7 +1444,9 @@ function moveTransform(e) {
 
         // Calculate scale factor
         const scaleFactor = currentDist / lastDist;
-        imageData.scale = Math.max(0.1, Math.min(2.0, imageData.scale * scaleFactor));
+
+        // Apply scaling with reasonable limits to prevent extreme scaling
+        imageData.scale = Math.max(0.1, Math.min(3.0, imageData.scale * scaleFactor));
     }
 
     // Update the texture with the new transforms
@@ -797,4 +1539,54 @@ export function clearCustomImage(view = 'all') {
             if (box) box.style.display = 'none';
         }
     }
+}
+
+/**
+ * Set texture position using a predefined position preset
+ * @param {string} position - Predefined position name (center, top, etc.)
+ * @param {string} view - The view to apply the position to (front, back, etc.)
+ */
+export function setTexturePosition(position, view = null) {
+    // If no view is provided, use the active view
+    if (!view) {
+        view = textureState.activeView;
+    }
+
+    // Map camera view to texture view if needed
+    const mappedView = mapCameraViewToTextureView(view);
+
+    // Skip if the position doesn't exist
+    if (!predefinedPositions[position]) {
+        console.warn(`Position "${position}" not found. Available positions: ${Object.keys(predefinedPositions).join(', ')}`);
+        return;
+    }
+
+    // Skip if the view doesn't exist
+    if (!textureState.customImages[mappedView]) {
+        console.warn(`View "${mappedView}" not found. Available views: ${Object.keys(textureState.customImages).join(', ')}`);
+        return;
+    }
+
+    // Get the position preset
+    const preset = predefinedPositions[position];
+
+    // Update the image data with the preset values
+    const imageData = textureState.customImages[mappedView];
+    imageData.position.x = preset.x;
+    imageData.position.y = preset.y;
+    imageData.scale = preset.scale;
+    imageData.rotation = preset.rotation;
+
+    // Update the texture
+    updateCombinedTexture();
+
+    // Highlight the active bounding box
+    showBoundingBox(mappedView);
+
+    // Provide feedback
+    if (typeof showToast === 'function') {
+        showToast(`Positioned image to ${position}`);
+    }
+
+    return true;
 } 

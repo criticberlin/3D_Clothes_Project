@@ -15,12 +15,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add direct event listeners for zoom buttons as a fail-safe
     setTimeout(() => {
         console.log('Setting up fail-safe zoom button handlers');
-        
+
         const zoomInBtn = document.getElementById('zoom-in');
         const zoomOutBtn = document.getElementById('zoom-out');
-        
+
         if (zoomInBtn) {
-            zoomInBtn.addEventListener('click', function() {
+            zoomInBtn.addEventListener('click', function () {
                 console.log('Zoom in clicked from fail-safe handler');
                 // Try the window method first
                 if (window.directZoomCamera) {
@@ -28,15 +28,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 // If that fails, try to dispatch the event manually
                 else {
-                    window.dispatchEvent(new CustomEvent('camera-zoom', { 
-                        detail: { direction: 'in' } 
+                    window.dispatchEvent(new CustomEvent('camera-zoom', {
+                        detail: { direction: 'in' }
                     }));
                 }
             });
         }
-        
+
         if (zoomOutBtn) {
-            zoomOutBtn.addEventListener('click', function() {
+            zoomOutBtn.addEventListener('click', function () {
                 console.log('Zoom out clicked from fail-safe handler');
                 // Try the window method first
                 if (window.directZoomCamera) {
@@ -44,8 +44,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 // If that fails, try to dispatch the event manually
                 else {
-                    window.dispatchEvent(new CustomEvent('camera-zoom', { 
-                        detail: { direction: 'out' } 
+                    window.dispatchEvent(new CustomEvent('camera-zoom', {
+                        detail: { direction: 'out' }
                     }));
                 }
             });

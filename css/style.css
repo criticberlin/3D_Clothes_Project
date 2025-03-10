@@ -385,30 +385,38 @@ body {
 
 .selected-color-display {
 	display: flex;
+	flex-direction: column;
 	align-items: center;
-	margin-top: 1rem;
-	background-color: var(--bg-primary);
-	padding: 8px 12px;
-	border-radius: var(--border-radius-sm);
+	margin-bottom: 1.5rem;
+	background-color: var(--bg-secondary);
+	padding: 15px;
+	border-radius: var(--border-radius);
 	box-shadow: var(--shadow-sm);
-	transition: var(--transition);
 }
 
 .color-preview {
-	width: 30px;
-	height: 30px;
+	width: 80px;
+	height: 80px;
 	border-radius: 50%;
-	box-shadow: var(--shadow-sm);
-	margin-right: 12px;
+	margin-bottom: 10px;
+	box-shadow: var(--shadow-md);
+	border: 2px solid var(--gray-600);
 	transition: var(--transition);
 }
 
-#color-hex {
+.color-name-display {
+	font-size: 1.1rem;
 	font-weight: 600;
-	font-size: 0.95rem;
+	margin-bottom: 5px;
 	color: var(--text-primary);
+	text-align: center;
+}
+
+#color-hex {
+	font-size: 0.8rem;
 	font-family: monospace;
-	transition: var(--transition-fast);
+	color: var(--text-secondary);
+	text-align: center;
 }
 
 .preset-colors h4 {
@@ -421,29 +429,53 @@ body {
 
 .colors {
 	display: grid;
-	grid-template-columns: repeat(4, 1fr);
-	gap: 10px;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 12px;
+	margin-bottom: 20px;
 }
 
 .color-btn {
+	position: relative;
 	width: 100%;
-	aspect-ratio: 1;
+	height: 60px;
 	border-radius: var(--border-radius-sm);
 	border: 2px solid transparent;
 	cursor: pointer;
 	transition: var(--transition);
 	box-shadow: var(--shadow-sm);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
 }
 
 .color-btn:hover {
-	transform: scale(1.08);
+	transform: scale(1.04);
 	box-shadow: var(--shadow-md);
 }
 
 .color-btn.active {
 	border-color: var(--text-primary);
-	transform: scale(1.08);
 	box-shadow: 0 0 0 2px var(--primary-color);
+}
+
+.color-name-label {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	background-color: rgba(0, 0, 0, 0.6);
+	color: white;
+	font-size: 11px;
+	padding: 4px;
+	text-align: center;
+	transition: var(--transition);
+	opacity: 0.8;
+}
+
+.color-btn:hover .color-name-label {
+	opacity: 1;
+	background-color: rgba(0, 0, 0, 0.8);
 }
 
 /* File Upload */
@@ -499,17 +531,45 @@ body {
 	margin-top: 0.5rem;
 }
 
+/* Preview area styling */
 .preview {
-	height: 180px;
-	background-color: var(--bg-tertiary);
+	width: 100%;
+	min-height: 200px;
+	max-height: 300px;
+	background-color: var(--bg-secondary);
 	border-radius: var(--border-radius);
+	overflow: hidden;
 	display: flex;
+	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	overflow: hidden;
-	box-shadow: var(--shadow-sm);
+	margin-top: 10px;
+	position: relative;
+	transition: opacity 0.3s ease;
 }
 
+/* Style for clear texture button */
+.clear-texture-btn {
+	margin-top: 12px;
+	background-color: rgba(239, 68, 68, 0.9) !important;
+	color: white !important;
+	font-size: 0.85rem;
+	padding: 6px 12px;
+	border-radius: var(--border-radius-sm);
+	transition: all 0.2s ease;
+}
+
+.clear-texture-btn:hover {
+	background-color: var(--danger-color) !important;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.clear-texture-btn i {
+	margin-right: 6px;
+}
+
+/* Empty state for preview */
 .empty-state {
 	display: flex;
 	flex-direction: column;
@@ -753,6 +813,8 @@ body {
 	);
 	overflow: hidden;
 	transition: background 0.3s ease;
+	perspective: 1000px;
+	transform-style: preserve-3d;
 }
 
 canvas {
@@ -1166,7 +1228,7 @@ canvas {
 	}
 
 	.colors {
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(2, 1fr);
 	}
 
 	.position-buttons {
@@ -1260,17 +1322,84 @@ canvas {
 	cursor: move;
 	z-index: 100;
 	transition: transform 0.3s ease-out, border-color 0.2s ease,
-		background-color 0.2s ease;
+		background-color 0.2s ease, box-shadow 0.3s ease;
 	transform-style: preserve-3d;
 	box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
 	backdrop-filter: blur(2px);
 	-webkit-backdrop-filter: blur(2px);
+	overflow: hidden; /* Ensure content stays within bounds */
+	will-change: transform; /* Optimize for animations */
+}
+
+/* 3D Box appearance */
+.texture-bounding-box.box-3d {
+	transform-style: preserve-3d;
+	box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.3),
+		-5px -5px 15px rgba(255, 255, 255, 0.1);
+	border: 2px solid rgba(255, 255, 255, 0.85);
+	/* Subtle gradient to enhance 3D appearance */
+	background: linear-gradient(
+		135deg,
+		rgba(100, 100, 255, 0.2),
+		rgba(150, 150, 255, 0.3)
+	);
+	/* Add a subtle highlight */
+	border-top: 2px solid rgba(255, 255, 255, 0.9);
+	border-left: 2px solid rgba(255, 255, 255, 0.9);
+	border-right: 2px solid rgba(200, 200, 255, 0.8);
+	border-bottom: 2px solid rgba(150, 150, 255, 0.8);
+}
+
+/* Floating animation for primary boxes */
+@keyframes floatBox {
+	0% {
+		transform: translateZ(50px);
+	}
+	50% {
+		transform: translateZ(60px);
+	}
+	100% {
+		transform: translateZ(50px);
+	}
+}
+
+.texture-bounding-box.box-float {
+	animation: floatBox 4s ease-in-out infinite;
+}
+
+/* Different appearance for primary vs secondary views */
+.texture-bounding-box[data-primary-view='true'] {
+	background-color: rgba(120, 120, 255, 0.25);
+	border-color: rgba(255, 255, 255, 0.9);
+	box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4),
+		0 0 20px rgba(255, 255, 255, 0.1) inset;
+	/* Add a glass-like effect */
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	/* Glowing effect */
+	outline: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.texture-bounding-box[data-primary-view='false'] {
+	opacity: 0.85;
+	border-style: dashed;
 }
 
 .texture-bounding-box.active {
 	border-color: rgba(99, 102, 241, 0.9);
 	background-color: rgba(99, 102, 241, 0.25);
 	box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+	border-width: 3px;
+	border-style: solid;
+	/* Override any opacity reduction */
+	opacity: 1 !important;
+}
+
+/* Enhanced visual feedback when dragging */
+.texture-bounding-box.active.box-3d {
+	box-shadow: 0 15px 35px rgba(99, 102, 241, 0.5);
+	/* Glowing effect */
+	outline: 2px solid rgba(99, 102, 241, 0.5);
 }
 
 .texture-bounding-box::before {
@@ -1292,24 +1421,63 @@ canvas {
 	box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
-/* Box titles */
+/* Visual drag area indicator */
+.drag-area {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	color: rgba(255, 255, 255, 0.8);
+	font-size: 0.9rem;
+	font-weight: 500;
+	text-align: center;
+	background-color: rgba(0, 0, 0, 0.3);
+	padding: 8px 12px;
+	border-radius: var(--border-radius-sm);
+	opacity: 0.8;
+	transition: opacity 0.3s ease;
+	pointer-events: none; /* Don't block drag events */
+	white-space: nowrap;
+}
+
+.texture-bounding-box:hover .drag-area {
+	opacity: 1;
+}
+
+.texture-bounding-box.active .drag-area {
+	opacity: 0; /* Hide when actively dragging */
+}
+
+/* Box titles with improved 3D appearance */
 .box-title {
 	position: absolute;
-	top: -25px;
+	top: -28px;
 	left: 50%;
 	transform: translateX(-50%);
 	background-color: var(--primary-color);
 	color: white;
-	padding: 3px 8px;
+	padding: 4px 10px;
 	border-radius: var(--border-radius-sm);
-	font-size: 0.8rem;
-	font-weight: 500;
+	font-size: 0.85rem;
+	font-weight: 600;
 	white-space: nowrap;
 	z-index: 102;
-	box-shadow: var(--shadow-sm);
+	box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+	letter-spacing: 0.5px;
+	/* Add 3D floating appearance */
+	transform-style: preserve-3d;
+	transform: translateX(-50%) translateZ(5px);
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-/* Transform handles for rotation and scaling */
+/* Make title stand out more for primary view */
+.texture-bounding-box[data-primary-view='true'] .box-title {
+	background-color: var(--primary-hover);
+	transform: translateX(-50%) translateZ(8px) scale(1.05);
+	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Transform handles with improved 3D appearance */
 .transform-handle {
 	position: absolute;
 	width: 30px;
@@ -1323,6 +1491,9 @@ canvas {
 	box-shadow: var(--shadow-md);
 	z-index: 101;
 	transition: transform 0.2s ease, background-color 0.2s ease;
+	/* Add 3D floating appearance */
+	transform-style: preserve-3d;
+	transform: translateZ(10px);
 }
 
 .transform-handle i {
@@ -1331,23 +1502,38 @@ canvas {
 }
 
 .transform-handle:hover {
-	transform: scale(1.1);
+	transform: scale(1.1) translateZ(15px);
 	background-color: var(--primary-hover);
 }
 
 .transform-handle:active {
-	transform: scale(0.95);
+	transform: scale(0.95) translateZ(5px);
 }
 
-/* Position the handles */
+/* Position the handles with 3D effect */
 .rotate-handle {
 	top: -15px;
 	right: -15px;
+	transform: translateZ(12px);
 }
 
 .scale-handle {
 	bottom: -15px;
 	right: -15px;
+	transform: translateZ(12px);
+}
+
+/* Remove button with 3D effect */
+.remove-handle {
+	top: -15px;
+	left: -15px;
+	background-color: var(--danger-color);
+	transform: translateZ(12px);
+}
+
+.remove-handle:hover {
+	background-color: var(--danger-hover);
+	transform: scale(1.1) translateZ(15px);
 }
 
 /* View-specific bounding box styles for better visibility */
@@ -1371,6 +1557,41 @@ canvas {
 	background-color: rgba(245, 158, 11, 0.15);
 }
 
+/* Make texture view responsive */
+@media (max-width: 768px) {
+	.transform-handle {
+		width: 24px;
+		height: 24px;
+	}
+
+	.transform-handle i {
+		font-size: 12px;
+	}
+
+	.box-title {
+		font-size: 0.75rem;
+		padding: 3px 8px;
+		top: -24px;
+	}
+
+	/* Reduce floating height on mobile */
+	.texture-bounding-box.box-3d {
+		box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+	}
+
+	@keyframes floatBox {
+		0% {
+			transform: translateZ(30px);
+		}
+		50% {
+			transform: translateZ(35px);
+		}
+		100% {
+			transform: translateZ(30px);
+		}
+	}
+}
+
 /* Debug texture view */
 .texture-debug-view {
 	position: absolute;
@@ -1384,23 +1605,6 @@ canvas {
 	overflow: hidden;
 	box-shadow: var(--shadow-lg);
 	z-index: 1000;
-}
-
-/* Responsive adjustments for smaller screens */
-@media (max-width: 768px) {
-	.transform-handle {
-		width: 24px;
-		height: 24px;
-	}
-
-	.transform-handle i {
-		font-size: 12px;
-	}
-
-	.box-title {
-		font-size: 0.7rem;
-		top: -20px;
-	}
 }
 
 /* Animation for texture update */
@@ -1474,4 +1678,358 @@ canvas {
 	margin-top: 15px;
 	display: flex;
 	justify-content: center;
+}
+
+/* Texture Positioning UI */
+.texture-position-container {
+	margin-top: 1rem;
+	background-color: var(--bg-secondary);
+	border-radius: var(--border-radius);
+	padding: 1rem;
+	box-shadow: var(--shadow-sm);
+}
+
+.position-grid-title {
+	font-size: 1rem;
+	font-weight: 600;
+	margin-bottom: 0.5rem;
+	color: var(--text-primary);
+}
+
+.position-grid-subtitle {
+	font-size: 0.85rem;
+	color: var(--text-secondary);
+	margin-bottom: 1rem;
+}
+
+.texture-position-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 0.5rem;
+	margin-bottom: 1rem;
+}
+
+.texture-position-btn {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 0.75rem 0.5rem;
+	background-color: var(--bg-tertiary);
+	border: 2px solid transparent;
+	border-radius: var(--border-radius-sm);
+	cursor: pointer;
+	transition: var(--transition);
+	color: var(--text-primary);
+}
+
+.texture-position-btn i {
+	font-size: 1.2rem;
+	margin-bottom: 0.3rem;
+	color: var(--primary-color);
+}
+
+.texture-position-btn span {
+	font-size: 0.75rem;
+	font-weight: 500;
+}
+
+.texture-position-btn:hover {
+	background-color: var(--bg-secondary);
+	border-color: var(--primary-color);
+	transform: translateY(-2px);
+	box-shadow: var(--shadow-md);
+}
+
+.texture-position-btn.active {
+	background-color: rgba(99, 102, 241, 0.15);
+	border-color: var(--primary-color);
+	box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+}
+
+.texture-action-row {
+	display: flex;
+	gap: 0.5rem;
+	margin-top: 1rem;
+}
+
+.texture-action-btn {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0.6rem 1rem;
+	border-radius: var(--border-radius-sm);
+	background-color: var(--bg-tertiary);
+	color: var(--text-primary);
+	border: none;
+	cursor: pointer;
+	font-size: 0.85rem;
+	font-weight: 500;
+	transition: var(--transition);
+}
+
+.texture-action-btn i {
+	margin-right: 0.5rem;
+	font-size: 0.9rem;
+}
+
+.texture-action-btn.reset-btn {
+	background-color: var(--gray-600);
+	color: white;
+}
+
+.texture-action-btn.reset-btn:hover {
+	background-color: var(--gray-700);
+}
+
+.texture-action-btn.clear-btn {
+	background-color: rgba(239, 68, 68, 0.15);
+	color: var(--danger-color);
+}
+
+.texture-action-btn.clear-btn:hover {
+	background-color: var(--danger-color);
+	color: white;
+}
+
+.texture-tips {
+	margin-top: 1.5rem;
+	border-radius: var(--border-radius-sm);
+	overflow: hidden;
+	border: 1px solid var(--border-color);
+}
+
+.tip-toggle {
+	display: flex;
+	align-items: center;
+	padding: 0.75rem 1rem;
+	background-color: var(--bg-tertiary);
+	cursor: pointer;
+	user-select: none;
+}
+
+.tip-toggle i {
+	margin-right: 0.5rem;
+	color: var(--warning-color);
+}
+
+.tip-toggle span {
+	flex: 1;
+	font-weight: 500;
+	font-size: 0.9rem;
+}
+
+.tip-content {
+	max-height: 0;
+	overflow: hidden;
+	transition: max-height 0.3s ease;
+}
+
+.tip-content.open {
+	max-height: 300px;
+}
+
+.tip-content ul {
+	padding: 1rem;
+	margin: 0;
+	list-style: none;
+}
+
+.tip-content li {
+	display: flex;
+	align-items: center;
+	margin-bottom: 0.5rem;
+	font-size: 0.85rem;
+	color: var(--text-secondary);
+}
+
+.tip-content li i {
+	margin-right: 0.5rem;
+	color: var(--primary-color);
+	width: 1rem;
+	text-align: center;
+}
+
+/* Enhanced 3D appearance for texture bounding boxes */
+.texture-bounding-box {
+	position: absolute;
+	border: 2px dashed rgba(255, 255, 255, 0.7);
+	background-color: rgba(100, 100, 255, 0.2);
+	border-radius: var(--border-radius-sm);
+	cursor: move;
+	z-index: 100;
+	transition: transform 0.3s ease-out, border-color 0.2s ease,
+		background-color 0.2s ease, box-shadow 0.3s ease;
+	transform-style: preserve-3d;
+	box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+	backdrop-filter: blur(2px);
+	-webkit-backdrop-filter: blur(2px);
+	overflow: hidden; /* Ensure content stays within bounds */
+	will-change: transform; /* Optimize for animations */
+}
+
+/* Add a modernized neumorphic style to the boxes */
+.texture-bounding-box.box-3d {
+	transform-style: preserve-3d;
+	box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.3),
+		-5px -5px 15px rgba(255, 255, 255, 0.1);
+	border: 2px solid rgba(255, 255, 255, 0.85);
+	/* Subtle gradient to enhance 3D appearance */
+	background: linear-gradient(
+		135deg,
+		rgba(100, 100, 255, 0.2),
+		rgba(150, 150, 255, 0.3)
+	);
+	/* Add a subtle highlight */
+	border-top: 2px solid rgba(255, 255, 255, 0.9);
+	border-left: 2px solid rgba(255, 255, 255, 0.9);
+	border-right: 2px solid rgba(200, 200, 255, 0.8);
+	border-bottom: 2px solid rgba(150, 150, 255, 0.8);
+}
+
+/* Make the primary view box stand out more */
+.texture-bounding-box[data-primary-view='true'] {
+	background-color: rgba(120, 120, 255, 0.25);
+	border-color: rgba(255, 255, 255, 0.9);
+	box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4),
+		0 0 20px rgba(255, 255, 255, 0.1) inset;
+	/* Add a glass-like effect */
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	/* Glowing effect */
+	outline: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+/* Make the UI more responsive */
+@media (max-width: 768px) {
+	.texture-position-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+
+	.texture-position-btn {
+		padding: 0.6rem 0.4rem;
+	}
+
+	.texture-action-row {
+		flex-direction: column;
+	}
+}
+
+/* View Label in the box */
+.view-label {
+	position: absolute;
+	bottom: 8px;
+	left: 8px;
+	background-color: rgba(99, 102, 241, 0.9);
+	color: white;
+	border-radius: 4px;
+	font-size: 0.7rem;
+	padding: 3px 6px;
+	display: flex;
+	align-items: center;
+	transform: translateZ(5px);
+	z-index: 102;
+	box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.view-label i {
+	margin-right: 4px;
+	font-size: 0.7rem;
+}
+
+.view-label span {
+	font-weight: 600;
+	text-transform: capitalize;
+	letter-spacing: 0.5px;
+}
+
+/* Snap Indicators */
+.snap-indicators {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	z-index: 101;
+}
+
+.snap-badge {
+	position: absolute;
+	width: 24px;
+	height: 24px;
+	background-color: rgba(255, 255, 255, 0.2);
+	border: 1px solid rgba(255, 255, 255, 0.5);
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	pointer-events: auto;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	transform: scale(0.7) translateZ(20px);
+	opacity: 0.7;
+}
+
+.snap-badge:hover {
+	transform: scale(1) translateZ(25px);
+	background-color: rgba(99, 102, 241, 0.8);
+	color: white;
+	opacity: 1;
+}
+
+.snap-center {
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%) scale(0.8) translateZ(20px);
+}
+
+.snap-top {
+	top: 5px;
+	left: 50%;
+	transform: translateX(-50%) scale(0.7) translateZ(20px);
+}
+
+.snap-bottom {
+	bottom: 5px;
+	left: 50%;
+	transform: translateX(-50%) scale(0.7) translateZ(20px);
+}
+
+.snap-left {
+	top: 50%;
+	left: 5px;
+	transform: translateY(-50%) scale(0.7) translateZ(20px);
+}
+
+.snap-right {
+	top: 50%;
+	right: 5px;
+	transform: translateY(-50%) scale(0.7) translateZ(20px);
+}
+
+/* Highlight pulse animation */
+@keyframes pulseHighlight {
+	0% {
+		box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4),
+			0 0 20px rgba(255, 255, 255, 0.1) inset;
+	}
+	50% {
+		box-shadow: 0 10px 30px rgba(99, 102, 241, 0.7),
+			0 0 30px rgba(255, 255, 255, 0.2) inset;
+	}
+	100% {
+		box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4),
+			0 0 20px rgba(255, 255, 255, 0.1) inset;
+	}
+}
+
+/* Hover effects for the bounding boxes */
+.texture-bounding-box:hover .snap-badge {
+	opacity: 1;
+}
+
+.texture-bounding-box[data-primary-view='true'] .snap-badge {
+	transform: scale(0.9) translateZ(20px);
 }

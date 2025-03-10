@@ -178,6 +178,16 @@
 										<p>Preview will appear here</p>
 									</div>
 								</div>
+
+								<!-- Texture Position Controls -->
+								<div class="section-divider"></div>
+								<div class="section-title">
+									<h3>Position & Alignment</h3>
+									<p>Perfect placement for your design</p>
+								</div>
+								<div class="texture-position-container">
+									<!-- This will be populated by setupTexturePositionControls() -->
+								</div>
 							</div>
 
 							<!-- AI Generator -->
@@ -423,69 +433,73 @@
 		<!-- Direct camera control script -->
 		<script>
 			// Create direct zoom functions that bypass the regular event system
-			window.directZoomIn = function() {
-				console.log("Direct Zoom In clicked");
+			window.directZoomIn = function () {
+				console.log('Direct Zoom In clicked')
 				// Try to access the camera and controls from the global scope
 				if (window.directZoomCamera) {
-					window.directZoomCamera("in");
-					return;
+					window.directZoomCamera('in')
+					return
 				}
-				
+
 				// Find the scene from the window or document
-				const camera = window.camera;
-				const controls = window.controls;
-				const renderer = window.renderer;
-				const scene = window.scene;
-				
+				const camera = window.camera
+				const controls = window.controls
+				const renderer = window.renderer
+				const scene = window.scene
+
 				if (camera) {
 					// Get zoom direction
-					const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+					const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(
+						camera.quaternion
+					)
 					// Move camera forward along view direction
-					camera.position.addScaledVector(direction, 0.3);
-					
+					camera.position.addScaledVector(direction, 0.3)
+
 					// Update controls if available
-					if (controls) controls.update();
-					
+					if (controls) controls.update()
+
 					// Render the scene
-					if (renderer && scene) renderer.render(scene, camera);
-					
-					console.log("Direct zoom in applied");
+					if (renderer && scene) renderer.render(scene, camera)
+
+					console.log('Direct zoom in applied')
 				} else {
-					console.warn("Camera not found for direct zoom");
+					console.warn('Camera not found for direct zoom')
 				}
-			};
-			
-			window.directZoomOut = function() {
-				console.log("Direct Zoom Out clicked");
+			}
+
+			window.directZoomOut = function () {
+				console.log('Direct Zoom Out clicked')
 				// Try to access the camera and controls from the global scope
 				if (window.directZoomCamera) {
-					window.directZoomCamera("out");
-					return;
+					window.directZoomCamera('out')
+					return
 				}
-				
+
 				// Find the scene from the window or document
-				const camera = window.camera;
-				const controls = window.controls;
-				const renderer = window.renderer;
-				const scene = window.scene;
-				
+				const camera = window.camera
+				const controls = window.controls
+				const renderer = window.renderer
+				const scene = window.scene
+
 				if (camera) {
 					// Get zoom direction
-					const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+					const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(
+						camera.quaternion
+					)
 					// Move camera backward along view direction
-					camera.position.addScaledVector(direction, -0.3);
-					
+					camera.position.addScaledVector(direction, -0.3)
+
 					// Update controls if available
-					if (controls) controls.update();
-					
+					if (controls) controls.update()
+
 					// Render the scene
-					if (renderer && scene) renderer.render(scene, camera);
-					
-					console.log("Direct zoom out applied");
+					if (renderer && scene) renderer.render(scene, camera)
+
+					console.log('Direct zoom out applied')
 				} else {
-					console.warn("Camera not found for direct zoom");
+					console.warn('Camera not found for direct zoom')
 				}
-			};
+			}
 		</script>
 	</body>
 </html>

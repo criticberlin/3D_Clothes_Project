@@ -249,21 +249,21 @@ export function setupScene() {
             initializeScene();
             setupLighting();
             setupControls();
-            
+
             // Add debug verification for controls
             console.log('Controls initialized:', controls ? 'Yes' : 'No');
-            
+
             // Expose key objects to window for direct access
             window.camera = camera;
             window.controls = controls;
             window.scene = scene;
             window.renderer = renderer;
-            
+
             // Add direct reset camera function
-            window.directResetCamera = function() {
+            window.directResetCamera = function () {
                 console.log('Direct reset camera called');
                 resetCameraPosition();
-                
+
                 // Provide visual feedback
                 const resetButton = document.getElementById('reset-camera');
                 if (resetButton) {
@@ -271,39 +271,39 @@ export function setupScene() {
                     setTimeout(() => resetButton.classList.remove('active'), 300);
                 }
             };
-            
+
             // Add direct toggle rotation function to window
-            window.directToggleRotation = function() {
+            window.directToggleRotation = function () {
                 console.log('=== ROTATION BUTTON CLICKED ===');
-                
+
                 // Toggle the rotation state
                 rotationEnabled = !rotationEnabled;
                 console.log('Rotation is now:', rotationEnabled ? 'ENABLED' : 'DISABLED');
-                
+
                 // Update the manualRotationActive flag to match
                 manualRotationActive = rotationEnabled;
                 isAutoRotating = rotationEnabled;
-                
+
                 // Update button visual state
                 const rotateButton = document.getElementById('rotate-view');
                 if (rotateButton) {
                     if (rotationEnabled) {
                         rotateButton.classList.add('active');
                         rotateButton.title = 'Stop Rotation';
-                        
+
                         // Change icon to stop when rotating
                         const icon = rotateButton.querySelector('i');
                         if (icon) {
                             icon.classList.remove('fa-redo');
                             icon.classList.add('fa-stop');
                         }
-                        
+
                         // Set the appropriate rotation axis
                         updateRotationAxisForCurrentView();
                     } else {
                         rotateButton.classList.remove('active');
                         rotateButton.title = 'Start Rotation';
-                        
+
                         // Change icon back to rotate when stopped
                         const icon = rotateButton.querySelector('i');
                         if (icon) {
@@ -312,34 +312,34 @@ export function setupScene() {
                         }
                     }
                 }
-                
+
                 // Make sure controls auto-rotation is off
                 if (controls) {
                     controls.autoRotate = false;
                     controls.update();
                 }
-                
+
                 // Force a render to show immediate feedback
                 if (renderer && scene && camera) {
                     renderer.render(scene, camera);
                 }
             };
-            
+
             // Direct function to stop rotation
-            window.directStopRotation = function() {
+            window.directStopRotation = function () {
                 console.log('Directly stopping rotation');
-                
+
                 // Set all rotation flags to false
                 rotationEnabled = false;
                 manualRotationActive = false;
                 isAutoRotating = false;
-                
+
                 // Update button visual state
                 const rotateButton = document.getElementById('rotate-view');
                 if (rotateButton) {
                     rotateButton.classList.remove('active');
                     rotateButton.title = 'Start Rotation';
-                    
+
                     // Change icon back to rotate
                     const icon = rotateButton.querySelector('i');
                     if (icon) {
@@ -347,48 +347,48 @@ export function setupScene() {
                         icon.classList.add('fa-redo');
                     }
                 }
-                
+
                 // Ensure controls auto-rotation is off
                 if (controls) {
                     controls.autoRotate = false;
                     controls.update();
                 }
-                
+
                 // Force a render
                 if (renderer && scene && camera) {
                     renderer.render(scene, camera);
                 }
-                
+
                 console.log('Rotation has been stopped');
             };
-            
+
             // Add direct zoom camera function to window
-            window.directZoomCamera = function(direction) {
+            window.directZoomCamera = function (direction) {
                 console.log('Direct window zoom camera:', direction);
-                
+
                 const zoomAmount = direction === 'in' ? 0.3 : -0.3;
-                
+
                 // Get direction vector from camera to target
                 const target = controls ? controls.target : new THREE.Vector3(0, 0, 0);
                 const zoomDirection = new THREE.Vector3();
                 zoomDirection.subVectors(target, camera.position).normalize();
-                
+
                 // Apply zoom by moving camera position
                 camera.position.addScaledVector(zoomDirection, zoomAmount);
-                
+
                 // Update camera matrix
                 camera.updateMatrixWorld();
                 camera.updateProjectionMatrix();
-                
+
                 // Update controls
                 if (controls) controls.update();
-                
+
                 // Force render update
                 if (renderer) renderer.render(scene, camera);
-                
+
                 console.log('Camera position after zoom:', camera.position.toArray());
             };
-            
+
             setupEventListeners();
             setupCameraControls();
 
@@ -603,15 +603,15 @@ function setupControls() {
     // Ensure the dollyIn and dollyOut methods are available and working correctly
     if (!controls.dollyIn || !controls.dollyOut) {
         console.warn('OrbitControls missing dolly methods, implementing alternatives');
-        
+
         // Add backup implementations if they're not available
-        controls.dollyIn = function(dollyScale) {
+        controls.dollyIn = function (dollyScale) {
             const zoomScale = Math.pow(0.95, dollyScale);
             controls.zoom *= zoomScale;
             controls.update();
         };
-        
-        controls.dollyOut = function(dollyScale) {
+
+        controls.dollyOut = function (dollyScale) {
             const zoomScale = Math.pow(0.95, dollyScale);
             controls.zoom /= zoomScale;
             controls.update();
@@ -654,7 +654,7 @@ function setupEventListeners() {
     window.addEventListener('camera-zoom', (e) => {
         const direction = e.detail.direction;
         console.log('Camera zoom event received:', direction);
-        
+
         // Use direct camera zoom
         zoomCamera(direction);
     });
@@ -676,7 +676,7 @@ function setupEventListeners() {
     window.addEventListener('camera-view-change', (e) => {
         const view = e.detail.view;
         changeCameraView(view);
-        
+
         // Update rotation axis if rotation is active
         if (manualRotationActive) {
             updateRotationAxisForCurrentView();
@@ -913,9 +913,24 @@ function processLoadedModel(gltf, settings, color) {
             // Apply the color
             shirtMaterial.color.copy(color);
 
-            // Set basic material properties
-            shirtMaterial.roughness = settings.materialSettings?.roughness || 0.7;
-            shirtMaterial.metalness = settings.materialSettings?.metalness || 0.05;
+            // Set material properties from settings if available
+            if (settings.materialSettings) {
+                for (const [property, value] of Object.entries(settings.materialSettings)) {
+                    if (property in shirtMaterial) {
+                        shirtMaterial[property] = value;
+                    }
+                }
+            } else {
+                // Fallback to basic properties
+                shirtMaterial.roughness = 0.65;
+                shirtMaterial.metalness = 0.02;
+            }
+
+            // Add fabric textures for realism
+            createAdvancedFabricTextures(shirtMaterial);
+
+            // Try to upgrade to physical material for better realism
+            tryUpgradeToPhysicalMaterial(shirtMaterial, color, settings.materialSettings);
 
             // Apply the material
             obj.material = shirtMaterial;
@@ -928,7 +943,7 @@ function processLoadedModel(gltf, settings, color) {
         shirtMesh.receiveShadow = true;
     }
 
-    console.log('Model processed successfully');
+    console.log('Model processed successfully with enhanced material');
 }
 
 // Apply camera settings for the current model type
@@ -1020,24 +1035,321 @@ function createDecalFromTexture(texture, type) {
 // Texture and Material Management
 // ============================================================================
 
-// Update shirt color with smooth transition
+// Update shirt color with realistic fabric material settings
 export function updateShirtColor(color) {
     if (!shirtMaterial) return;
 
     const targetColor = new THREE.Color(color);
-    // Apply the same material settings for both models
+
+    // Color-specific material settings for more realism
+    let materialSettings = {
+        roughness: 0.65,
+        metalness: 0.02,
+        clearcoat: 0.08,
+        clearcoatRoughness: 0.4
+    };
+
+    // Adjust material properties based on color for more realism
+    switch (color.toUpperCase()) {
+        case '#FFFFFF': // White
+            materialSettings = {
+                roughness: 0.6,
+                metalness: 0.01,
+                clearcoat: 0.1,
+                clearcoatRoughness: 0.45,
+                sheen: 0.1,
+                sheenRoughness: 0.8
+            };
+            break;
+
+        case '#000000': // Black
+            materialSettings = {
+                roughness: 0.7,
+                metalness: 0.03,
+                clearcoat: 0.12,
+                clearcoatRoughness: 0.35,
+                sheen: 0.15,
+                sheenRoughness: 0.7
+            };
+            break;
+
+        case '#606060': // Gray/Charcoal
+            materialSettings = {
+                roughness: 0.68,
+                metalness: 0.03,
+                clearcoat: 0.09,
+                clearcoatRoughness: 0.4,
+                sheen: 0.08,
+                sheenRoughness: 0.75
+            };
+            break;
+
+        case '#000080': // Navy Blue
+            materialSettings = {
+                roughness: 0.72,
+                metalness: 0.025,
+                clearcoat: 0.07,
+                clearcoatRoughness: 0.5,
+                sheen: 0.06,
+                sheenRoughness: 0.8
+            };
+            break;
+
+        case '#F5F5DC': // Beige/Khaki
+            materialSettings = {
+                roughness: 0.65,
+                metalness: 0.015,
+                clearcoat: 0.06,
+                clearcoatRoughness: 0.42,
+                sheen: 0.07,
+                sheenRoughness: 0.85
+            };
+            break;
+
+        case '#556B2F': // Olive Green
+            materialSettings = {
+                roughness: 0.73,
+                metalness: 0.02,
+                clearcoat: 0.06,
+                clearcoatRoughness: 0.45,
+                sheen: 0.05,
+                sheenRoughness: 0.85
+            };
+            break;
+
+        case '#8B4513': // Brown
+            materialSettings = {
+                roughness: 0.75,
+                metalness: 0.025,
+                clearcoat: 0.05,
+                clearcoatRoughness: 0.5,
+                sheen: 0.04,
+                sheenRoughness: 0.9
+            };
+            break;
+
+        case '#800020': // Burgundy
+            materialSettings = {
+                roughness: 0.71,
+                metalness: 0.03,
+                clearcoat: 0.08,
+                clearcoatRoughness: 0.4,
+                sheen: 0.1,
+                sheenRoughness: 0.8
+            };
+            break;
+    }
+
+    // Smooth transition for color change
     function updateColor() {
+        // Smoothly transition color
         shirtMaterial.color.lerp(targetColor, 0.1);
-        // Update material properties
-        shirtMaterial.roughness = 0.7; // Slightly smoother for fabric
-        shirtMaterial.metalness = 0.05; // Tiny bit of shine
+
+        // Update material properties based on color settings
+        for (const [property, value] of Object.entries(materialSettings)) {
+            if (property in shirtMaterial) {
+                // Smoothly transition property values
+                shirtMaterial[property] += (value - shirtMaterial[property]) * 0.1;
+            }
+        }
+
+        // Update material
         shirtMaterial.needsUpdate = true;
 
+        // Continue animation until color is close enough
         if (!shirtMaterial.color.equals(targetColor)) {
             requestAnimationFrame(updateColor);
+        } else {
+            // Apply advanced fabric textures with color-specific adjustments
+            createColorAdjustedFabricTextures(shirtMaterial, color);
+
+            // Attempt to upgrade to physical material
+            tryUpgradeToPhysicalMaterial(shirtMaterial, targetColor, materialSettings);
+
+            console.log("Color update complete with fabric-specific properties");
         }
     }
+
     updateColor();
+}
+
+// New function to create fabric textures adjusted for specific colors
+function createColorAdjustedFabricTextures(material, color) {
+    // Higher resolution for more detail
+    const resolution = 1024;
+
+    // Create normal map adjusted for the fabric type of this color
+    const normalMap = createColorAdjustedNormalMap(resolution, resolution, color);
+    material.normalMap = normalMap;
+
+    // Create roughness map adjusted for this color's fabric properties
+    const roughnessMap = createColorAdjustedRoughnessMap(resolution, resolution, color);
+    material.roughnessMap = roughnessMap;
+
+    // Create AO map
+    const aoMap = createAmbientOcclusionMap(resolution, resolution);
+    material.aoMap = aoMap;
+
+    // Only apply slight displacement for fabric texture
+    const displacementMap = createDisplacementMap(resolution, resolution);
+    material.displacementMap = displacementMap;
+    material.displacementScale = 0.02;
+
+    material.needsUpdate = true;
+}
+
+// Create a normal map adjusted for specific fabric types based on color
+function createColorAdjustedNormalMap(width, height, color) {
+    const size = width * height;
+    const data = new Uint8Array(4 * size);
+
+    // Different fabric weave patterns based on color
+    let weaveFrequency = 0.2;
+    let weaveDepth = 8;
+    let noiseScale = 0.3;
+
+    // Adjust fabric pattern based on color
+    switch (color.toUpperCase()) {
+        case '#FFFFFF': // White - smoother cotton
+            weaveFrequency = 0.25;
+            weaveDepth = 7;
+            noiseScale = 0.25;
+            break;
+        case '#000000': // Black - slightly rougher
+            weaveFrequency = 0.2;
+            weaveDepth = 9;
+            noiseScale = 0.35;
+            break;
+        case '#556B2F': // Olive Green - canvas-like
+            weaveFrequency = 0.18;
+            weaveDepth = 10;
+            noiseScale = 0.4;
+            break;
+        case '#8B4513': // Brown - thick cotton
+            weaveFrequency = 0.16;
+            weaveDepth = 11;
+            noiseScale = 0.45;
+            break;
+    }
+
+    // Fill with fabric-like normal pattern
+    for (let i = 0; i < size; i++) {
+        const stride = i * 4;
+
+        const x = i % width;
+        const y = Math.floor(i / width);
+
+        // Multi-frequency noise for realistic fabric weave
+        const weaveX = Math.sin(x * weaveFrequency) * weaveDepth +
+            Math.sin(x * (weaveFrequency / 2)) * (weaveDepth / 2);
+        const weaveY = Math.sin(y * weaveFrequency) * weaveDepth +
+            Math.sin(y * (weaveFrequency / 2)) * (weaveDepth / 2);
+
+        // Diagonal pattern for fabric threads
+        const diagonalNoise = Math.sin((x + y) * (weaveFrequency / 2)) * (weaveDepth / 2);
+
+        // Combine for fabric weave pattern
+        const noise = (weaveX + weaveY + diagonalNoise) * noiseScale;
+
+        // Create more variation in the normal map
+        data[stride] = Math.min(255, Math.max(0, 128 + noise + (Math.random() * 4 - 2)));
+        data[stride + 1] = Math.min(255, Math.max(0, 128 + noise + (Math.random() * 4 - 2)));
+        data[stride + 2] = 255;
+        data[stride + 3] = 255;
+    }
+
+    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(8, 8); // More repeats for finer detail
+    texture.needsUpdate = true;
+
+    return texture;
+}
+
+// Create a roughness map adjusted for specific fabric types based on color
+function createColorAdjustedRoughnessMap(width, height, color) {
+    const size = width * height;
+    const data = new Uint8Array(4 * size);
+
+    // Base roughness differs per fabric type/color
+    let baseRoughness = 170;
+    let patternIntensity = 0.2;
+    let weaveFrequency = 0.4;
+
+    // Adjust based on color
+    switch (color.toUpperCase()) {
+        case '#FFFFFF': // White - smoother cotton
+            baseRoughness = 160;
+            patternIntensity = 0.18;
+            break;
+        case '#000000': // Black - slightly rougher
+            baseRoughness = 180;
+            patternIntensity = 0.22;
+            break;
+        case '#606060': // Gray/Charcoal - medium texture
+            baseRoughness = 175;
+            patternIntensity = 0.2;
+            break;
+        case '#000080': // Navy Blue - smoother finish
+            baseRoughness = 165;
+            patternIntensity = 0.19;
+            break;
+        case '#F5F5DC': // Beige/Khaki - rougher natural fiber
+            baseRoughness = 185;
+            patternIntensity = 0.25;
+            break;
+        case '#556B2F': // Olive Green - canvas-like
+            baseRoughness = 190;
+            patternIntensity = 0.28;
+            break;
+        case '#8B4513': // Brown - rough texture
+            baseRoughness = 195;
+            patternIntensity = 0.3;
+            break;
+        case '#800020': // Burgundy - medium-smooth
+            baseRoughness = 175;
+            patternIntensity = 0.2;
+            break;
+    }
+
+    // Create fabric-like roughness
+    for (let i = 0; i < size; i++) {
+        const stride = i * 4;
+
+        const x = i % width;
+        const y = Math.floor(i / width);
+
+        // Fine weave pattern
+        const weaveX = Math.sin(x * weaveFrequency) * 15 + Math.cos(x * (weaveFrequency / 2)) * 8;
+        const weaveY = Math.sin(y * weaveFrequency) * 15 + Math.cos(y * (weaveFrequency / 2)) * 8;
+
+        // Diagonal pattern
+        const diagonal = Math.sin((x + y) * (weaveFrequency / 2)) * 10;
+
+        // Combined pattern with intensity factor
+        const noise = (weaveX + weaveY + diagonal) * patternIntensity;
+
+        // Random fabric fuzz
+        const fuzz = Math.random() * 10;
+
+        // Final roughness value
+        const value = Math.min(255, Math.max(0, baseRoughness + noise + fuzz));
+
+        // Grayscale
+        data[stride] = value;
+        data[stride + 1] = value;
+        data[stride + 2] = value;
+        data[stride + 3] = 255;
+    }
+
+    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(8, 8);
+    texture.needsUpdate = true;
+
+    return texture;
 }
 
 // Apply texture to a geometry with proper UV mapping
@@ -1470,7 +1782,7 @@ function setupCameraControls() {
     if (rotateView) {
         // Removed redundant event listener since the button already has an onclick attribute in HTML
         // that calls window.directToggleRotation()
-        
+
         // Set initial state based on manualRotationActive
         rotateView.classList.toggle('active', manualRotationActive);
     }
@@ -1629,7 +1941,7 @@ function animate() {
     if (window.GLOBAL_ROTATION_ENABLED === true && group) {
         // Directly rotate the model group around the specified axis
         group.rotateOnAxis(rotationAxis, rotationSpeed);
-        
+
         // Notify in console so we can see it's working
         if (window.frameCount === undefined) {
             window.frameCount = 0;
@@ -1639,7 +1951,7 @@ function animate() {
             console.log("Rotating model...");
         }
     }
-    
+
     // Update controls for damping even when not auto-rotating
     if (controls && controls.enableDamping) {
         controls.update();
@@ -1712,7 +2024,7 @@ export function updateThemeBackground(isDarkMode) {
 // Add the toggleAutoRotate function to toggle auto-rotation
 export function toggleAutoRotate(active) {
     console.log('toggleAutoRotate called with active =', active);
-    
+
     // Use our new global rotation control
     if (active !== undefined) {
         // Set to the specified state
@@ -1721,18 +2033,18 @@ export function toggleAutoRotate(active) {
         // Toggle the current state
         rotationEnabled = !rotationEnabled;
     }
-    
+
     // Synchronize other rotation state variables
     manualRotationActive = rotationEnabled;
     isAutoRotating = rotationEnabled;
-    
+
     console.log('Rotation is now:', rotationEnabled ? 'ENABLED' : 'DISABLED');
-    
+
     // If turning on rotation, set the appropriate rotation axis
     if (rotationEnabled) {
         updateRotationAxisForCurrentView();
     }
-    
+
     // Update button visual state
     const rotateButton = document.getElementById('rotate-view');
     if (rotateButton) {
@@ -1756,20 +2068,20 @@ export function toggleAutoRotate(active) {
             }
         }
     }
-    
+
     // Disable OrbitControls auto-rotation to avoid conflicts
     if (controls) {
         controls.autoRotate = false;
     }
-    
+
     // Also update the old state variable for compatibility
     isAutoRotating = rotationEnabled;
-    
+
     // Force a render for immediate visual feedback
     if (renderer && scene && camera) {
         renderer.render(scene, camera);
     }
-    
+
     return rotationEnabled;
 }
 
@@ -1853,10 +2165,10 @@ function updateLogoPosition(position) {
 // Add reset camera position function
 function resetCameraPosition() {
     console.log('Resetting camera position');
-    
+
     // Reset cumulative zoom factor
     cumulativeZoomFactor = 1.0;
-    
+
     if (!camera || !controls) return;
 
     const settings = modelSettings[currentModelType] || modelSettings.tshirt;
@@ -1950,6 +2262,199 @@ function createProceduralFabricTextures(material) {
     material.needsUpdate = true;
 }
 
+// New enhanced fabric textures function
+function createAdvancedFabricTextures(material) {
+    // Higher resolution for more detail
+    const resolution = 1024;
+
+    // Create detailed normal map for fabric weave
+    const normalMap = createAdvancedNormalMap(resolution, resolution);
+    material.normalMap = normalMap;
+    material.normalScale = new THREE.Vector2(0.7, 0.7);
+
+    // Create detailed roughness map for fabric
+    const roughnessMap = createAdvancedRoughnessMap(resolution, resolution);
+    material.roughnessMap = roughnessMap;
+
+    // Create ambient occlusion map
+    const aoMap = createAmbientOcclusionMap(resolution, resolution);
+    material.aoMap = aoMap;
+    material.aoMapIntensity = 0.8;
+
+    // Create displacement map for subtle fabric detail
+    const displacementMap = createDisplacementMap(resolution, resolution);
+    material.displacementMap = displacementMap;
+    material.displacementScale = 0.02;
+
+    material.needsUpdate = true;
+}
+
+// Create a more detailed normal map for fabric
+function createAdvancedNormalMap(width, height) {
+    const size = width * height;
+    const data = new Uint8Array(4 * size);
+
+    // Fill with a detailed fabric-like normal pattern
+    for (let i = 0; i < size; i++) {
+        const stride = i * 4;
+
+        const x = i % width;
+        const y = Math.floor(i / width);
+
+        // Multi-frequency noise for more realistic fabric weave
+        const weaveX = Math.sin(x * 0.2) * 8 + Math.sin(x * 0.1) * 4 + Math.sin(x * 0.05) * 2;
+        const weaveY = Math.sin(y * 0.2) * 8 + Math.sin(y * 0.1) * 4 + Math.sin(y * 0.05) * 2;
+
+        // Add a subtle diagonal pattern for fabric threads
+        const diagonalNoise = Math.sin((x + y) * 0.1) * 4 + Math.sin((x - y) * 0.1) * 4;
+
+        // Combine for more complex fabric weave pattern
+        const noise = (weaveX + weaveY + diagonalNoise) * 0.3;
+
+        // Create more variation in the normal map
+        data[stride] = Math.min(255, Math.max(0, 128 + noise + (Math.random() * 5 - 2.5)));
+        data[stride + 1] = Math.min(255, Math.max(0, 128 + noise + (Math.random() * 5 - 2.5)));
+        data[stride + 2] = 255;
+        data[stride + 3] = 255;
+    }
+
+    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(8, 8); // More repeats for finer detail
+    texture.needsUpdate = true;
+
+    return texture;
+}
+
+// Create an enhanced roughness map for fabric
+function createAdvancedRoughnessMap(width, height) {
+    const size = width * height;
+    const data = new Uint8Array(4 * size);
+
+    // Create a more detailed fabric-like roughness
+    for (let i = 0; i < size; i++) {
+        const stride = i * 4;
+
+        const x = i % width;
+        const y = Math.floor(i / width);
+
+        // Multi-scale noise for fabric fibers
+        const baseRoughness = 170; // Base fabric roughness
+
+        // Create a fine weave pattern
+        const weaveX = Math.sin(x * 0.4) * 15 + Math.cos(x * 0.2) * 8;
+        const weaveY = Math.sin(y * 0.4) * 15 + Math.cos(y * 0.2) * 8;
+
+        // Add diagonal patterns
+        const diagonal = Math.sin((x + y) * 0.2) * 10 + Math.sin((x - y) * 0.2) * 10;
+
+        // Combine different patterns for more realism
+        const noise = (weaveX + weaveY + diagonal) * 0.2;
+
+        // Add some randomness for fabric fuzz
+        const fuzz = Math.random() * 10;
+
+        // Calculate final roughness value
+        const value = Math.min(255, Math.max(0, baseRoughness + noise + fuzz));
+
+        // Use same value for R, G, B (grayscale)
+        data[stride] = value;
+        data[stride + 1] = value;
+        data[stride + 2] = value;
+        data[stride + 3] = 255;
+    }
+
+    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(8, 8);
+    texture.needsUpdate = true;
+
+    return texture;
+}
+
+// Create an ambient occlusion map for fabric folds and details
+function createAmbientOcclusionMap(width, height) {
+    const size = width * height;
+    const data = new Uint8Array(4 * size);
+
+    // Fill with fabric-like AO pattern with subtle folds
+    for (let i = 0; i < size; i++) {
+        const stride = i * 4;
+
+        const x = i % width;
+        const y = Math.floor(i / width);
+
+        // Base brightness (higher values = less occlusion)
+        const baseValue = 220;
+
+        // Create subtle folds
+        const fold1 = Math.sin(y * 0.01) * 25;
+        const fold2 = Math.sin(x * 0.01 + y * 0.01) * 15;
+
+        // Subtle random variation
+        const variation = Math.random() * 5;
+
+        // Calculate final AO value - lower values = more occlusion
+        const value = Math.min(255, Math.max(0, baseValue + fold1 + fold2 + variation));
+
+        data[stride] = value;
+        data[stride + 1] = value;
+        data[stride + 2] = value;
+        data[stride + 3] = 255;
+    }
+
+    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(2, 2); // Larger scale for folds
+    texture.needsUpdate = true;
+
+    return texture;
+}
+
+// Create a displacement map for subtle fabric detail
+function createDisplacementMap(width, height) {
+    const size = width * height;
+    const data = new Uint8Array(4 * size);
+
+    // Fill with subtle displacement pattern for fabric texture
+    for (let i = 0; i < size; i++) {
+        const stride = i * 4;
+
+        const x = i % width;
+        const y = Math.floor(i / width);
+
+        // Base displacement value (middle gray = no displacement)
+        const baseValue = 128;
+
+        // Create fabric weave pattern with very subtle displacement
+        const weaveX = Math.sin(x * 0.3) * 2 + Math.sin(x * 0.6) * 1;
+        const weaveY = Math.sin(y * 0.3) * 2 + Math.sin(y * 0.6) * 1;
+
+        // Add very subtle random noise
+        const noise = (Math.random() - 0.5) * 2;
+
+        // Calculate final displacement value
+        const value = Math.min(255, Math.max(0, baseValue + weaveX + weaveY + noise));
+
+        // Use same value for R, G, B
+        data[stride] = value;
+        data[stride + 1] = value;
+        data[stride + 2] = value;
+        data[stride + 3] = 255;
+    }
+
+    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(8, 8);
+    texture.needsUpdate = true;
+
+    return texture;
+}
+
 // Create a procedural normal map using noise
 function createNormalMap(width, height) {
     const size = width * height;
@@ -2025,35 +2530,51 @@ function createRoughnessMap(width, height) {
 }
 
 // Try to upgrade to physical material for better realism
-function tryUpgradeToPhysicalMaterial(standardMaterial, color) {
+function tryUpgradeToPhysicalMaterial(standardMaterial, color, materialSettings) {
     // Only try if MeshPhysicalMaterial is available
     if (THREE.MeshPhysicalMaterial) {
         try {
             const physicalMaterial = new THREE.MeshPhysicalMaterial({
                 color: color,
-                roughness: 0.7,
-                metalness: 0.05,
-                clearcoat: 0.1,          // Slight glossy finish
-                clearcoatRoughness: 0.4,  // Not too glossy
+                roughness: materialSettings?.roughness || 0.65,
+                metalness: materialSettings?.metalness || 0.02,
+                clearcoat: materialSettings?.clearcoat || 0.08,
+                clearcoatRoughness: materialSettings?.clearcoatRoughness || 0.4,
                 side: THREE.DoubleSide,
-                transmission: 0.02,       // Slight transparency
-                thickness: 0.2,           // For subsurface scattering
-                envMapIntensity: 0.8
+                transmission: materialSettings?.transmission || 0.01,
+                thickness: materialSettings?.thickness || 0.3,
+                envMapIntensity: materialSettings?.envMapIntensity || 0.6,
+                sheen: 0.05,  // Subtle sheen for fabric
+                sheenRoughness: 0.8,
+                sheenColor: new THREE.Color(color).multiplyScalar(1.2), // Slightly brighter sheen
+                anisotropy: materialSettings?.anisotropy || 0.3,
+                anisotropyRotation: Math.PI / 4 // 45 degrees
             });
 
             // Copy all maps from the standard material
             if (standardMaterial.normalMap) {
                 physicalMaterial.normalMap = standardMaterial.normalMap;
-                physicalMaterial.normalScale = standardMaterial.normalScale;
+                physicalMaterial.normalScale = new THREE.Vector2(
+                    materialSettings?.normalScale || 0.7,
+                    materialSettings?.normalScale || 0.7
+                );
             }
             if (standardMaterial.roughnessMap) {
                 physicalMaterial.roughnessMap = standardMaterial.roughnessMap;
+            }
+            if (standardMaterial.aoMap) {
+                physicalMaterial.aoMap = standardMaterial.aoMap;
+                physicalMaterial.aoMapIntensity = materialSettings?.aoMapIntensity || 0.8;
+            }
+            if (standardMaterial.displacementMap) {
+                physicalMaterial.displacementMap = standardMaterial.displacementMap;
+                physicalMaterial.displacementScale = materialSettings?.displacementScale || 0.02;
             }
 
             // Replace the material
             shirtMaterial = physicalMaterial;
             shirtMesh.material = shirtMaterial;
-            console.log("Upgraded to physical material for better realism");
+            console.log("Upgraded to enhanced physical material for better fabric realism");
         } catch (e) {
             console.log("Advanced material not supported, using standard material instead", e);
         }
@@ -2066,54 +2587,54 @@ function zoomCamera(direction) {
         console.warn('Camera not available for zoom operation');
         return;
     }
-    
+
     console.log('Direct camera zoom:', direction);
-    
+
     // Update the cumulative zoom factor (smaller steps for more precision)
     if (direction === 'in') {
         cumulativeZoomFactor *= 0.9; // Zoom in (factor gets smaller)
     } else {
         cumulativeZoomFactor *= 1.1; // Zoom out (factor gets larger)
     }
-    
+
     // Clamp the zoom factor to reasonable limits
     cumulativeZoomFactor = Math.max(0.3, Math.min(cumulativeZoomFactor, 2.0));
-    
+
     console.log('Cumulative zoom factor:', cumulativeZoomFactor);
-    
+
     // Get the current view settings for the model type
     const modelSettings = getModelSettingsForCurrentView();
     if (!modelSettings) return;
-    
+
     // Get the base camera position for this view
     const view = state.cameraView || 'front';
     const viewSettings = modelSettings.cameraPositions[view];
-    
+
     if (viewSettings) {
         // Calculate new camera position based on the base position and the zoom factor
         const basePosition = viewSettings.position.clone();
         const zoomDirection = basePosition.clone().normalize();
-        
+
         // Apply the cumulative zoom factor to the base position
         const zoomedPosition = zoomDirection.multiplyScalar(basePosition.length() * cumulativeZoomFactor);
-        
+
         // Update target camera position (this will be applied smoothly in the animation loop)
         targetCameraPosition.copy(zoomedPosition);
-        
+
         // Force immediate update for responsive feedback
         camera.position.copy(zoomedPosition);
         camera.updateProjectionMatrix();
-        
+
         // Update controls if available
         if (controls) {
             controls.update();
         }
-        
+
         // Force a render
         if (renderer && scene) {
             renderer.render(scene, camera);
         }
-        
+
         console.log('Camera zoomed to position:', zoomedPosition.toArray());
     }
 }
@@ -2127,7 +2648,7 @@ function getModelSettingsForCurrentView() {
 // Helper function to update rotation axis based on current camera view
 function updateRotationAxisForCurrentView() {
     const currentView = state.cameraView || determineCurrentView();
-    
+
     // Set rotation axis based on view
     switch (currentView) {
         case 'front':
@@ -2146,7 +2667,7 @@ function updateRotationAxisForCurrentView() {
             // Default to Y axis rotation
             rotationAxis.set(0, 1, 0);
     }
-    
+
     console.log('Rotation axis set for view:', currentView);
 }
 
@@ -2155,23 +2676,23 @@ function resetRotation() {
     // Reset any ongoing rotation effects
     if (group) {
         console.log('Reset rotation called for group');
-        
+
         // Ensure the manualRotationActive flag is set to false
         manualRotationActive = false;
         isAutoRotating = false;
-        
+
         // Ensure OrbitControls auto-rotation is off
         if (controls) {
             controls.autoRotate = false;
             controls.update();
         }
-        
+
         // Force an immediate render to ensure the model stops exactly where it is
         if (renderer && scene && camera) {
             console.log('Forcing render to stop rotation');
             renderer.render(scene, camera);
         }
-        
+
         console.log('Rotation has been completely stopped');
     } else {
         console.warn('Cannot reset rotation: model group not found');
@@ -2181,17 +2702,17 @@ function resetRotation() {
 // Add a dedicated function to stop rotation
 function stopRotation() {
     console.log('stopRotation function called');
-    
+
     // First set the flags
     manualRotationActive = false;
     isAutoRotating = false;
-    
+
     // Update the button visual state
     const rotateButton = document.getElementById('rotate-view');
     if (rotateButton) {
         rotateButton.classList.remove('active');
         rotateButton.title = 'Start Rotation';
-        
+
         // Change icon back to rotate
         const icon = rotateButton.querySelector('i');
         if (icon) {
@@ -2199,39 +2720,39 @@ function stopRotation() {
             icon.classList.add('fa-redo');
         }
     }
-    
+
     // Disable OrbitControls auto-rotation
     if (controls) {
         controls.autoRotate = false;
         controls.update();
     }
-    
+
     // Render one final frame
     if (renderer && scene && camera) {
         renderer.render(scene, camera);
     }
-    
+
     console.log('Rotation has been stopped');
     return false; // Return false to indicate rotation is now off
 }
 
 // Add a debug wrapper function for the rotate button
-window.debugRotateToggle = function() {
+window.debugRotateToggle = function () {
     console.log('=====================================');
     console.log('DEBUG: Rotate button clicked directly');
     console.log('Before toggle - rotationEnabled:', rotationEnabled);
     console.log('Before toggle - manualRotationActive:', manualRotationActive);
     console.log('Before toggle - isAutoRotating:', isAutoRotating);
-    
+
     // Set rotation state directly
     rotationEnabled = !rotationEnabled;
-    
+
     // Force update of all related variables
     manualRotationActive = rotationEnabled;
     isAutoRotating = rotationEnabled;
-    
+
     console.log('After toggle - rotationEnabled:', rotationEnabled);
-    
+
     // Update button visual state
     const rotateButton = document.getElementById('rotate-view');
     if (rotateButton) {
@@ -2239,21 +2760,21 @@ window.debugRotateToggle = function() {
             console.log('Setting button to ACTIVE state');
             rotateButton.classList.add('active');
             rotateButton.title = 'Stop Rotation';
-            
+
             // Change icon to stop when rotating
             const icon = rotateButton.querySelector('i');
             if (icon) {
                 icon.classList.remove('fa-redo');
                 icon.classList.add('fa-stop');
             }
-            
+
             // Set the appropriate rotation axis
             updateRotationAxisForCurrentView();
         } else {
             console.log('Setting button to INACTIVE state');
             rotateButton.classList.remove('active');
             rotateButton.title = 'Start Rotation';
-            
+
             // Change icon back to rotate when stopped
             const icon = rotateButton.querySelector('i');
             if (icon) {
@@ -2262,52 +2783,52 @@ window.debugRotateToggle = function() {
             }
         }
     }
-    
+
     // Ensure controls auto-rotation is off (we handle rotation ourselves)
     if (controls) {
         controls.autoRotate = false;
         controls.update();
         console.log('Controls updated');
     }
-    
+
     // Prove rotation has been set correctly by checking what will happen in animation loop
     if (rotationEnabled && group) {
         console.log('Rotation WILL be applied in the next animation frame');
     } else {
         console.log('Rotation will NOT be applied in the next animation frame');
     }
-    
+
     // Force a render to show immediate feedback
     if (renderer && scene && camera) {
         console.log('Forcing immediate render');
         renderer.render(scene, camera);
     }
-    
+
     console.log('DEBUG: Rotation toggle complete');
     console.log('=====================================');
 };
 
 // Add a function to debug the rotation state from the console
-window.debugRotationState = function() {
+window.debugRotationState = function () {
     console.log('===== ROTATION STATE DEBUG =====');
     console.log('rotationEnabled:', rotationEnabled);
     console.log('manualRotationActive:', manualRotationActive);
     console.log('isAutoRotating:', isAutoRotating);
-    
+
     const rotateButton = document.getElementById('rotate-view');
     if (rotateButton) {
         console.log('Button class list:', rotateButton.classList.toString());
         console.log('Button title:', rotateButton.title);
-        
+
         const icon = rotateButton.querySelector('i');
         if (icon) {
             console.log('Icon class list:', icon.classList.toString());
         }
     }
-    
+
     console.log('Will rotation happen in animation loop?', (rotationEnabled === true && group) ? 'YES' : 'NO');
     console.log('============================');
-    
+
     // Return the state for further inspection
     return {
         rotationEnabled,
@@ -2318,32 +2839,32 @@ window.debugRotationState = function() {
 };
 
 // Create a COMPLETELY new function to toggle rotation
-window.TOGGLE_ROTATION = function() {
+window.TOGGLE_ROTATION = function () {
     // Toggle the global rotation flag
     window.GLOBAL_ROTATION_ENABLED = !window.GLOBAL_ROTATION_ENABLED;
-    
+
     console.log("GLOBAL ROTATION TOGGLED TO:", window.GLOBAL_ROTATION_ENABLED ? "ON" : "OFF");
-    
+
     // Update the button appearance
     const rotateButton = document.getElementById('rotate-view');
     if (rotateButton) {
         if (window.GLOBAL_ROTATION_ENABLED) {
             rotateButton.classList.add('active');
             rotateButton.title = 'Stop Rotation';
-            
+
             // Change icon to stop
             const icon = rotateButton.querySelector('i');
             if (icon) {
                 icon.classList.remove('fa-redo');
                 icon.classList.add('fa-stop');
             }
-            
+
             // Set rotation axis
             updateRotationAxisForCurrentView();
         } else {
             rotateButton.classList.remove('active');
             rotateButton.title = 'Start Rotation';
-            
+
             // Change icon back to rotate
             const icon = rotateButton.querySelector('i');
             if (icon) {
@@ -2352,12 +2873,12 @@ window.TOGGLE_ROTATION = function() {
             }
         }
     }
-    
+
     // Also update the other flags for consistency
     rotationEnabled = window.GLOBAL_ROTATION_ENABLED;
     manualRotationActive = window.GLOBAL_ROTATION_ENABLED;
     isAutoRotating = window.GLOBAL_ROTATION_ENABLED;
-    
+
     // Force a render for immediate feedback
     if (renderer && scene && camera) {
         renderer.render(scene, camera);
@@ -2365,28 +2886,28 @@ window.TOGGLE_ROTATION = function() {
 };
 
 // Add a direct event listener to the rotation button when DOM content is loaded
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     console.log('DOM loaded, attaching rotation button event listener');
-    
+
     const rotateButton = document.getElementById('rotate-view');
     if (rotateButton) {
         console.log('Found rotation button, attaching click handler');
-        
+
         // Remove any existing click handlers by cloning the button
         const newButton = rotateButton.cloneNode(true);
         rotateButton.parentNode.replaceChild(newButton, rotateButton);
-        
+
         // Add our event listener to the new button
-        newButton.addEventListener('click', function(event) {
+        newButton.addEventListener('click', function (event) {
             event.preventDefault();
             event.stopPropagation();
-            
+
             console.log('DIRECT CLICK EVENT DETECTED');
             window.TOGGLE_ROTATION();
-            
+
             return false;
         });
-        
+
         console.log('Event listener attached successfully');
     } else {
         console.warn('Could not find rotation button');

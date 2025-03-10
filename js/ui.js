@@ -1,16 +1,17 @@
 import { updateState, state } from './state.js';
 import { updateShirtColor, updateShirtTexture, toggleTexture, changeCameraView, updateThemeBackground } from './scene.js';
-import { loadCustomImage, clearCustomImage, showBoundingBoxesForCameraView } from './texture-mapper.js';
+import { loadCustomImage, clearCustomImage, showBoundingBoxesForCameraView, setTexturePosition } from './texture-mapper.js';
 
-// Rainbow colors (standard 7 rainbow colors)
+// Popular t-shirt colors with their hex codes
 const colors = [
-    '#FF0000', // Red
-    '#FF7F00', // Orange
-    '#FFFF00', // Yellow
-    '#00FF00', // Green
-    '#0000FF', // Blue
-    '#4B0082', // Indigo
-    '#9400D3'  // Violet
+    { name: 'White', hex: '#FFFFFF' },
+    { name: 'Black', hex: '#000000' },
+    { name: 'Gray', hex: '#606060' },      // Charcoal Gray
+    { name: 'Navy Blue', hex: '#000080' },
+    { name: 'Beige', hex: '#F5F5DC' },     // Khaki
+    { name: 'Olive Green', hex: '#556B2F' },
+    { name: 'Brown', hex: '#8B4513' },     // Saddle Brown
+    { name: 'Burgundy', hex: '#800020' }
 ];
 
 // Initialize tab functionality
@@ -111,20 +112,44 @@ export function setupColorPicker() {
     const colorWheel = document.getElementById('color-wheel');
     const colorHexDisplay = document.getElementById('color-hex');
     const colorPreview = document.getElementById('color-preview');
+    const colorNameDisplay = document.getElementById('color-name');
 
-    // Default color is the first in our rainbow palette
-    const defaultColor = colors[0];
+    // Create color name display if it doesn't exist
+    if (colorHexDisplay && !colorNameDisplay) {
+        const nameDisplay = document.createElement('div');
+        nameDisplay.id = 'color-name';
+        nameDisplay.className = 'color-name-display';
+        colorHexDisplay.parentNode.insertBefore(nameDisplay, colorHexDisplay.nextSibling);
+    }
+
+    // Default color is the first in our palette
+    const defaultColor = colors[0].hex;
+    const defaultName = colors[0].name;
 
     if (colorWheel) {
         // Set initial color
         colorWheel.value = state.color || defaultColor;
-        colorHexDisplay.textContent = colorWheel.value.toUpperCase();
-        colorPreview.style.backgroundColor = colorWheel.value;
+
+        const colorName = document.getElementById('color-name');
+        if (colorName) {
+            // Find the color name from the hex value
+            const colorObj = colors.find(c => c.hex === (state.color || defaultColor)) || colors[0];
+            colorName.textContent = colorObj.name;
+        }
+
+        colorHexDisplay.textContent = (state.color || defaultColor).toUpperCase();
+        colorPreview.style.backgroundColor = state.color || defaultColor;
 
         colorWheel.addEventListener('input', (e) => {
             const newColor = e.target.value;
             colorHexDisplay.textContent = newColor.toUpperCase();
             colorPreview.style.backgroundColor = newColor;
+
+            // Try to find matching color name or show "Custom"
+            const colorObj = colors.find(c => c.hex.toUpperCase() === newColor.toUpperCase());
+            if (colorName) {
+                colorName.textContent = colorObj ? colorObj.name : "Custom";
+            }
 
             // Add subtle animation to the color preview
             colorPreview.classList.add('pulse');
@@ -144,32 +169,52 @@ export function setupColorPicker() {
     const colorContainer = document.querySelector('.colors');
     if (!colorContainer) return;
 
+    // Clear existing color buttons to avoid duplicates
+    colorContainer.innerHTML = '';
+
     // Create color buttons
     colors.forEach((color, index) => {
         const button = document.createElement('button');
         button.className = 'color-btn';
-        button.style.backgroundColor = color;
-        button.dataset.color = color;
-        button.setAttribute('aria-label', `Select color ${color}`);
-        button.setAttribute('title', color);
+        button.style.backgroundColor = color.hex;
+        button.dataset.color = color.hex;
+        button.setAttribute('aria-label', `Select color ${color.name}`);
+        button.setAttribute('title', color.name);
+
+        // Add color name label inside button
+        const nameLabel = document.createElement('span');
+        nameLabel.className = 'color-name-label';
+        nameLabel.textContent = color.name;
+        button.appendChild(nameLabel);
 
         // Set the first color as active by default, or match current state
-        if ((state.color === undefined && index === 0) || color === state.color) {
+        if ((state.color === undefined && index === 0) || color.hex === state.color) {
             button.classList.add('active');
         }
 
         button.addEventListener('click', () => {
-            // Update active state
+            // Remove active class from all buttons
             document.querySelectorAll('.color-btn').forEach(btn =>
                 btn.classList.remove('active')
             );
+
+            // Add active class to clicked button
             button.classList.add('active');
+
+            // Add animation to the button
+            button.classList.add('pulse');
+            setTimeout(() => button.classList.remove('pulse'), 500);
 
             // Update color wheel and preview
             if (colorWheel) {
-                colorWheel.value = color;
-                colorHexDisplay.textContent = color.toUpperCase();
-                colorPreview.style.backgroundColor = color;
+                colorWheel.value = color.hex;
+                colorHexDisplay.textContent = color.hex.toUpperCase();
+                colorPreview.style.backgroundColor = color.hex;
+
+                const colorName = document.getElementById('color-name');
+                if (colorName) {
+                    colorName.textContent = color.name;
+                }
 
                 // Add animation to preview
                 colorPreview.classList.add('pulse');
@@ -177,8 +222,8 @@ export function setupColorPicker() {
             }
 
             // Update shirt color
-            updateState({ color });
-            updateShirtColor(color);
+            updateState({ color: color.hex });
+            updateShirtColor(color.hex);
         });
 
         colorContainer.appendChild(button);
@@ -362,25 +407,50 @@ export function setupFilePicker() {
                         preview.style.opacity = '1';
                     }, 300);
 
-                    // Get the current camera view to determine which side to apply the texture to
-                    const currentView = state.cameraView || 'front';
+                    // Check if a specific target view was specified (from double-click or other means)
+                    const fileInput = document.getElementById('file-upload');
+                    let targetView = fileInput && fileInput.dataset.targetView;
+
+                    // If no target view was specified, use the current camera view
+                    if (!targetView) {
+                        targetView = state.cameraView || 'front';
+                    }
 
                     // Show texture application info
                     const infoBox = document.createElement('div');
                     infoBox.className = 'texture-info';
                     infoBox.innerHTML = `
-                        <p><strong>Applied to:</strong> ${currentView} view</p>
-                        <p><small>Use camera controls to switch views</small></p>
+                        <p><strong>Applied to:</strong> ${targetView} area</p>
+                        <p><small>Double-click areas to add more images</small></p>
                     `;
                     preview.appendChild(infoBox);
 
-                    // Load the image into the texture mapper for the current view
-                    loadCustomImage(event.target.result, currentView)
+                    // Add a clear button to the preview
+                    const clearButton = document.createElement('button');
+                    clearButton.className = 'button secondary clear-texture-btn';
+                    clearButton.innerHTML = '<i class="fas fa-trash-alt"></i> Remove Image';
+                    clearButton.addEventListener('click', () => {
+                        if (typeof clearCustomImage === 'function') {
+                            clearCustomImage(targetView);
+                            showToast(`Removed image from ${targetView} area`);
+                            // Clear the preview
+                            preview.innerHTML = '<div class="empty-state"><i class="fas fa-upload"></i><p>Upload an image to customize</p></div>';
+                        }
+                    });
+                    preview.appendChild(clearButton);
+
+                    // Load the image into the texture mapper for the target view
+                    loadCustomImage(event.target.result, targetView)
                         .then(() => {
-                            console.log(`Image applied to ${currentView} view`);
+                            console.log(`Image applied to ${targetView} area`);
 
                             // Show a success message
-                            showToast(`Image applied to ${currentView} view`);
+                            showToast(`Image applied to ${targetView} area`);
+
+                            // Clear the target view from the file input
+                            if (fileInput) {
+                                delete fileInput.dataset.targetView;
+                            }
                         })
                         .catch(error => {
                             console.error('Error applying image:', error);
@@ -736,4 +806,173 @@ function setupThemeToggle() {
 
         console.log('Theme toggled:', newDarkMode ? 'dark' : 'light');
     });
-} 
+}
+
+/**
+ * Trigger file upload for a specific view area
+ * @param {string} view - The view to upload to (front, back, left_arm, right_arm)
+ */
+export function triggerFileUploadForView(view) {
+    const fileInput = document.getElementById('file-upload');
+    if (fileInput) {
+        // Store the target view
+        fileInput.dataset.targetView = view;
+
+        // Create and show a toast message
+        showToast(`Select an image for the ${view} area`);
+
+        // Trigger the file input
+        fileInput.click();
+    }
+}
+
+/**
+ * Set up the texture position controls
+ * Creates a position grid similar to logo positions but for textures
+ */
+export function setupTexturePositionControls() {
+    // Look for the texture-position-container element
+    const container = document.querySelector('.texture-position-container');
+    if (!container) {
+        console.warn('Texture position container not found. Skipping setup.');
+        return;
+    }
+
+    // Define the position options
+    const positions = [
+        { name: 'top_left', icon: 'nw-resize', label: 'Top Left' },
+        { name: 'top', icon: 'n-resize', label: 'Top' },
+        { name: 'top_right', icon: 'ne-resize', label: 'Top Right' },
+        { name: 'left', icon: 'w-resize', label: 'Left' },
+        { name: 'center', icon: 'move', label: 'Center' },
+        { name: 'right', icon: 'e-resize', label: 'Right' },
+        { name: 'bottom_left', icon: 'sw-resize', label: 'Bottom Left' },
+        { name: 'bottom', icon: 's-resize', label: 'Bottom' },
+        { name: 'bottom_right', icon: 'se-resize', label: 'Bottom Right' },
+        { name: 'pocket', icon: 'square', label: 'Pocket' }
+    ];
+
+    // Create the position grid
+    const grid = document.createElement('div');
+    grid.className = 'texture-position-grid';
+
+    // Create title
+    const title = document.createElement('h4');
+    title.textContent = 'Position Presets';
+    title.className = 'position-grid-title';
+    container.appendChild(title);
+
+    // Add a subtitle
+    const subtitle = document.createElement('p');
+    subtitle.textContent = 'Click to apply preset positions to your image';
+    subtitle.className = 'position-grid-subtitle';
+    container.appendChild(subtitle);
+
+    // Add the grid of position buttons
+    positions.forEach(pos => {
+        const btn = document.createElement('button');
+        btn.className = 'texture-position-btn';
+        btn.dataset.position = pos.name;
+        btn.title = pos.label;
+
+        // Use Font Awesome icons or other icon sets
+        const icon = document.createElement('i');
+        icon.className = `fas fa-${pos.icon}`;
+        btn.appendChild(icon);
+
+        // Add position name
+        const label = document.createElement('span');
+        label.textContent = pos.label;
+        btn.appendChild(label);
+
+        // Add button to grid
+        grid.appendChild(btn);
+
+        // Add click event to apply the position
+        btn.addEventListener('click', () => {
+            // Apply the position preset
+            setTexturePosition(pos.name);
+
+            // Update active state
+            document.querySelectorAll('.texture-position-btn').forEach(b => {
+                b.classList.remove('active');
+            });
+            btn.classList.add('active');
+        });
+    });
+
+    // Add the grid to the container
+    container.appendChild(grid);
+
+    // Add quick action buttons below the grid
+    const actionRow = document.createElement('div');
+    actionRow.className = 'texture-action-row';
+
+    // Add reset button
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'texture-action-btn reset-btn';
+    resetBtn.innerHTML = '<i class="fas fa-undo"></i> Reset Position';
+    resetBtn.addEventListener('click', () => {
+        setTexturePosition('center');
+    });
+    actionRow.appendChild(resetBtn);
+
+    // Add clear button
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'texture-action-btn clear-btn';
+    clearBtn.innerHTML = '<i class="fas fa-trash"></i> Remove Image';
+    clearBtn.addEventListener('click', () => {
+        clearCustomImage(state.cameraView);
+    });
+    actionRow.appendChild(clearBtn);
+
+    container.appendChild(actionRow);
+
+    // Add quick tips section
+    const tipsContainer = document.createElement('div');
+    tipsContainer.className = 'texture-tips';
+    tipsContainer.innerHTML = `
+        <div class="tip-toggle">
+            <i class="fas fa-lightbulb"></i>
+            <span>Pro Tips</span>
+            <i class="fas fa-chevron-down"></i>
+        </div>
+        <div class="tip-content">
+            <ul>
+                <li><i class="fas fa-mouse-pointer"></i> Double-click any area to upload an image</li>
+                <li><i class="fas fa-arrows-alt"></i> Drag to reposition your image</li>
+                <li><i class="fas fa-sync"></i> Use the rotate handle to rotate</li>
+                <li><i class="fas fa-expand"></i> Use the scale handle to resize</li>
+            </ul>
+        </div>
+    `;
+    container.appendChild(tipsContainer);
+
+    // Toggle the tips visibility
+    const tipToggle = tipsContainer.querySelector('.tip-toggle');
+    const tipContent = tipsContainer.querySelector('.tip-content');
+    tipToggle.addEventListener('click', () => {
+        tipContent.classList.toggle('open');
+        tipToggle.querySelector('.fa-chevron-down').classList.toggle('fa-chevron-up');
+    });
+
+    console.log('Texture position controls set up successfully');
+}
+
+// Initialize everything when the DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    try {
+        // Initialize all components
+        initializeTabs();
+        setupColorPicker();
+        setupFilePicker();
+        setupAIPicker();
+        setupCameraViewButtons();
+        setupThemeToggle();
+
+        // Initialize the new texture position controls
+        setupTexturePositionControls();
+    } catch (error) {
+        console.error('Error initializing UI components:', error);
+    }
+}); 
