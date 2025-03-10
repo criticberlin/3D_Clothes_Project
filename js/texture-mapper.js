@@ -131,8 +131,8 @@ const predefinedPositions = {
     sleeve: { x: 0.5, y: 0.5, scale: 0.6, rotation: 0 }
 };
 
-// Add new advanced texture utilities
-// Simplex noise implementation for realistic texture generation
+// Add new advanced texture utilities - optimized for performance
+// Simplex noise implementation for realistic texture generation (optimized)
 const SimplexNoise = {
     grad3: [
         [1, 1, 0], [-1, 1, 0], [1, -1, 0], [-1, -1, 0],
@@ -144,11 +144,24 @@ const SimplexNoise = {
     // Populate the permutation table
     init() {
         this.perm = [...Array(512)].map((_, i) => this.p[i & 255]);
+
+        // Pre-calculate some values for better performance
+        this.cache = new Map();
         return this;
     },
 
-    // 2D simplex noise
+    // 2D simplex noise with caching for better performance
     noise2D(x, y) {
+        // Round to reduce unique combinations for better cache hits
+        const rx = Math.round(x * 10) / 10;
+        const ry = Math.round(y * 10) / 10;
+
+        // Check cache first
+        const key = `${rx},${ry}`;
+        if (this.cache.has(key)) {
+            return this.cache.get(key);
+        }
+
         // Find unit grid cell containing point
         let X = Math.floor(x);
         let Y = Math.floor(y);
@@ -167,18 +180,24 @@ const SimplexNoise = {
         const n2 = this.dot(this.grad3[this.perm[(X + this.perm[Y + 1]) & 255] % 12], x, y - 1);
         const n3 = this.dot(this.grad3[this.perm[(X + 1 + this.perm[Y + 1]) & 255] % 12], x - 1, y - 1);
 
-        // Linear interpolation
-        const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
-        const u = fade(x);
-        const v = fade(y);
+        // Linear interpolation (optimized for performance)
+        const u = x * x * (3 - 2 * x); // Faster curve than fade
+        const v = y * y * (3 - 2 * y);
 
         // Interpolate the four results
         const nx0 = n0 + u * (n1 - n0);
         const nx1 = n2 + u * (n3 - n2);
         const nxy = nx0 + v * (nx1 - nx0);
 
-        // Convert to range [0, 1]
-        return (nxy + 1) * 0.5;
+        // Convert to range [0, 1] and cache the result
+        const result = (nxy + 1) * 0.5;
+
+        // Only store if cache isn't too large
+        if (this.cache.size < 1000) {
+            this.cache.set(key, result);
+        }
+
+        return result;
     },
 
     dot(g, x, y) {
@@ -186,8 +205,11 @@ const SimplexNoise = {
     }
 }.init();
 
-// Fractal Brownian Motion function for layered noise
-function fbm(x, y, octaves = 6, lacunarity = 2.0, gain = 0.5) {
+// Fractal Brownian Motion function for layered noise (optimized)
+function fbm(x, y, octaves = 3, lacunarity = 2.0, gain = 0.5) {
+    // Use fewer octaves for better performance
+    octaves = Math.min(octaves, 3);
+
     let amplitude = 0.5;
     let frequency = 1.0;
     let sum = 0;
@@ -203,11 +225,12 @@ function fbm(x, y, octaves = 6, lacunarity = 2.0, gain = 0.5) {
     return sum / sumOfAmplitudes;
 }
 
-// Calculate ambient occlusion based on geometry factors
+// Calculate ambient occlusion based on geometry factors (optimized)
 function calculateAO(x, y, width, height, canvas, strength = 0.5) {
+    // Use simpler calculations for better performance
     // Normalize coordinates to 0-1 range
-    const nx = x / canvas.width;
-    const ny = y / canvas.height;
+    const nx = x / width;
+    const ny = y / height;
 
     // Get distance from edges (in UV space)
     const distFromLeftEdge = nx;
@@ -223,50 +246,17 @@ function calculateAO(x, y, width, height, canvas, strength = 0.5) {
         distFromBottomEdge
     );
 
-    // Apply easing function to make the darkening more natural
-    const easedValue = Math.pow(Math.min(1, minDist * 15), 2.0);
+    // Simpler easing function for better performance
+    const easedValue = Math.min(1, minDist * 10);
 
     // Scale by strength parameter
     return 1 - ((1 - easedValue) * strength);
 }
 
-// Calculates fabric wrinkle density based on position
-function fabricWrinkleFactor(x, y, width, height, material) {
-    // Get normalized coordinates
-    const nx = x / width;
-    const ny = y / height;
-
-    // Define wrinkle factors based on material and position
-    const wrinkleIntensity = material.wrinkling || 0.3;
-
-    // Areas with more wrinkling (like under arms, curves)
-    const isWrinkleZone =
-        (nx < 0.2 || nx > 0.8) || // sides
-        (ny > 0.7 && (nx > 0.3 && nx < 0.7)); // bottom center
-
-    // Add noise-based detail to the wrinkle factor
-    const noiseValue = fbm(nx * 10, ny * 10, 4, 2.2, 0.5);
-
-    // Calculate the wrinkle factor
-    let factor = noiseValue * wrinkleIntensity;
-
-    // Increase factor in natural wrinkle zones
-    if (isWrinkleZone) {
-        factor *= 1.5;
-    }
-
-    return Math.min(1, factor);
-}
-
-// Calculate fabric displacement for 3D-like effects
-function calculateDisplacement(uvX, uvY, textureSize) {
-    // Multiple layers of noise at different frequencies
-    const largeScale = fbm(uvX * 2, uvY * 2, 3, 2.0, 0.5) * 0.7;
-    const mediumScale = fbm(uvX * 5, uvY * 5, 3, 2.0, 0.5) * 0.2;
-    const smallScale = fbm(uvX * 12, uvY * 15, 2, 2.0, 0.5) * 0.1;
-
-    // Combine the layers
-    return largeScale + mediumScale + smallScale;
+// Calculate fabric displacement for 3D-like effects (simplified)
+function calculateDisplacement(uvX, uvY) {
+    // Simplified with fewer layers for better performance
+    return fbm(uvX * 2, uvY * 2, 2, 2.0, 0.5) * 0.5;
 }
 
 /**
@@ -370,119 +360,104 @@ export function initTextureMapper(fabricTextureUrl, bumpMapUrl, modelType = 'tsh
 
 /**
  * Creates a combined texture that includes the base fabric and all custom uploaded images
- * Now with advanced fabric simulation and effects
+ * Now with advanced fabric simulation and effects - optimized for performance
  * @returns {THREE.Texture} The combined texture
  */
 function createBaseTexture() {
-    // Create a canvas to draw the combined texture
+    // Create a canvas to draw the combined texture (reduced resolution for performance)
     const canvas = document.createElement('canvas');
-    canvas.width = 2048; // Increased resolution for better detail
-    canvas.height = 2048;
+    canvas.width = 1024; // Back to original resolution for better performance
+    canvas.height = 1024;
     const ctx = canvas.getContext('2d');
 
     // Get material settings for current model
     const materialSettings = modelConfig[textureState.currentModel].materialSettings || {};
 
-    // Create background with advanced fabric texture simulation
+    // Create background with advanced fabric texture simulation (optimized)
     if (textureState.fabricTexture && textureState.fabricTexture.image) {
         // Draw base fabric texture with advanced blending
         ctx.globalAlpha = modelConfig[textureState.currentModel].fabricTextureStrength;
         ctx.drawImage(textureState.fabricTexture.image, 0, 0, canvas.width, canvas.height);
         ctx.globalAlpha = 1.0;
 
-        // Add detailed fabric structure with noise overlay
-        ctx.globalCompositeOperation = 'overlay';
+        // Add fabric detail but with optimized approach
+        // Use downsampled processing for better performance
+        const downsampleFactor = 4; // Process fewer pixels
+        const sampleWidth = canvas.width / downsampleFactor;
+        const sampleHeight = canvas.height / downsampleFactor;
 
-        // Draw fabric structure using noise functions
-        const baseColor = state.color || '#FFFFFF';
-        // Parse the base color to RGB values for manipulation
-        const colorMatch = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(baseColor);
-        const rgb = colorMatch ? {
-            r: parseInt(colorMatch[1], 16),
-            g: parseInt(colorMatch[2], 16),
-            b: parseInt(colorMatch[3], 16)
-        } : { r: 255, g: 255, b: 255 };
+        // Create a smaller temporary canvas for the effects
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = sampleWidth;
+        tempCanvas.height = sampleHeight;
+        const tempCtx = tempCanvas.getContext('2d');
 
-        // Draw advanced fabric texture with micro-details
-        const pixelData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        // Draw the original image to the smaller canvas
+        tempCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height,
+            0, 0, sampleWidth, sampleHeight);
+
+        // Get image data from the smaller canvas
+        const pixelData = tempCtx.getImageData(0, 0, sampleWidth, sampleHeight);
         const data = pixelData.data;
 
-        for (let y = 0; y < canvas.height; y++) {
-            for (let x = 0; x < canvas.width; x++) {
-                const i = (y * canvas.width + x) * 4;
+        // Process the downsampled image data
+        for (let y = 0; y < sampleHeight; y++) {
+            for (let x = 0; x < sampleWidth; x++) {
+                const i = (y * sampleWidth + x) * 4;
 
                 // Normalized coordinates for noise function
-                const nx = x / canvas.width;
-                const ny = y / canvas.height;
+                const nx = x / sampleWidth;
+                const ny = y / sampleHeight;
 
-                // Calculate various fabric effects
-                const noise = fbm(nx * 20, ny * 20, 6, 2.0, 0.5) * 0.15;
-                const largeNoise = fbm(nx * 4, ny * 3, 3, 2.0, 0.6) * 0.1;
-
-                // Calculate wrinkle factor for this position
-                const wrinkleFactor = fabricWrinkleFactor(x, y, canvas.width, canvas.height, materialSettings);
+                // Simplified fabric effects with fewer calculations
+                const noise = fbm(nx * 10, ny * 10, 2, 2.0, 0.5) * 0.15;
 
                 // Calculate ambient occlusion
-                const ao = calculateAO(x, y, canvas.width, canvas.height, canvas, 0.4);
+                const ao = calculateAO(x, y, sampleWidth, sampleHeight, tempCanvas, 0.3);
 
-                // Calculate geometric displacement for 3D-like effect
-                const displacement = calculateDisplacement(nx, ny, canvas.width) * 0.2;
+                // Simplified total effect
+                const totalEffect = 1.0 + noise;
 
-                // Apply all effects
-                const totalEffect = 1.0 + noise + largeNoise - wrinkleFactor + displacement;
-                const aoFactor = ao * (1 - (wrinkleFactor * 0.5));
-
-                // Apply to pixel data
-                data[i] = Math.min(255, Math.max(0, data[i] * totalEffect * aoFactor));
-                data[i + 1] = Math.min(255, Math.max(0, data[i + 1] * totalEffect * aoFactor));
-                data[i + 2] = Math.min(255, Math.max(0, data[i + 2] * totalEffect * aoFactor));
+                // Apply to pixel data with simpler math
+                data[i] = Math.min(255, Math.max(0, data[i] * totalEffect * ao));
+                data[i + 1] = Math.min(255, Math.max(0, data[i + 1] * totalEffect * ao));
+                data[i + 2] = Math.min(255, Math.max(0, data[i + 2] * totalEffect * ao));
             }
         }
 
-        ctx.putImageData(pixelData, 0, 0);
-        ctx.globalCompositeOperation = 'source-over';
+        // Put the processed image data back to the small canvas
+        tempCtx.putImageData(pixelData, 0, 0);
+
+        // Draw the small canvas back to the main canvas
+        ctx.drawImage(tempCanvas, 0, 0, sampleWidth, sampleHeight,
+            0, 0, canvas.width, canvas.height);
     } else {
-        // Fill with advanced procedural texture if no fabric texture
+        // Fill with simpler procedural texture for better performance
         ctx.fillStyle = state.color || '#FFFFFF';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Create procedural fabric texture
-        const pixelData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = pixelData.data;
+        // Only apply a basic fabric texture
+        const patternSize = 12;
+        ctx.strokeStyle = 'rgba(0,0,0,0.05)';
+        ctx.lineWidth = 1;
 
-        for (let y = 0; y < canvas.height; y++) {
-            for (let x = 0; x < canvas.width; x++) {
-                const i = (y * canvas.width + x) * 4;
-
-                // Normalized coordinates for noise
-                const nx = x / canvas.width;
-                const ny = y / canvas.height;
-
-                // Multi-layered noise for realistic fabric
-                const baseNoise = fbm(nx * 20, ny * 20, 5, 2.0, 0.5);
-                const detailNoise = fbm(nx * 60, ny * 60, 3, 2.0, 0.5);
-                const largeNoise = fbm(nx * 4, ny * 4, 2, 2.0, 0.5);
-
-                // Calculate fabric features
-                const weavePattern = Math.sin(nx * Math.PI * 100) * Math.sin(ny * Math.PI * 100) * 0.05;
-
-                // Calculate AO
-                const ao = calculateAO(x, y, canvas.width, canvas.height, canvas, 0.5);
-
-                // Combine all effects
-                const totalFactor = (0.9 + (baseNoise * 0.2) + (detailNoise * 0.1) + weavePattern) * ao;
-
-                // Apply to pixel data
-                data[i] = Math.min(255, Math.max(0, data[i] * totalFactor));
-                data[i + 1] = Math.min(255, Math.max(0, data[i + 1] * totalFactor));
-                data[i + 2] = Math.min(255, Math.max(0, data[i + 2] * totalFactor));
-            }
+        // Draw a simple grid pattern
+        for (let i = 0; i < canvas.height; i += patternSize) {
+            ctx.beginPath();
+            ctx.moveTo(0, i);
+            ctx.lineTo(canvas.width, i);
+            ctx.stroke();
         }
 
-        ctx.putImageData(pixelData, 0, 0);
+        for (let i = 0; i < canvas.width; i += patternSize) {
+            ctx.beginPath();
+            ctx.moveTo(i, 0);
+            ctx.lineTo(i, canvas.height);
+            ctx.stroke();
+        }
     }
 
-    // Composite custom images for each view with advanced blending and effects
+    // Composite custom images for each view with optimized blending
     for (const view of availableViews) {
         const imageData = textureState.customImages[view];
         if (imageData.texture && imageData.texture.image) {
@@ -502,36 +477,42 @@ function createBaseTexture() {
             const centerX = x + width / 2;
             const centerY = y + height / 2;
 
-            // Calculate optimal image placement based on UV map analysis
-            // This minimizes stretching and distortion
-            const uvAnalysis = analyzeUVArea(uvRect, view, textureState.currentModel);
-            const optimizedPosition = getOptimizedPosition(imageData.position, uvAnalysis);
+            // Simplified UV analysis for better performance
+            const uvAnalysis = {
+                stretchFactorU: view.includes('arm') ? 1.1 : 1.0,
+                stretchFactorV: 1.0,
+                optimalCenterU: 0.5,
+                optimalCenterV: 0.5
+            };
+
+            // Simplified optimization
+            const position = imageData.position;
+            const blendFactor = 0.15;
+            const optimizedX = position.x * (1 - blendFactor) + 0.5 * blendFactor;
+            const optimizedY = position.y * (1 - blendFactor) + 0.5 * blendFactor;
 
             // Position adjustment based on optimized image position
-            const posX = centerX + (optimizedPosition.x - 0.5) * width;
-            const posY = centerY + (optimizedPosition.y - 0.5) * height;
+            const posX = centerX + (optimizedX - 0.5) * width;
+            const posY = centerY + (optimizedY - 0.5) * height;
 
-            // Apply transformations with advanced calculations
+            // Apply transformations with simpler calculations
             ctx.translate(posX, posY);
             ctx.rotate(imageData.rotation * Math.PI / 180);
 
-            // Apply non-uniform scaling based on UV distortion analysis
-            const { scaleX, scaleY } = calculateNonUniformScale(
-                imageData.scale,
-                uvAnalysis.stretchFactorU,
-                uvAnalysis.stretchFactorV
-            );
+            // Calculate non-uniform scale with simpler math
+            const scaleX = imageData.scale / uvAnalysis.stretchFactorU;
+            const scaleY = imageData.scale / uvAnalysis.stretchFactorV;
 
-            // FIX: Apply vertical flip and scale
+            // Apply vertical flip and scale
             ctx.scale(scaleX, -scaleY);
 
-            // Draw the image with advanced blending and effects
+            // Draw the image with simplified blending
             const imgWidth = imageData.texture.image.width;
             const imgHeight = imageData.texture.image.height;
 
-            // Apply special blending mode for more realistic integration with fabric
+            // Apply simple blending for fabric integration
             ctx.globalCompositeOperation = 'multiply';
-            ctx.globalAlpha = 0.95;
+            ctx.globalAlpha = 0.9;
             ctx.drawImage(
                 imageData.texture.image,
                 -imgWidth / 2,
@@ -540,48 +521,8 @@ function createBaseTexture() {
                 imgHeight
             );
 
-            // Apply overlay to enhance colors
-            ctx.globalCompositeOperation = 'overlay';
-            ctx.globalAlpha = 0.3;
-            ctx.drawImage(
-                imageData.texture.image,
-                -imgWidth / 2,
-                -imgHeight / 2,
-                imgWidth,
-                imgHeight
-            );
-
-            // Reset composite operation and apply fabric texture overlay
+            // Reset composite operation
             ctx.globalCompositeOperation = 'source-over';
-            ctx.globalAlpha = 0.2;
-
-            // Generate fabric overlay that will affect the printed image
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = imgWidth;
-            tempCanvas.height = imgHeight;
-            const tempCtx = tempCanvas.getContext('2d');
-
-            // Draw fabric grain overlay
-            for (let ty = 0; ty < imgHeight; ty += 2) {
-                for (let tx = 0; tx < imgWidth; tx += 2) {
-                    // Normalized coordinates
-                    const nx = tx / imgWidth;
-                    const ny = ty / imgHeight;
-
-                    // Calculate fabric grain pattern
-                    const grainNoise = SimplexNoise.noise2D(nx * 50, ny * 50) * 0.15;
-
-                    // Set pixel color based on noise
-                    const alpha = 0.1 + grainNoise;
-                    tempCtx.fillStyle = `rgba(240, 240, 240, ${alpha})`;
-                    tempCtx.fillRect(tx, ty, 2, 2);
-                }
-            }
-
-            // Apply the fabric grain overlay to make the image appear printed
-            ctx.drawImage(tempCanvas, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight);
-
-            // Reset alpha
             ctx.globalAlpha = 1.0;
 
             // Restore context
@@ -607,44 +548,23 @@ function createBaseTexture() {
     return texture;
 }
 
-/**
- * Analyzes a UV area to determine distortion and optimal placement
- * @param {Object} uvRect - The UV rectangle
- * @param {string} view - The view
- * @param {string} modelType - The model type
- * @returns {Object} Analysis data
- */
+// Simplified analysis function for better performance
 function analyzeUVArea(uvRect, view, modelType) {
     // Calculate UV dimensions
     const uWidth = uvRect.u2 - uvRect.u1;
     const vHeight = uvRect.v2 - uvRect.v1;
 
-    // Get view-specific data
-    const viewConfig = modelConfig[modelType].views[view];
-
-    // Calculate stretch factors based on model geometry
-    // (This would ideally come from the 3D model, but we'll approximate)
+    // Simplified stretch factors based on view
     let stretchFactorU = 1.0;
     let stretchFactorV = 1.0;
 
-    // Approximate stretch factors based on view
-    switch (view) {
-        case 'front':
-        case 'back':
-            // These are usually mapped more directly
-            stretchFactorU = 1.0;
-            stretchFactorV = 1.0;
-            break;
-        case 'left_arm':
-        case 'right_arm':
-            // Arms usually have more horizontal stretch
-            stretchFactorU = 1.2;
-            stretchFactorV = 0.9;
-            break;
+    // Quick approximation for performance
+    if (view.includes('arm')) {
+        stretchFactorU = 1.1;
+        stretchFactorV = 0.95;
     }
 
-    // Calculate optimal placement center point
-    // By default, center of the UV area
+    // Default optimal center
     const optimalCenterU = 0.5;
     const optimalCenterV = 0.5;
 
@@ -658,36 +578,21 @@ function analyzeUVArea(uvRect, view, modelType) {
     };
 }
 
-/**
- * Calculate non-uniform scale based on UV stretch factors
- * @param {number} baseScale - The base scale value
- * @param {number} stretchU - U stretch factor
- * @param {number} stretchV - V stretch factor
- * @returns {Object} Scale factors for X and Y
- */
+// Simplified functions for better performance
 function calculateNonUniformScale(baseScale, stretchU, stretchV) {
-    // Calculate compensated scale to reduce distortion
-    const scaleX = baseScale / stretchU;
-    const scaleY = baseScale / stretchV;
-
-    return { scaleX, scaleY };
+    return {
+        scaleX: baseScale / stretchU,
+        scaleY: baseScale / stretchV
+    };
 }
 
-/**
- * Get optimized position based on UV analysis
- * @param {Object} position - Current position
- * @param {Object} uvAnalysis - UV analysis data
- * @returns {Object} Optimized position
- */
 function getOptimizedPosition(position, uvAnalysis) {
-    // Calculate blend factor between user position and optimal position
-    const blendFactor = 0.2; // 20% optimal, 80% user choice
+    const blendFactor = 0.15; // Less optimization for performance
 
-    // Blend between user position and optimal position
-    const x = position.x * (1 - blendFactor) + uvAnalysis.optimalCenterU * blendFactor;
-    const y = position.y * (1 - blendFactor) + uvAnalysis.optimalCenterV * blendFactor;
-
-    return { x, y };
+    return {
+        x: position.x * (1 - blendFactor) + uvAnalysis.optimalCenterU * blendFactor,
+        y: position.y * (1 - blendFactor) + uvAnalysis.optimalCenterV * blendFactor
+    };
 }
 
 /**
