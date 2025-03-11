@@ -739,9 +739,15 @@ function setupEventListeners() {
     });
 }
 
+// Set initial defaults - no logo
 function initializeDefaultState() {
-    updateShirtColor(state.color || '#FF0000');
-    updateShirtTexture('assets/threejs.png', 'logo');
+    // Set color
+    const savedColor = state.color || '#EFBD48';
+    updateShirtColor(savedColor);
+    
+    // No logo by default
+    toggleTexture('logo', false);
+    toggleTexture('full', false);
 }
 
 // ============================================================================
@@ -1465,16 +1471,20 @@ export function toggleTexture(type, active) {
         if (logoDecal) {
             logoDecal.visible = active;
         } else if (active) {
-            // If logo is enabled but doesn't exist yet, create it with default texture
-            updateShirtTexture('assets/threejs.png', 'logo');
+            // Only create logo if user has selected one, no default logo
+            if (state.logoDecal) {
+                updateShirtTexture(state.logoDecal, 'logo');
+            }
         }
     } else if (type === 'full') {
         isFullTexture = active;
         if (fullDecal) {
             fullDecal.visible = active;
         } else if (active) {
-            // If full texture is enabled but doesn't exist yet, create it with default texture
-            updateShirtTexture('assets/threejs.png', 'full');
+            // Only create full texture if user has selected one, no default texture
+            if (state.fullDecal) {
+                updateShirtTexture(state.fullDecal, 'full');
+            }
         }
     }
 }

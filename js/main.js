@@ -93,11 +93,11 @@ document.addEventListener('DOMContentLoaded', () => {
         updateState({
             intro: true,
             color: defaultColor,
-            isLogoTexture: true,
+            isLogoTexture: false,
             isFullTexture: false,
-            logoDecal: 'assets/threejs.png',
-            fullDecal: 'assets/threejs.png',
-            logo: true,  // For the toggle button
+            logoDecal: null,
+            fullDecal: null,
+            logo: false,  // Logo disabled by default
             stylish: false, // For the toggle button
             currentModel: 'tshirt', // Default model is t-shirt
             logoPosition: 'center', // Reset logo position to center
@@ -215,18 +215,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Reset to default state - match original project defaults
                 updateState({
                     color: defaultColor,
-                    isLogoTexture: true,
+                    isLogoTexture: false,
                     isFullTexture: false,
-                    logoDecal: 'assets/threejs.png',
-                    fullDecal: 'assets/threejs.png',
-                    logo: true,
+                    logoDecal: null,
+                    fullDecal: null,
+                    logo: false,
                     stylish: false,
                     logoPosition: 'center' // Reset logo position to center
                 });
 
                 // Reset UI elements
                 if (logoToggle) {
-                    logoToggle.checked = true;
+                    logoToggle.checked = false;
                 }
 
                 if (textureToggle) {
@@ -276,8 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Update shirt model
                 updateShirtColor(defaultColor);
-                updateShirtTexture('assets/threejs.png', 'logo');
-                toggleTexture('logo', true);
+                toggleTexture('logo', false);
                 toggleTexture('full', false);
 
                 // Reset preview areas

@@ -2,13 +2,13 @@
 export const state = {
     intro: true,              // Original: whether we're in intro screen
     color: '#EFBD48',         // Original: shirt color
-    isLogoTexture: true,      // Original: whether to show logo texture
+    isLogoTexture: false,      // Original: whether to show logo texture
     isFullTexture: false,     // Original: whether to show full texture
-    logoDecal: 'assets/threejs.png',  // Original: logo image path
-    fullDecal: 'assets/threejs.png',  // Original: full texture image path
+    logoDecal: null,  // Removed ThreeJS logo
+    fullDecal: null,  // Removed ThreeJS texture
 
     // New properties for toggle controls
-    logo: true,               // For UI: logo toggle state
+    logo: false,               // For UI: logo toggle state
     stylish: false,           // For UI: full texture toggle state
 
     // Logo positioning
