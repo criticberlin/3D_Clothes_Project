@@ -63,4 +63,9 @@ export const updateState = (updates) => {
 
     // Notify subscribers
     callbacks.forEach(callback => callback(state));
-}; 
+};
+
+// Make functions available globally for use by direct scripts
+window.state = state;
+window.updateState = updateState;
+window.subscribe = subscribe; 

@@ -4,6 +4,12 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { state, updateState } from './state.js';
 import { initTextureMapper, loadCustomImage, setModelType, clearCustomImage } from './texture-mapper.js';
 import { Logger, Performance } from './utils.js';
+import {
+    calculateFabricMaterialProperties,
+    generateAdvancedFabricNormalMap,
+    enhanceFabricLightInteraction,
+    calculateFabricColor
+} from './advanced-calculations.js';
 
 // ============================================================================
 // Global Variables
@@ -397,6 +403,7 @@ export function setupScene() {
             loadModel(state.modelPaths[state.currentModel] || './shirt_baked.glb')
                 .then(() => {
                     initializeDefaultState();
+
                     // Remove loading overlay after scene is fully set up
                     const loadingOverlay = document.querySelector('.loading-overlay');
                     if (loadingOverlay) {
@@ -447,6 +454,9 @@ function ensureLoadingOverlayExists() {
 
 function initializeScene() {
     scene = new THREE.Scene();
+
+    // Initialize scene userData
+    scene.userData = {};
 
     // Create a canvas container if it doesn't exist
     ensureCanvasContainerExists();
@@ -529,23 +539,33 @@ function ensureCanvasContainerExists() {
 }
 
 function setupLighting() {
-    // Soft ambient light for overall illumination
+    // Clear any existing lights
+    scene.children.forEach(child => {
+        if (child.isLight) {
+            scene.remove(child);
+        }
+    });
+
+    // Create physically-based studio lighting for fabric rendering
+
+    // Ambient light for base illumination
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
     scene.add(ambientLight);
 
-    // Main directional light (simulating sunlight)
+    // Main key light (simulating window/studio key light)
     const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    mainLight.position.set(5, 10, 7);
+    mainLight.position.set(4, 8, 6);
     mainLight.castShadow = true;
 
-    // Improve shadow quality
+    // High-quality shadows for realistic fabric appearance
     mainLight.shadow.mapSize.width = 2048;
     mainLight.shadow.mapSize.height = 2048;
     mainLight.shadow.camera.near = 0.1;
     mainLight.shadow.camera.far = 30;
     mainLight.shadow.bias = -0.0001;
+    mainLight.shadow.radius = 2; // Soft shadows for fabric
 
-    // For a room-sized scene
+    // Set up shadow camera
     const shadowSize = 10;
     mainLight.shadow.camera.left = -shadowSize;
     mainLight.shadow.camera.right = shadowSize;
@@ -554,24 +574,102 @@ function setupLighting() {
 
     scene.add(mainLight);
 
-    // Add fill light (from opposite side)
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.6);
-    fillLight.position.set(-5, 5, -3);
+    // Fill light (simulating bounce light from environment)
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    fillLight.position.set(-5, 3, -4);
     scene.add(fillLight);
 
-    // Add rim light for edge highlights
-    const rimLight = new THREE.DirectionalLight(0xffffff, 0.4);
-    rimLight.position.set(0, -5, -5);
-    scene.add(rimLight);
+    // Try to create an environment map with compatibility checks
+    try {
+        createEnvironmentMap();
+    } catch (error) {
+        console.error("Failed to create environment map, using fallback:", error);
+        createFallbackEnvironment();
+    }
+}
 
-    // Add a subtle blue-tinted light from below (soft bounce light)
-    const bounceLight = new THREE.DirectionalLight(0xe6f0ff, 0.2);
-    bounceLight.position.set(0, -3, 0);
-    scene.add(bounceLight);
+/**
+ * Create a high-quality environment map for reflections
+ */
+function createEnvironmentMap() {
+    // Check if renderer exists
+    if (!renderer) {
+        console.error("Renderer not initialized yet");
+        return;
+    }
 
-    // Add hemisphere light for subtle color variation from sky/ground
-    const hemiLight = new THREE.HemisphereLight(0xddeeff, 0x202030, 0.3);
+    // Check WebGL capabilities
+    const gl = renderer.getContext();
+    const isWebGL2 = gl instanceof WebGL2RenderingContext;
+
+    // Use HalfFloatType only if supported
+    const textureType = isWebGL2 ? THREE.HalfFloatType : THREE.UnsignedByteType;
+
+    // Reduce size on mobile or lower-end devices
+    const isLowPerfDevice = !isWebGL2 || window.innerWidth < 768 || navigator.hardwareConcurrency < 4;
+    const cubeMapSize = isLowPerfDevice ? 128 : 256;
+
+    try {
+        // Create an environment map for realistic reflections
+        const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(cubeMapSize);
+        cubeRenderTarget.texture.type = textureType;
+
+        // Create cube camera for environment map
+        const cubeCamera = new THREE.CubeCamera(0.1, 1000, cubeRenderTarget);
+        scene.add(cubeCamera);
+
+        // Simple environment for reflections
+        const envScene = new THREE.Scene();
+        const envGeometry = new THREE.BoxGeometry(100, 100, 100);
+        const envMaterial = new THREE.MeshBasicMaterial({
+            side: THREE.BackSide,
+            color: 0xffffff,
+            // Gradient-like environment
+            onBeforeCompile: shader => {
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    'gl_FragColor = vec4( outgoingLight, diffuseColor.a );',
+                    `
+                    // Create a simple gradient environment
+                    vec3 topColor = vec3(0.8, 0.9, 1.0);
+                    vec3 bottomColor = vec3(0.4, 0.4, 0.5);
+                    float h = normalize(vWorldPosition).y * 0.5 + 0.5;
+                    vec3 envColor = mix(bottomColor, topColor, h);
+                    gl_FragColor = vec4(envColor, diffuseColor.a);
+                    `
+                );
+            }
+        });
+
+        const envMesh = new THREE.Mesh(envGeometry, envMaterial);
+        envScene.add(envMesh);
+
+        // Update the environment map
+        cubeCamera.update(renderer, envScene);
+
+        // Add the environment map to the scene
+        scene.environment = cubeRenderTarget.texture;
+
+        console.log("Environment map created successfully with size:", cubeMapSize);
+    } catch (error) {
+        console.error("Error creating environment map:", error);
+        throw error;
+    }
+}
+
+/**
+ * Create a simpler fallback environment when advanced features aren't supported
+ */
+function createFallbackEnvironment() {
+    // Load a static environment map or create a simpler one
+    const fallbackEnvScene = new THREE.Scene();
+    fallbackEnvScene.background = new THREE.Color(0xf0f0f0);
+
+    // Add basic hemispheric lighting for ambient illumination
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8);
+    hemiLight.position.set(0, 200, 0);
     scene.add(hemiLight);
+
+    console.log("Using fallback environment lighting");
 }
 
 function setupControls() {
@@ -630,7 +728,7 @@ function setupControls() {
 
 function setupEventListeners() {
     window.addEventListener('resize', onWindowResize);
-    window.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointermove', onPointerMove);
 
     // Add keyboard controls for zooming
     window.addEventListener('keydown', (event) => {
@@ -647,7 +745,41 @@ function setupEventListeners() {
         // 'R' key to toggle rotation
         else if (event.key === 'r' || event.key === 'R') {
             console.log('Toggle rotation via keyboard');
-            window.TOGGLE_ROTATION(); // Use our new global function
+            window.TOGGLE_ROTATION(); // Use our global function
+        }
+    });
+
+    // Add click event listener for the canvas
+    renderer.domElement.addEventListener('click', function (event) {
+        // Calculate normalized device coordinates
+        const rect = renderer.domElement.getBoundingClientRect();
+        const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        // Update pointer coordinates for raycasting
+        pointer.x = x;
+        pointer.y = y;
+
+        // Perform raycasting
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(pointer, camera);
+        const intersects = raycaster.intersectObjects(scene.children, true);
+
+        if (intersects.length > 0) {
+            // The first intersection is the closest to the camera
+            const intersection = intersects[0];
+            const object = intersection.object;
+
+            // Check if we clicked on the shirt
+            if (object === shirtMesh) {
+                window.dispatchEvent(new CustomEvent('shirt-clicked', {
+                    detail: {
+                        point: intersection.point,
+                        normal: intersection.face.normal,
+                        uv: intersection.uv
+                    }
+                }));
+            }
         }
     });
 
@@ -684,11 +816,10 @@ function setupEventListeners() {
         }
     });
 
-    // Handle logo position change event
-    window.addEventListener('logo-position-change', (e) => {
-        const position = e.detail.position;
-        if (position && logoDecal) {
-            updateLogoPosition(position);
+    // Handle window resize for texture mapper
+    window.addEventListener('texture-resize', () => {
+        if (shirtMesh && shirtMesh.material.map) {
+            shirtMesh.material.map.needsUpdate = true;
         }
     });
 
@@ -757,19 +888,32 @@ function initializeDefaultState() {
 // Load a 3D model
 function loadModel(modelPath) {
     return new Promise((resolve, reject) => {
+        if (!modelPath) {
+            console.error('Model path is required');
+            reject(new Error('Model path is required'));
+            return;
+        }
+
         if (modelPath === currentModelPath && shirtMesh) {
             // Model already loaded
+            console.log('Model already loaded:', modelPath);
             resolve();
             return;
         }
 
         // Show loading indicator
         const loadingOverlay = document.querySelector('.loading-overlay');
-        if (loadingOverlay) loadingOverlay.style.display = 'flex';
+        if (loadingOverlay) {
+            loadingOverlay.style.display = 'flex';
+            loadingOverlay.innerHTML = `
+                <div class="spinner"></div>
+                <p>Loading model...</p>
+            `;
+        }
 
         // Determine model type from path
         currentModelType = modelPath.includes('hoodie') ? 'hoodie' : 'tshirt';
-        console.log(`Loading model type: ${currentModelType}`);
+        console.log(`Loading model type: ${currentModelType}, path: ${modelPath}`);
 
         // Get model settings based on current type
         const settings = modelSettings[currentModelType] || modelSettings.tshirt;
@@ -813,76 +957,122 @@ function loadModel(modelPath) {
         // Update the currentModelPath to prevent reloading
         currentModelPath = modelPath;
 
-        const gltfLoader = new GLTFLoader();
-        gltfLoader.load(
-            modelPath,
-            (gltf) => {
-                // Process the loaded model
-                processLoadedModel(gltf, settings, currentColor);
-
-                // Initialize the texture mapper if not already done
-                if (!textureMapperInitialized) {
-                    // Set up texture mapper with procedural textures (no file paths)
-                    initTextureMapper(null, null, currentModelType)
-                        .then(({ baseTexture, bumpMap }) => {
-                            console.log('Texture mapper initialized with procedural textures');
-                            textureMapperInitialized = true;
-
-                            // Apply the base texture if available
-                            if (baseTexture && shirtMaterial) {
-                                shirtMaterial.map = baseTexture;
-                                if (bumpMap) {
-                                    shirtMaterial.normalMap = bumpMap;
-                                    shirtMaterial.normalScale.set(0.1, 0.1);
-                                }
-                                shirtMaterial.needsUpdate = true;
-                            }
-
-                            // Notify that model is ready
-                            window.dispatchEvent(new CustomEvent('model-loaded', {
-                                detail: { model: currentModelType }
-                            }));
-
-                            resolve();
-
-                            // Hide loading overlay
-                            if (loadingOverlay) loadingOverlay.style.display = 'none';
-                        })
-                        .catch(error => {
-                            console.error('Error initializing texture mapper:', error);
-                            resolve(); // Still resolve to not block the app
-
-                            // Hide loading overlay
-                            if (loadingOverlay) loadingOverlay.style.display = 'none';
-                        });
-                } else {
-                    // Just update the model type in texture mapper
-                    setModelType(currentModelType);
-
-                    // Notify that model is ready
-                    window.dispatchEvent(new CustomEvent('model-loaded', {
-                        detail: { model: currentModelType }
-                    }));
-
-                    resolve();
-
-                    // Hide loading overlay
-                    if (loadingOverlay) loadingOverlay.style.display = 'none';
+        // Check if file exists before loading
+        fetch(modelPath, { method: 'HEAD' })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Model file not found: ${modelPath}`);
                 }
-            },
-            (progress) => {
-                // Update loading progress if needed
-                const percentComplete = Math.round((progress.loaded / progress.total) * 100);
-                console.log(`Model loading: ${percentComplete}%`);
-            },
-            (error) => {
-                console.error('Error loading model:', error);
-                reject(error);
+                return true;
+            })
+            .then(() => {
+                console.log(`Model file exists: ${modelPath}`);
 
-                // Hide loading overlay
-                if (loadingOverlay) loadingOverlay.style.display = 'none';
-            }
-        );
+                const gltfLoader = new GLTFLoader();
+
+                console.log(`Starting to load 3D model: ${modelPath}`);
+
+                gltfLoader.load(
+                    modelPath,
+                    (gltf) => {
+                        try {
+                            console.log(`Model loaded successfully: ${modelPath}`);
+                            // Process the loaded model
+                            processLoadedModel(gltf, settings, currentColor);
+
+                            // Initialize the texture mapper if not already done
+                            if (!textureMapperInitialized) {
+                                // Set up texture mapper with procedural textures (no file paths)
+                                initTextureMapper(null, null, currentModelType)
+                                    .then(({ baseTexture, bumpMap }) => {
+                                        console.log('Texture mapper initialized with procedural textures');
+                                        textureMapperInitialized = true;
+
+                                        // Update model type in the texture mapper
+                                        setModelType(currentModelType);
+
+                                        // Let the app know the model is loaded
+                                        window.dispatchEvent(new CustomEvent('model-loaded'));
+
+                                        // Hide loading overlay
+                                        if (loadingOverlay) loadingOverlay.style.display = 'none';
+
+                                        resolve();
+                                    })
+                                    .catch(error => {
+                                        console.error('Error initializing texture mapper:', error);
+
+                                        // Continue even if texture mapper fails
+                                        setModelType(currentModelType);
+                                        window.dispatchEvent(new CustomEvent('model-loaded'));
+                                        if (loadingOverlay) loadingOverlay.style.display = 'none';
+                                        resolve();
+                                    });
+                            } else {
+                                // Just update the model type
+                                setModelType(currentModelType);
+
+                                // Let the app know the model is loaded
+                                window.dispatchEvent(new CustomEvent('model-loaded'));
+
+                                // Hide loading overlay
+                                if (loadingOverlay) loadingOverlay.style.display = 'none';
+
+                                resolve();
+                            }
+                        } catch (error) {
+                            console.error('Error processing model:', error);
+                            if (loadingOverlay) {
+                                loadingOverlay.innerHTML = `
+                                    <div class="error">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        <p>Error processing model. Please try again.</p>
+                                        <p class="error-details">${error.message}</p>
+                                    </div>
+                                `;
+                            }
+                            reject(error);
+                        }
+                    },
+                    (progress) => {
+                        // Show loading progress
+                        const percent = Math.round((progress.loaded / progress.total) * 100);
+                        console.log(`Loading model: ${percent}%`);
+
+                        // Update loading overlay with progress
+                        if (loadingOverlay && loadingOverlay.querySelector('p')) {
+                            loadingOverlay.querySelector('p').textContent =
+                                `Loading ${currentModelType} model... ${percent}%`;
+                        }
+                    },
+                    (error) => {
+                        console.error('Error loading model:', error);
+                        if (loadingOverlay) {
+                            loadingOverlay.innerHTML = `
+                                <div class="error">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    <p>Error loading model. Please try again.</p>
+                                    <p class="error-details">${error.message}</p>
+                                </div>
+                            `;
+                        }
+                        reject(error);
+                    }
+                );
+            })
+            .catch(error => {
+                console.error('Error checking model file:', error);
+                if (loadingOverlay) {
+                    loadingOverlay.innerHTML = `
+                        <div class="error">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <p>Error loading model: File not found</p>
+                            <p class="error-details">${error.message}</p>
+                        </div>
+                    `;
+                }
+                reject(error);
+            });
     });
 }
 
@@ -1048,136 +1238,28 @@ export function updateShirtColor(color) {
 
     const targetColor = new THREE.Color(color);
 
-    // Color-specific material settings for more realism
+    // Basic material settings
     let materialSettings = {
-        roughness: 0.65,
-        metalness: 0.02,
-        clearcoat: 0.08,
-        clearcoatRoughness: 0.4
+        roughness: 0.5,
+        metalness: 0.0
     };
 
-    // Adjust material properties based on color for more realism
-    switch (color.toUpperCase()) {
-        case '#FFFFFF': // White
-            materialSettings = {
-                roughness: 0.6,
-                metalness: 0.01,
-                clearcoat: 0.1,
-                clearcoatRoughness: 0.45,
-                sheen: 0.1,
-                sheenRoughness: 0.8
-            };
-            break;
+    // Apply color immediately
+    shirtMaterial.color = targetColor;
 
-        case '#000000': // Black
-            materialSettings = {
-                roughness: 0.7,
-                metalness: 0.03,
-                clearcoat: 0.12,
-                clearcoatRoughness: 0.35,
-                sheen: 0.15,
-                sheenRoughness: 0.7
-            };
-            break;
-
-        case '#606060': // Gray/Charcoal
-            materialSettings = {
-                roughness: 0.68,
-                metalness: 0.03,
-                clearcoat: 0.09,
-                clearcoatRoughness: 0.4,
-                sheen: 0.08,
-                sheenRoughness: 0.75
-            };
-            break;
-
-        case '#000080': // Navy Blue
-            materialSettings = {
-                roughness: 0.72,
-                metalness: 0.025,
-                clearcoat: 0.07,
-                clearcoatRoughness: 0.5,
-                sheen: 0.06,
-                sheenRoughness: 0.8
-            };
-            break;
-
-        case '#F5F5DC': // Beige/Khaki
-            materialSettings = {
-                roughness: 0.65,
-                metalness: 0.015,
-                clearcoat: 0.06,
-                clearcoatRoughness: 0.42,
-                sheen: 0.07,
-                sheenRoughness: 0.85
-            };
-            break;
-
-        case '#556B2F': // Olive Green
-            materialSettings = {
-                roughness: 0.73,
-                metalness: 0.02,
-                clearcoat: 0.06,
-                clearcoatRoughness: 0.45,
-                sheen: 0.05,
-                sheenRoughness: 0.85
-            };
-            break;
-
-        case '#8B4513': // Brown
-            materialSettings = {
-                roughness: 0.75,
-                metalness: 0.025,
-                clearcoat: 0.05,
-                clearcoatRoughness: 0.5,
-                sheen: 0.04,
-                sheenRoughness: 0.9
-            };
-            break;
-
-        case '#800020': // Burgundy
-            materialSettings = {
-                roughness: 0.71,
-                metalness: 0.03,
-                clearcoat: 0.08,
-                clearcoatRoughness: 0.4,
-                sheen: 0.1,
-                sheenRoughness: 0.8
-            };
-            break;
+    // Apply basic material settings
+    if (shirtMaterial.roughness !== undefined) {
+        shirtMaterial.roughness = materialSettings.roughness;
+    }
+    if (shirtMaterial.metalness !== undefined) {
+        shirtMaterial.metalness = materialSettings.metalness;
     }
 
-    // Smooth transition for color change
-    function updateColor() {
-        // Smoothly transition color
-        shirtMaterial.color.lerp(targetColor, 0.1);
+    // Update material
+    shirtMaterial.needsUpdate = true;
 
-        // Update material properties based on color settings
-        for (const [property, value] of Object.entries(materialSettings)) {
-            if (property in shirtMaterial) {
-                // Smoothly transition property values
-                shirtMaterial[property] += (value - shirtMaterial[property]) * 0.1;
-            }
-        }
-
-        // Update material
-        shirtMaterial.needsUpdate = true;
-
-        // Continue animation until color is close enough
-        if (!shirtMaterial.color.equals(targetColor)) {
-            requestAnimationFrame(updateColor);
-        } else {
-            // Apply advanced fabric textures with color-specific adjustments
-            createColorAdjustedFabricTextures(shirtMaterial, color);
-
-            // Attempt to upgrade to physical material
-            tryUpgradeToPhysicalMaterial(shirtMaterial, targetColor, materialSettings);
-
-            console.log("Color update complete with fabric-specific properties");
-        }
-    }
-
-    updateColor();
+    // Update state
+    updateState({ color: color });
 }
 
 // New function to create fabric textures adjusted for specific colors
@@ -1491,23 +1573,41 @@ export function toggleTexture(type, active) {
 
 // Change the current 3D model
 export function changeModel(modelType) {
-    const modelPath = state.modelPaths[modelType];
+    console.log(`Changing model to: ${modelType}`);
+
+    // First check if the modelType is valid
+    if (modelType !== 'tshirt' && modelType !== 'hoodie') {
+        console.error(`Invalid model type: ${modelType}`);
+        return Promise.reject(new Error(`Invalid model type: ${modelType}`));
+    }
+
+    // Get the model path from state
+    let modelPath;
+    if (modelType === 'tshirt') {
+        modelPath = './models/tshirt.glb'; // Fixed path to match actual file location
+    } else if (modelType === 'hoodie') {
+        modelPath = './models/hoodie.glb'; // Fixed path to match actual file location
+    }
+
     if (!modelPath) {
         console.error('Model path not found for type:', modelType);
         return Promise.reject(new Error('Model path not found'));
     }
 
+    console.log(`Model path resolved to: ${modelPath}`);
+
     // Show loading overlay
     const loadingOverlay = document.querySelector('.loading-overlay');
     if (loadingOverlay) {
-        loadingOverlay.classList.remove('hidden');
-        loadingOverlay.querySelector('p').textContent = 'Loading model...';
+        loadingOverlay.style.display = 'flex';
+        loadingOverlay.querySelector('p').textContent = `Loading ${modelType} model...`;
     }
 
     // Already on this model, no need to change
-    if (modelType === currentModelType) {
+    if (modelType === currentModelType && shirtMesh) {
+        console.log(`Already on ${modelType} model, no need to change`);
         if (loadingOverlay) {
-            loadingOverlay.classList.add('hidden');
+            loadingOverlay.style.display = 'none';
         }
         return Promise.resolve();
     }
@@ -1526,9 +1626,10 @@ export function changeModel(modelType) {
 
     return loadModel(modelPath)
         .then(() => {
+            console.log(`Model ${modelType} loaded successfully`);
             // Hide loading overlay
             if (loadingOverlay) {
-                loadingOverlay.classList.add('hidden');
+                loadingOverlay.style.display = 'none';
             }
 
             // Restore color
@@ -1539,79 +1640,46 @@ export function changeModel(modelType) {
             // Get current logo position from state
             const logoPosition = state.logoPosition || 'center';
 
-            // Restore textures with correct positions
-            if (savedLogoDecal && isLogoVisible) {
-                createDecalFromTexture(savedLogoDecal, 'logo');
+            // Restore textures
+            if (isLogoVisible && savedLogoDecal) {
+                const currentLogoDecal = state.logoDecal || 'assets/threejs.png';
+                updateShirtTexture(currentLogoDecal, 'logo');
             }
 
-            if (savedFullDecal && isFullVisible) {
-                createDecalFromTexture(savedFullDecal, 'full');
+            if (isFullVisible && savedFullDecal) {
+                const currentFullDecal = state.fullDecal || 'assets/threejs.png';
+                updateShirtTexture(currentFullDecal, 'full');
             }
+
+            // Reset camera
+            resetCameraPosition();
+
+            // Notify that model has changed
+            window.dispatchEvent(new CustomEvent('model-changed', {
+                detail: { modelType }
+            }));
+
+            return true;
         })
         .catch(error => {
-            console.error('Error changing model:', error);
+            console.error(`Error loading model ${modelType}:`, error);
+
+            // Show error in loading overlay
             if (loadingOverlay) {
-                // Show helpful error message with instructions
                 loadingOverlay.innerHTML = `
-                    <div class="error">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <p>Missing 3D model: ${modelPath}</p>
-                        <div class="error-instructions">
-                            <p>To add a hoodie model:</p>
-                            <ol>
-                                <li>Download a free hoodie 3D model in GLB format from 
-                                    <a href="https://sketchfab.com/3d-models/hoodie-low-poly-a56b93562d3a42c5989eaa40098c802b" target="_blank">Sketchfab</a>
-                                    or <a href="https://free3d.com/3d-models/hoodie" target="_blank">Free3D</a></li>
-                                <li>Name it "hoodie_baked.glb"</li>
-                                <li>Place it in the root directory of your project</li>
-                                <li>Refresh the page</li>
-                            </ol>
-                            <button id="model-error-close" class="button secondary">
-                                <i class="fas fa-arrow-left"></i> Go Back
-                            </button>
-                        </div>
-                    </div>
-                `;
-
-                // Add listener for close button
-                const closeButton = document.getElementById('model-error-close');
-                if (closeButton) {
-                    closeButton.addEventListener('click', () => {
-                        // Revert to t-shirt model
-                        updateState({ currentModel: 'tshirt' });
-                        document.querySelector('input[name="model-type"][value="tshirt"]').checked = true;
-
-                        // Hide error and show loading again
-                        if (loadingOverlay) {
-                            loadingOverlay.innerHTML = `
-                                <div class="spinner"></div>
-                                <p>Loading original model...</p>
-                            `;
-                        }
-
-                        // Load t-shirt model
-                        return loadModel(state.modelPaths.tshirt)
-                            .then(() => {
-                                // Hide loading overlay
-                                if (loadingOverlay) {
-                                    loadingOverlay.classList.add('hidden');
-                                }
-                            })
-                            .catch(err => {
-                                console.error('Error loading fallback model:', err);
-                                if (loadingOverlay) {
-                                    loadingOverlay.innerHTML = `
                                         <div class="error">
                                             <i class="fas fa-exclamation-triangle"></i>
-                                            <p>Unable to load any models. Please refresh the page.</p>
+                        <p>Error loading ${modelType} model</p>
+                        <p class="error-details">${error.message}</p>
                                         </div>
                                     `;
-                                }
-                            });
-                    });
-                }
             }
-            throw error;
+
+            // Revert to previous model type
+            currentModelType = modelType === 'tshirt' ? 'hoodie' : 'tshirt';
+
+            // Reject the promise
+            return Promise.reject(error);
         });
 }
 
@@ -1947,15 +2015,15 @@ const frameInterval = 1000 / targetFPS;
 // Animation loop
 function animate(currentTime) {
     requestAnimationFrame(animate);
-    
+
     // Limit frame rate for better performance
     const elapsed = currentTime - lastFrameTime;
     if (elapsed < frameInterval) return;
-    
+
     // Calculate actual FPS
     const actualFPS = 1000 / elapsed;
     lastFrameTime = currentTime - (elapsed % frameInterval);
-    
+
     // Start performance measurement
     Performance.start('render-frame');
 
@@ -1978,7 +2046,7 @@ function animate(currentTime) {
     if (scene && camera) {
         renderer.render(scene, camera);
     }
-    
+
     // End performance measurement
     Performance.end('render-frame');
 }
@@ -1999,12 +2067,20 @@ function onWindowResize() {
         const width = container.clientWidth;
         const height = container.clientHeight;
 
+        console.log(`Resizing canvas to ${width}x${height}`);
+
+        // Update camera aspect ratio
         camera.aspect = width / height;
         camera.updateProjectionMatrix();
 
         // Update renderer size
-        renderer.setSize(width, height);
+        renderer.setSize(width, height, false); // false to avoid setting style
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit pixel ratio for performance
+
+        // Force a render to update the display immediately
+        if (scene) {
+            renderer.render(scene, camera);
+        }
     }
 }
 
@@ -2016,29 +2092,56 @@ function onPointerMove(event) {
 
 // Update scene background color based on theme
 export function updateThemeBackground(isDarkMode) {
-    if (!scene) return;
-
-    // Update background based on theme
-    if (isDarkMode) {
-        scene.background = new THREE.Color(0x111827); // Dark background
-
-        // Also update any environment lighting if needed
-        if (renderer) {
-            renderer.setClearColor(0x111827);
-        }
-    } else {
-        scene.background = new THREE.Color(0xf8f9fa); // Light background
-
-        // Update renderer clear color as well
-        if (renderer) {
-            renderer.setClearColor(0xf8f9fa);
-        }
+    if (!scene) {
+        console.warn('Scene not initialized when trying to update theme background');
+        return;
     }
 
-    // Force a render update to show the change immediately
-    if (renderer && scene && camera) {
+    console.log('Updating theme background to', isDarkMode ? 'dark' : 'light', 'mode');
+
+    // Define theme colors
+    const darkBackgroundColor = 0x111827; // Dark slate
+    const lightBackgroundColor = 0xf8fafc; // Light off-white
+
+    // Create color object
+    const newColor = new THREE.Color(isDarkMode ? darkBackgroundColor : lightBackgroundColor);
+
+    // Set scene background
+    scene.background = newColor;
+
+    // Update renderer clear color
+    if (renderer) {
+        renderer.setClearColor(newColor);
+    }
+
+    // Make sure the document class matches the theme
+    if (isDarkMode) {
+        document.documentElement.classList.remove('light-theme');
+    } else {
+        document.documentElement.classList.add('light-theme');
+    }
+
+    // Update ambient light intensity for better theme matching
+    const ambientLights = [];
+    scene.traverse(function (child) {
+        if (child.isAmbientLight) {
+            ambientLights.push(child);
+        }
+    });
+
+    if (ambientLights.length > 0) {
+        ambientLights.forEach(light => {
+            light.intensity = isDarkMode ? 0.8 : 1.2;
+        });
+    }
+
+    // Force a render to show the changes immediately
+    if (renderer && camera) {
         renderer.render(scene, camera);
     }
+
+    console.log('Theme background updated successfully to', isDarkMode ? 'dark' : 'light');
+    return true; // Return a value to indicate success
 }
 
 // Add the toggleAutoRotate function to toggle auto-rotation
@@ -2284,194 +2387,92 @@ function createProceduralFabricTextures(material) {
 
 // New enhanced fabric textures function
 function createAdvancedFabricTextures(material) {
-    // Higher resolution for more detail
-    const resolution = 1024;
-
-    // Create detailed normal map for fabric weave
-    const normalMap = createAdvancedNormalMap(resolution, resolution);
-    material.normalMap = normalMap;
-    material.normalScale = new THREE.Vector2(0.7, 0.7);
-
-    // Create detailed roughness map for fabric
-    const roughnessMap = createAdvancedRoughnessMap(resolution, resolution);
-    material.roughnessMap = roughnessMap;
-
-    // Create ambient occlusion map
-    const aoMap = createAmbientOcclusionMap(resolution, resolution);
-    material.aoMap = aoMap;
-    material.aoMapIntensity = 0.8;
-
-    // Create displacement map for subtle fabric detail
-    const displacementMap = createDisplacementMap(resolution, resolution);
-    material.displacementMap = displacementMap;
-    material.displacementScale = 0.02;
-
+    // Don't add any textures for basic appearance
+    material.normalMap = null;
+    material.roughnessMap = null;
+    material.aoMap = null;
+    material.displacementMap = null;
     material.needsUpdate = true;
 }
 
 // Create a more detailed normal map for fabric
 function createAdvancedNormalMap(width, height) {
+    // Create a simple flat normal map (no details) for basic appearance
     const size = width * height;
     const data = new Uint8Array(4 * size);
 
-    // Fill with a detailed fabric-like normal pattern
+    // Fill with flat normal data (pointing straight up)
     for (let i = 0; i < size; i++) {
         const stride = i * 4;
-
-        const x = i % width;
-        const y = Math.floor(i / width);
-
-        // Multi-frequency noise for more realistic fabric weave
-        const weaveX = Math.sin(x * 0.2) * 8 + Math.sin(x * 0.1) * 4 + Math.sin(x * 0.05) * 2;
-        const weaveY = Math.sin(y * 0.2) * 8 + Math.sin(y * 0.1) * 4 + Math.sin(y * 0.05) * 2;
-
-        // Add a subtle diagonal pattern for fabric threads
-        const diagonalNoise = Math.sin((x + y) * 0.1) * 4 + Math.sin((x - y) * 0.1) * 4;
-
-        // Combine for more complex fabric weave pattern
-        const noise = (weaveX + weaveY + diagonalNoise) * 0.3;
-
-        // Create more variation in the normal map
-        data[stride] = Math.min(255, Math.max(0, 128 + noise + (Math.random() * 5 - 2.5)));
-        data[stride + 1] = Math.min(255, Math.max(0, 128 + noise + (Math.random() * 5 - 2.5)));
-        data[stride + 2] = 255;
-        data[stride + 3] = 255;
+        data[stride] = 128;     // R: X component (flat)
+        data[stride + 1] = 128; // G: Y component (flat) 
+        data[stride + 2] = 255; // B: Z component (pointing outward)
+        data[stride + 3] = 255; // A: fully opaque
     }
 
     const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(8, 8); // More repeats for finer detail
     texture.needsUpdate = true;
-
     return texture;
 }
 
 // Create an enhanced roughness map for fabric
 function createAdvancedRoughnessMap(width, height) {
+    // Create a simple uniform roughness map for basic appearance
     const size = width * height;
     const data = new Uint8Array(4 * size);
 
-    // Create a more detailed fabric-like roughness
+    // Fill with uniform roughness value
+    const value = 128; // Medium roughness
     for (let i = 0; i < size; i++) {
         const stride = i * 4;
-
-        const x = i % width;
-        const y = Math.floor(i / width);
-
-        // Multi-scale noise for fabric fibers
-        const baseRoughness = 170; // Base fabric roughness
-
-        // Create a fine weave pattern
-        const weaveX = Math.sin(x * 0.4) * 15 + Math.cos(x * 0.2) * 8;
-        const weaveY = Math.sin(y * 0.4) * 15 + Math.cos(y * 0.2) * 8;
-
-        // Add diagonal patterns
-        const diagonal = Math.sin((x + y) * 0.2) * 10 + Math.sin((x - y) * 0.2) * 10;
-
-        // Combine different patterns for more realism
-        const noise = (weaveX + weaveY + diagonal) * 0.2;
-
-        // Add some randomness for fabric fuzz
-        const fuzz = Math.random() * 10;
-
-        // Calculate final roughness value
-        const value = Math.min(255, Math.max(0, baseRoughness + noise + fuzz));
-
-        // Use same value for R, G, B (grayscale)
         data[stride] = value;
         data[stride + 1] = value;
         data[stride + 2] = value;
-        data[stride + 3] = 255;
+        data[stride + 3] = 255; // Fully opaque
     }
 
     const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(8, 8);
     texture.needsUpdate = true;
-
     return texture;
 }
 
-// Create an ambient occlusion map for fabric folds and details
+// Create an ambient occlusion map for the fabric
 function createAmbientOcclusionMap(width, height) {
+    // Create a flat white AO map (no occlusion) for basic appearance
     const size = width * height;
     const data = new Uint8Array(4 * size);
 
-    // Fill with fabric-like AO pattern with subtle folds
+    // Fill with white (no occlusion)
     for (let i = 0; i < size; i++) {
         const stride = i * 4;
-
-        const x = i % width;
-        const y = Math.floor(i / width);
-
-        // Base brightness (higher values = less occlusion)
-        const baseValue = 220;
-
-        // Create subtle folds
-        const fold1 = Math.sin(y * 0.01) * 25;
-        const fold2 = Math.sin(x * 0.01 + y * 0.01) * 15;
-
-        // Subtle random variation
-        const variation = Math.random() * 5;
-
-        // Calculate final AO value - lower values = more occlusion
-        const value = Math.min(255, Math.max(0, baseValue + fold1 + fold2 + variation));
-
-        data[stride] = value;
-        data[stride + 1] = value;
-        data[stride + 2] = value;
-        data[stride + 3] = 255;
+        data[stride] = 255;     // White
+        data[stride + 1] = 255; // White
+        data[stride + 2] = 255; // White
+        data[stride + 3] = 255; // Fully opaque
     }
 
     const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(2, 2); // Larger scale for folds
     texture.needsUpdate = true;
-
     return texture;
 }
 
 // Create a displacement map for subtle fabric detail
 function createDisplacementMap(width, height) {
+    // Create a flat displacement map (no displacement) for basic appearance
     const size = width * height;
     const data = new Uint8Array(4 * size);
 
-    // Fill with subtle displacement pattern for fabric texture
+    // Fill with middle gray (no displacement)
     for (let i = 0; i < size; i++) {
         const stride = i * 4;
-
-        const x = i % width;
-        const y = Math.floor(i / width);
-
-        // Base displacement value (middle gray = no displacement)
-        const baseValue = 128;
-
-        // Create fabric weave pattern with very subtle displacement
-        const weaveX = Math.sin(x * 0.3) * 2 + Math.sin(x * 0.6) * 1;
-        const weaveY = Math.sin(y * 0.3) * 2 + Math.sin(y * 0.6) * 1;
-
-        // Add very subtle random noise
-        const noise = (Math.random() - 0.5) * 2;
-
-        // Calculate final displacement value
-        const value = Math.min(255, Math.max(0, baseValue + weaveX + weaveY + noise));
-
-        // Use same value for R, G, B
-        data[stride] = value;
-        data[stride + 1] = value;
-        data[stride + 2] = value;
-        data[stride + 3] = 255;
+        data[stride] = 128;     // Middle value (no displacement)
+        data[stride + 1] = 128; // Middle value
+        data[stride + 2] = 128; // Middle value
+        data[stride + 3] = 255; // Fully opaque
     }
 
     const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(8, 8);
     texture.needsUpdate = true;
-
     return texture;
 }
 
@@ -2554,51 +2555,105 @@ function tryUpgradeToPhysicalMaterial(standardMaterial, color, materialSettings)
     // Only try if MeshPhysicalMaterial is available
     if (THREE.MeshPhysicalMaterial) {
         try {
-            const physicalMaterial = new THREE.MeshPhysicalMaterial({
-                color: color,
-                roughness: materialSettings?.roughness || 0.65,
-                metalness: materialSettings?.metalness || 0.02,
-                clearcoat: materialSettings?.clearcoat || 0.08,
-                clearcoatRoughness: materialSettings?.clearcoatRoughness || 0.4,
-                side: THREE.DoubleSide,
-                transmission: materialSettings?.transmission || 0.01,
-                thickness: materialSettings?.thickness || 0.3,
-                envMapIntensity: materialSettings?.envMapIntensity || 0.6,
-                sheen: 0.05,  // Subtle sheen for fabric
-                sheenRoughness: 0.8,
-                sheenColor: new THREE.Color(color).multiplyScalar(1.2), // Slightly brighter sheen
-                anisotropy: materialSettings?.anisotropy || 0.3,
-                anisotropyRotation: Math.PI / 4 // 45 degrees
-            });
+            // Get current fabric type from state or default to cotton
+            const fabricType = state.fabricType || 'cotton';
 
-            // Copy all maps from the standard material
-            if (standardMaterial.normalMap) {
-                physicalMaterial.normalMap = standardMaterial.normalMap;
-                physicalMaterial.normalScale = new THREE.Vector2(
-                    materialSettings?.normalScale || 0.7,
-                    materialSettings?.normalScale || 0.7
+            // Calculate physically-based material properties with error handling
+            let physicsMaterialProperties;
+            try {
+                physicsMaterialProperties = calculateFabricMaterialProperties(
+                    fabricType,
+                    new THREE.Color(color)
                 );
+            } catch (error) {
+                console.error("Failed to calculate fabric properties:", error);
+                // Use default properties
+                physicsMaterialProperties = {
+                    roughness: 0.7,
+                    metalness: 0.1,
+                    clearcoat: 0.1,
+                    clearcoatRoughness: 0.5,
+                    sheen: 0.1,
+                    sheenRoughness: 0.9
+                };
             }
+
+            // Merge with any provided settings
+            const finalSettings = {
+                ...physicsMaterialProperties,
+                ...materialSettings,
+                color: color,
+                side: THREE.DoubleSide
+            };
+
+            // Create physical material with advanced properties
+            const physicalMaterial = new THREE.MeshPhysicalMaterial(finalSettings);
+
+            // Generate advanced fabric normal map with error handling
+            try {
+                const normalMap = generateAdvancedFabricNormalMap(1024, 1024, fabricType);
+                physicalMaterial.normalMap = normalMap;
+                physicalMaterial.normalScale.set(0.8, 0.8);
+            } catch (error) {
+                console.error("Failed to generate normal map:", error);
+                // Continue without normal map
+            }
+
+            // Copy other maps from standard material if available
             if (standardMaterial.roughnessMap) {
                 physicalMaterial.roughnessMap = standardMaterial.roughnessMap;
             }
+
             if (standardMaterial.aoMap) {
                 physicalMaterial.aoMap = standardMaterial.aoMap;
-                physicalMaterial.aoMapIntensity = materialSettings?.aoMapIntensity || 0.8;
+                physicalMaterial.aoMapIntensity = 1.0;
             }
-            if (standardMaterial.displacementMap) {
-                physicalMaterial.displacementMap = standardMaterial.displacementMap;
-                physicalMaterial.displacementScale = materialSettings?.displacementScale || 0.02;
+
+            // Apply advanced light interaction calculations with error handling
+            try {
+                enhanceFabricLightInteraction(physicalMaterial, fabricType, new THREE.Color(color));
+            } catch (error) {
+                console.error("Failed to enhance light interaction:", error);
+                // Continue without enhancement
             }
 
             // Replace the material
             shirtMaterial = physicalMaterial;
-            shirtMesh.material = shirtMaterial;
-            console.log("Upgraded to enhanced physical material for better fabric realism");
+            if (shirtMesh) {
+                shirtMesh.material = shirtMaterial;
+            }
+
+            console.log(`Advanced physical material applied with ${fabricType} properties`);
         } catch (e) {
-            console.log("Advanced material not supported, using standard material instead", e);
+            console.error("Failed to upgrade to advanced material", e);
+            // Fallback to standard material
+            useFallbackMaterial(standardMaterial, color);
         }
+    } else {
+        // THREE.MeshPhysicalMaterial not available, use fallback
+        useFallbackMaterial(standardMaterial, color);
     }
+}
+
+/**
+ * Fallback to simpler material when advanced features aren't available
+ */
+function useFallbackMaterial(standardMaterial, color) {
+    // Create a simpler material as fallback
+    const fallbackMaterial = new THREE.MeshStandardMaterial({
+        color: color,
+        roughness: 0.7,
+        metalness: 0.1,
+        side: THREE.DoubleSide
+    });
+
+    // Replace the material
+    shirtMaterial = fallbackMaterial;
+    if (shirtMesh) {
+        shirtMesh.material = shirtMaterial;
+    }
+
+    console.log("Using standard material as fallback");
 }
 
 // Add this new function for direct camera zooming
@@ -2936,14 +2991,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
 function toggleRotation() {
     rotationEnabled = !rotationEnabled;
-    
+
     // Update the global window variable
     window.GLOBAL_ROTATION_ENABLED = rotationEnabled;
-    
+
     // Update the button state
     const rotateButton = document.getElementById('rotate-view');
     const icon = rotateButton?.querySelector('i');
-    
+
     if (rotateButton) {
         if (rotationEnabled) {
             rotateButton.classList.add('active');
@@ -2961,3 +3016,90 @@ function toggleRotation() {
         renderer.render(scene, camera);
     }
 }
+
+// Add a new function to set fabric type and update material
+export function setFabricType(fabricType) {
+    // Update state
+    updateState({ fabricType });
+
+    // Update material if it exists
+    if (shirtMaterial && shirtMesh) {
+        // Get current color
+        const color = shirtMaterial.color;
+
+        // Recalculate material with new fabric type
+        const materialSettings = calculateFabricMaterialProperties(
+            fabricType,
+            color
+        );
+
+        // Apply new material settings
+        for (const [property, value] of Object.entries(materialSettings)) {
+            if (property in shirtMaterial) {
+                shirtMaterial[property] = value;
+            }
+        }
+
+        // Regenerate normal map for the new fabric type
+        const normalMap = generateAdvancedFabricNormalMap(1024, 1024, fabricType);
+        shirtMaterial.normalMap = normalMap;
+
+        // Enhance light interaction for the specific fabric
+        enhanceFabricLightInteraction(shirtMaterial, fabricType, color);
+
+        // Update material
+        shirtMaterial.needsUpdate = true;
+
+        console.log(`Fabric type updated to ${fabricType}`);
+    }
+}
+
+// Expose updateThemeBackground to window for direct access from HTML
+window.updateThemeBackground = updateThemeBackground;
+
+// Check if WebGL is properly supported before loading the models
+function checkWebGLSupport() {
+    try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
+        if (!gl) {
+            return { supported: false, message: 'WebGL is not supported in your browser.' };
+        }
+
+        // Check if we have enough memory (at least 128MB recommended for 3D models)
+        if (gl.getExtension('WEBGL_debug_renderer_info')) {
+            const renderer = gl.getParameter(gl.getExtension('WEBGL_debug_renderer_info').UNMASKED_RENDERER_WEBGL);
+            console.log('Graphics hardware:', renderer);
+
+            // Check for mobile/integrated GPU that might struggle with complex models
+            const isMobileGPU = /(mali|adreno|powervr|intel)/i.test(renderer);
+            if (isMobileGPU) {
+                console.warn('Mobile or integrated GPU detected, performance may be limited');
+            }
+        }
+
+        // Check for necessary extensions
+        const hasRequiredExtensions = [
+            'OES_texture_float',
+            'OES_element_index_uint',
+            'WEBGL_depth_texture'
+        ].every(ext => gl.getExtension(ext));
+
+        if (!hasRequiredExtensions) {
+            return {
+                supported: true,
+                limitedSupport: true,
+                message: 'WebGL is supported but some features may not work correctly.'
+            };
+        }
+
+        return { supported: true, message: 'WebGL is fully supported.' };
+    } catch (e) {
+        console.error('Error checking WebGL support:', e);
+        return { supported: false, message: 'Error checking WebGL support: ' + e.message };
+    }
+}
+
+// Call this function before attempting to load any models
+window.checkWebGLSupport = checkWebGLSupport;

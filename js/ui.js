@@ -15,99 +15,51 @@ const colors = [
     { name: 'Burgundy', hex: '#800020' }
 ];
 
-// Initialize tab functionality
+/**
+ * Initialize the tabs navigation
+ */
 export function initializeTabs() {
-    const tabs = document.querySelectorAll('.tab-btn');
-    const panels = document.querySelectorAll('.tab-panel');
-    let lastTabClick = 0; // For debouncing
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabPanels = document.querySelectorAll('.tab-panel');
 
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            // Simple debounce to prevent rapid tab switching
-            const now = Date.now();
-            if (now - lastTabClick < 300) return;
-            lastTabClick = now;
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const tabName = button.dataset.tab;
 
-            // Add transition effect for tab buttons
-            tab.classList.add('pulse');
-            setTimeout(() => tab.classList.remove('pulse'), 600);
+            // Update active tab button
+            tabButtons.forEach(btn => {
+                btn.classList.remove('active');
+            });
+            button.classList.add('active');
 
-            // Remove active class from all tabs and panels
-            tabs.forEach(t => t.classList.remove('active'));
-            panels.forEach(p => {
-                p.classList.remove('active');
-                // Start exit animation
-                p.style.opacity = '0';
-                p.style.transform = 'translateY(10px)';
+            // Show the selected tab panel and hide others
+            tabPanels.forEach(panel => {
+                panel.classList.remove('active');
+                panel.style.opacity = '0';
+                panel.style.transform = 'translateY(10px)';
             });
 
-            // Add active class to clicked tab and corresponding panel
-            tab.classList.add('active');
-            const panel = document.getElementById(`${tab.dataset.tab}-picker`);
-
-            if (panel) {
-                // Delay showing new panel for smooth transition
+            const activePanel = document.getElementById(`${tabName}-picker`);
+            if (activePanel) {
+                activePanel.classList.add('active');
+                // Slight delay for smoother transition
                 setTimeout(() => {
-                    panel.classList.add('active');
+                    activePanel.classList.add('active');
                     // Trigger entrance animation
-                    panel.style.opacity = '1';
-                    panel.style.transform = 'translateY(0)';
+                    activePanel.style.opacity = '1';
+                    activePanel.style.transform = 'translateY(0)';
                 }, 50);
             }
         });
     });
 
-    // Set up logo toggle with visual feedback
-    const logoToggle = document.getElementById('logo-toggle');
-    if (logoToggle) {
-        logoToggle.checked = state.logo !== false; // Default to true
-        logoToggle.addEventListener('change', (e) => {
-            const isActive = e.target.checked;
-
-            // Add visual feedback
-            const label = e.target.closest('.toggle');
-            label.classList.add('pulse');
-            setTimeout(() => label.classList.remove('pulse'), 500);
-
-            updateState({
-                logo: isActive,
-                isLogoTexture: isActive // Keep original state key in sync
-            });
-            toggleTexture('logo', isActive);
-        });
-    }
-
-    // Set up texture toggle with visual feedback
-    const textureToggle = document.getElementById('texture-toggle');
-    if (textureToggle) {
-        textureToggle.checked = state.stylish === true; // Default to false
-        textureToggle.addEventListener('change', (e) => {
-            const isActive = e.target.checked;
-
-            // Add visual feedback
-            const label = e.target.closest('.toggle');
-            label.classList.add('pulse');
-            setTimeout(() => label.classList.remove('pulse'), 500);
-
-            updateState({
-                stylish: isActive,
-                isFullTexture: isActive // Keep original state key in sync
-            });
-            toggleTexture('full', isActive);
-        });
-    }
-
-    // Set up logo position buttons
-    setupLogoPositionButtons();
-
-    // Setup theme toggle
+    // Set up theme toggle
     setupThemeToggle();
-
-    // Setup camera view buttons
-    setupCameraViewButtons();
 }
 
-// Enhanced setupColorPicker with improved color selection UI
+/**
+ * Set up color picker functionality
+ */
 export function setupColorPicker() {
     // Set up color wheel
     const colorWheel = document.getElementById('color-wheel');
@@ -537,23 +489,23 @@ export function setupAIPicker() {
     const promptInput = document.getElementById('ai-prompt');
     const generateBtn = document.getElementById('ai-generate');
     const preview = document.querySelector('.ai-preview');
-    
+
     if (!promptInput || !generateBtn || !preview) {
         console.warn('AI Picker elements not found');
         return;
     }
-    
+
     let isGenerating = false;
     let serverIsOnline = false;
-    
+
     // Function to check server status
     const checkServerStatus = async () => {
         preview.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Checking AI server status...</p></div>';
-        
+
         try {
             // Use the new checkAIServerStatus function from ai-integration.js
             serverIsOnline = await checkAIServerStatus();
-            
+
             if (serverIsOnline) {
                 preview.innerHTML = '<p>Enter a prompt below to generate a design</p>';
                 generateBtn.disabled = false;
@@ -563,14 +515,14 @@ export function setupAIPicker() {
                     <p>AI server is not running. <button id="ai-help" class="button secondary small">Learn how to start</button></p>
                 </div>
                 `;
-                
+
                 const helpBtn = document.getElementById('ai-help');
                 if (helpBtn) {
                     helpBtn.addEventListener('click', () => {
                         showAISetupInstructions();
                     });
                 }
-                
+
                 generateBtn.disabled = true;
             }
         } catch (error) {
@@ -579,7 +531,7 @@ export function setupAIPicker() {
             generateBtn.disabled = true;
         }
     };
-    
+
     // Function to show AI setup instructions
     const showAISetupInstructions = () => {
         const modal = document.createElement('div');
@@ -604,31 +556,31 @@ export function setupAIPicker() {
             </div>
         </div>
         `;
-        
+
         document.body.appendChild(modal);
-        
+
         const closeBtn = modal.querySelector('.close');
         closeBtn.addEventListener('click', () => {
             document.body.removeChild(modal);
         });
     };
-    
+
     // Check server status when AI tab is clicked
     document.querySelector('.tab-btn[data-tab="ai"]')?.addEventListener('click', checkServerStatus);
-    
+
     // Initial server status check
     checkServerStatus();
-    
+
     // Handle generate button click
     generateBtn.addEventListener('click', async () => {
         if (isGenerating) return;
-        
+
         const prompt = promptInput.value.trim();
         if (!prompt) {
             showToast('Please enter a prompt first');
             return;
         }
-        
+
         if (!serverIsOnline) {
             // If server is not online, try checking again
             await checkServerStatus();
@@ -636,12 +588,12 @@ export function setupAIPicker() {
                 return;
             }
         }
-        
+
         isGenerating = true;
         generateBtn.disabled = true;
         generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
         preview.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Creating your design...</p></div>';
-        
+
         // Use the new generateAIImage function from ai-integration.js
         generateAIImage(prompt, {
             onSuccess: (imageData) => {
@@ -652,14 +604,14 @@ export function setupAIPicker() {
                     <button class="button primary apply-ai-btn">Apply to Shirt</button>
                 </div>
                 `;
-                
+
                 // Add event listener to the apply button
                 const applyBtn = preview.querySelector('.apply-ai-btn');
                 if (applyBtn) {
                     applyBtn.addEventListener('click', () => {
                         // Get the current view/tab (logo or full texture)
                         const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab;
-                        
+
                         if (activeTab === 'logo') {
                             // Apply as logo
                             updateShirtTexture(imageData, 'logo');
@@ -669,7 +621,7 @@ export function setupAIPicker() {
                             updateShirtTexture(imageData, 'full');
                             updateState({ stylish: true });
                         }
-                        
+
                         showToast('Applied AI design to shirt');
                     });
                 }
@@ -685,18 +637,18 @@ export function setupAIPicker() {
             }
         });
     });
-    
+
     // Helper functions for UI feedback
     function showToast(message) {
         const toast = document.createElement('div');
         toast.className = 'toast';
         toast.textContent = message;
         document.body.appendChild(toast);
-        
+
         setTimeout(() => {
             toast.classList.add('show');
         }, 10);
-        
+
         setTimeout(() => {
             toast.classList.remove('show');
             setTimeout(() => {
@@ -706,83 +658,90 @@ export function setupAIPicker() {
     }
 }
 
-// Enhance logo position buttons with improved feedback
-function setupLogoPositionButtons() {
-    const positionButtons = document.querySelectorAll('.position-btn');
-    let currentPosition = state.logoPosition || 'center';
+/**
+ * Setup theme toggle button
+ */
+function setupThemeToggle() {
+    console.log('Setting up theme toggle...');
 
-    // Set initial active button
-    positionButtons.forEach(btn => {
-        if (btn.dataset.position === currentPosition) {
-            btn.classList.add('active');
+    // Get the theme toggle elements
+    const themeToggle = document.getElementById('themeToggle');
+    const themeIcon = document.getElementById('themeIcon');
+
+    if (!themeToggle || !themeIcon) {
+        console.error('Theme toggle elements not found in the DOM');
+        return;
+    }
+
+    // Determine initial theme from localStorage or default to light
+    const savedTheme = localStorage.getItem('theme');
+    let currentTheme = savedTheme || 'light';
+
+    // Immediately apply the saved theme when the page loads
+    document.body.setAttribute('data-theme', currentTheme);
+    updateThemeUI(currentTheme);
+
+    // Update the background based on the current theme
+    if (typeof updateThemeBackground === 'function') {
+        updateThemeBackground(currentTheme);
+    } else {
+        console.warn('updateThemeBackground function not found');
+    }
+
+    // Add click event listener to toggle theme
+    themeToggle.addEventListener('click', function () {
+        console.log('Theme toggle clicked, current theme:', currentTheme);
+
+        // Toggle the theme
+        currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+
+        // Update localStorage
+        localStorage.setItem('theme', currentTheme);
+
+        // Update the body attribute
+        document.body.setAttribute('data-theme', currentTheme);
+
+        // Update the icon and UI
+        updateThemeUI(currentTheme);
+
+        // Update the background
+        if (typeof updateThemeBackground === 'function') {
+            updateThemeBackground(currentTheme);
+        } else {
+            console.warn('updateThemeBackground function not found when toggling');
         }
+
+        // Log the change
+        console.log('Theme changed to:', currentTheme);
     });
 
-    // Add event listeners to position buttons
-    positionButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const position = btn.dataset.position;
-
-            // Skip if already active
-            if (btn.classList.contains('active')) return;
-
-            // Update UI
-            positionButtons.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-
-            // Add visual feedback animation
-            btn.classList.add('pulse');
-            setTimeout(() => btn.classList.remove('pulse'), 500);
-
-            // Update state and shirt model
-            updateState({ logoPosition: position });
-            window.dispatchEvent(new CustomEvent('logo-position-change', {
-                detail: { position }
-            }));
-        });
-    });
+    console.log('Theme toggle setup completed');
 }
 
-// Improved theme toggle with smoother transition
-function setupThemeToggle() {
-    const themeToggle = document.getElementById('theme-toggle');
-    if (!themeToggle) return;
+// Function to update theme UI elements
+function updateThemeUI(theme) {
+    const themeIcon = document.getElementById('themeIcon');
+    if (!themeIcon) return;
 
-    // Set initial theme state based on state
-    const isDarkMode = state.darkMode !== false; // Default to dark
-    document.documentElement.classList.toggle('light-theme', !isDarkMode);
-    themeToggle.innerHTML = isDarkMode
-        ? '<i class="fas fa-sun"></i>'
-        : '<i class="fas fa-moon"></i>';
+    // Update the icon
+    if (theme === 'dark') {
+        themeIcon.classList.remove('bi-sun-fill');
+        themeIcon.classList.add('bi-moon-fill');
+    } else {
+        themeIcon.classList.remove('bi-moon-fill');
+        themeIcon.classList.add('bi-sun-fill');
+    }
 
-    // Update 3D background initially
-    updateThemeBackground(isDarkMode);
-
-    themeToggle.addEventListener('click', () => {
-        // Toggle theme state
-        const newDarkMode = !state.darkMode;
-        updateState({ darkMode: newDarkMode });
-
-        // Animate theme toggle button
-        themeToggle.classList.add('pulse');
-        setTimeout(() => themeToggle.classList.remove('pulse'), 500);
-
-        // Update UI
-        document.documentElement.classList.toggle('light-theme', !newDarkMode);
-        themeToggle.innerHTML = newDarkMode
-            ? '<i class="fas fa-sun"></i>'
-            : '<i class="fas fa-moon"></i>';
-
-        // Update 3D background
-        updateThemeBackground(newDarkMode);
-
-        console.log('Theme toggled:', newDarkMode ? 'dark' : 'light');
-    });
+    // Update any other UI elements that depend on the theme
+    const themeLabel = document.getElementById('themeLabel');
+    if (themeLabel) {
+        themeLabel.textContent = theme === 'dark' ? 'Dark Mode' : 'Light Mode';
+    }
 }
 
 /**
- * Trigger file upload for a specific view area
- * @param {string} view - The view to upload to (front, back, left_arm, right_arm)
+ * Trigger file upload dialog for a specific view
+ * @param {string} view - The view to upload for (front, back, etc.)
  */
 export function triggerFileUploadForView(view) {
     const fileInput = document.getElementById('file-upload');
@@ -798,139 +757,6 @@ export function triggerFileUploadForView(view) {
     }
 }
 
-/**
- * Set up the texture position controls
- * Creates a position grid similar to logo positions but for textures
- */
-export function setupTexturePositionControls() {
-    // Look for the texture-position-container element
-    const container = document.querySelector('.texture-position-container');
-    if (!container) {
-        console.warn('Texture position container not found. Skipping setup.');
-        return;
-    }
-
-    // Define the position options
-    const positions = [
-        { name: 'top_left', icon: 'nw-resize', label: 'Top Left' },
-        { name: 'top', icon: 'n-resize', label: 'Top' },
-        { name: 'top_right', icon: 'ne-resize', label: 'Top Right' },
-        { name: 'left', icon: 'w-resize', label: 'Left' },
-        { name: 'center', icon: 'move', label: 'Center' },
-        { name: 'right', icon: 'e-resize', label: 'Right' },
-        { name: 'bottom_left', icon: 'sw-resize', label: 'Bottom Left' },
-        { name: 'bottom', icon: 's-resize', label: 'Bottom' },
-        { name: 'bottom_right', icon: 'se-resize', label: 'Bottom Right' },
-        { name: 'pocket', icon: 'square', label: 'Pocket' }
-    ];
-
-    // Create the position grid
-    const grid = document.createElement('div');
-    grid.className = 'texture-position-grid';
-
-    // Create title
-    const title = document.createElement('h4');
-    title.textContent = 'Position Presets';
-    title.className = 'position-grid-title';
-    container.appendChild(title);
-
-    // Add a subtitle
-    const subtitle = document.createElement('p');
-    subtitle.textContent = 'Click to apply preset positions to your image';
-    subtitle.className = 'position-grid-subtitle';
-    container.appendChild(subtitle);
-
-    // Add the grid of position buttons
-    positions.forEach(pos => {
-        const btn = document.createElement('button');
-        btn.className = 'texture-position-btn';
-        btn.dataset.position = pos.name;
-        btn.title = pos.label;
-
-        // Use Font Awesome icons or other icon sets
-        const icon = document.createElement('i');
-        icon.className = `fas fa-${pos.icon}`;
-        btn.appendChild(icon);
-
-        // Add position name
-        const label = document.createElement('span');
-        label.textContent = pos.label;
-        btn.appendChild(label);
-
-        // Add button to grid
-        grid.appendChild(btn);
-
-        // Add click event to apply the position
-        btn.addEventListener('click', () => {
-            // Apply the position preset
-            setTexturePosition(pos.name);
-
-            // Update active state
-            document.querySelectorAll('.texture-position-btn').forEach(b => {
-                b.classList.remove('active');
-            });
-            btn.classList.add('active');
-        });
-    });
-
-    // Add the grid to the container
-    container.appendChild(grid);
-
-    // Add quick action buttons below the grid
-    const actionRow = document.createElement('div');
-    actionRow.className = 'texture-action-row';
-
-    // Add reset button
-    const resetBtn = document.createElement('button');
-    resetBtn.className = 'texture-action-btn reset-btn';
-    resetBtn.innerHTML = '<i class="fas fa-undo"></i> Reset Position';
-    resetBtn.addEventListener('click', () => {
-        setTexturePosition('center');
-    });
-    actionRow.appendChild(resetBtn);
-
-    // Add clear button
-    const clearBtn = document.createElement('button');
-    clearBtn.className = 'texture-action-btn clear-btn';
-    clearBtn.innerHTML = '<i class="fas fa-trash"></i> Remove Image';
-    clearBtn.addEventListener('click', () => {
-        clearCustomImage(state.cameraView);
-    });
-    actionRow.appendChild(clearBtn);
-
-    container.appendChild(actionRow);
-
-    // Add quick tips section
-    const tipsContainer = document.createElement('div');
-    tipsContainer.className = 'texture-tips';
-    tipsContainer.innerHTML = `
-        <div class="tip-toggle">
-            <i class="fas fa-lightbulb"></i>
-            <span>Pro Tips</span>
-            <i class="fas fa-chevron-down"></i>
-        </div>
-        <div class="tip-content">
-            <ul>
-                <li><i class="fas fa-mouse-pointer"></i> Double-click any area to upload an image</li>
-                <li><i class="fas fa-arrows-alt"></i> Drag to reposition your image</li>
-                <li><i class="fas fa-sync"></i> Use the rotate handle to rotate</li>
-                <li><i class="fas fa-expand"></i> Use the scale handle to resize</li>
-            </ul>
-        </div>
-    `;
-    container.appendChild(tipsContainer);
-
-    // Toggle the tips visibility
-    const tipToggle = tipsContainer.querySelector('.tip-toggle');
-    const tipContent = tipsContainer.querySelector('.tip-content');
-    tipToggle.addEventListener('click', () => {
-        tipContent.classList.toggle('open');
-        tipToggle.querySelector('.fa-chevron-down').classList.toggle('fa-chevron-up');
-    });
-
-    console.log('Texture position controls set up successfully');
-}
-
 // Initialize everything when the DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     try {
@@ -941,9 +767,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setupAIPicker();
         setupCameraViewButtons();
         setupThemeToggle();
-
-        // Initialize the new texture position controls
-        setupTexturePositionControls();
     } catch (error) {
         console.error('Error initializing UI components:', error);
     }

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark-theme">
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -27,6 +27,56 @@
 					"three/addons/": "https://unpkg.com/three@0.157.0/examples/jsm/"
 				}
 			}
+		</script>
+
+		<!-- Add Fabric.js -->
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+
+		<!-- Add direct theme toggle script -->
+		<script>
+			window.addEventListener('DOMContentLoaded', function () {
+				console.log('Setting up direct theme toggle from HTML')
+				const themeToggle = document.getElementById('theme-toggle')
+				if (themeToggle) {
+					// Set initial state - default is dark mode
+					let isDarkMode = true
+					document.documentElement.classList.toggle('light-theme', !isDarkMode)
+
+					// Set correct icon
+					themeToggle.innerHTML = isDarkMode
+						? '<i class="fas fa-sun"></i>'
+						: '<i class="fas fa-moon"></i>'
+
+					// Add direct click handler
+					themeToggle.addEventListener('click', function () {
+						console.log('Theme toggle clicked directly from HTML')
+
+						// Toggle theme state
+						isDarkMode = !isDarkMode
+
+						// Update UI
+						document.documentElement.classList.toggle(
+							'light-theme',
+							!isDarkMode
+						)
+
+						// Update button icon
+						themeToggle.innerHTML = isDarkMode
+							? '<i class="fas fa-sun"></i>'
+							: '<i class="fas fa-moon"></i>'
+
+						// Update state if available
+						if (window.updateState) {
+							window.updateState({ darkMode: isDarkMode })
+						}
+
+						// Update scene if available
+						if (window.updateThemeBackground) {
+							window.updateThemeBackground(isDarkMode)
+						}
+					})
+				}
+			})
 		</script>
 	</head>
 	<body>
@@ -177,16 +227,6 @@
 										<p>Preview will appear here</p>
 									</div>
 								</div>
-
-								<!-- Texture Position Controls -->
-								<div class="section-divider"></div>
-								<div class="section-title">
-									<h3>Position & Alignment</h3>
-									<p>Perfect placement for your design</p>
-								</div>
-								<div class="texture-position-container">
-									<!-- This will be populated by setupTexturePositionControls() -->
-								</div>
 							</div>
 
 							<!-- AI Generator -->
@@ -219,93 +259,43 @@
 
 						<div class="section-divider"></div>
 
-						<!-- Design Settings Section -->
+						<!-- Fabric.js Design Editor Section -->
 						<div class="section-header">
-							<i class="fas fa-sliders-h"></i>
-							<h3>Design Settings</h3>
+							<i class="fas fa-paint-brush"></i>
+							<h3>Design Editor</h3>
 						</div>
 
-						<!-- Toggle Buttons -->
-						<div class="toggle-options">
-							<!-- Visibility Toggles Group -->
-							<div class="toggle-group">
-								<div class="toggle-group-title">
-									<i class="fas fa-eye"></i>
-									<span>Visibility Options</span>
-								</div>
-
-								<label class="toggle tooltip" data-tooltip="Show/Hide Logo">
-									<input
-										type="checkbox"
-										id="logo-toggle"
-										checked
-										aria-label="Toggle Logo"
-									/>
-									<span class="toggle-slider"></span>
-									<span class="toggle-label">Logo</span>
-								</label>
-
-								<label
-									class="toggle tooltip"
-									data-tooltip="Apply texture to entire shirt"
-								>
-									<input
-										type="checkbox"
-										id="texture-toggle"
-										aria-label="Toggle Texture"
-									/>
-									<span class="toggle-slider"></span>
-									<span class="toggle-label">Full Texture</span>
-								</label>
+						<div class="fabric-editor-container">
+							<div class="fabric-canvas-wrapper">
+								<canvas id="fabric-canvas" width="300" height="300"></canvas>
 							</div>
-
-							<!-- Logo Position Options -->
-							<div class="toggle-group">
-								<div class="toggle-group-title">
-									<i class="fas fa-crosshairs"></i>
-									<span>Logo Position</span>
+							<div class="fabric-controls">
+								<div class="control-group">
+									<button id="add-text" class="tool-btn" aria-label="Add Text">
+										<i class="fas fa-font"></i>
+										<span>Text</span>
+									</button>
+									<button
+										id="add-shape"
+										class="tool-btn"
+										aria-label="Add Shape"
+									>
+										<i class="fas fa-shapes"></i>
+										<span>Shape</span>
+									</button>
+									<button
+										id="draw-free"
+										class="tool-btn"
+										aria-label="Free Draw"
+									>
+										<i class="fas fa-pen"></i>
+										<span>Draw</span>
+									</button>
 								</div>
-
-								<div class="position-buttons">
-									<button
-										id="center-logo"
-										class="position-btn active"
-										data-position="center"
-										aria-label="Center Logo"
-										data-tooltip="Center Front"
-									>
-										<i class="fas fa-bullseye"></i>
-										<span>Center</span>
-									</button>
-									<button
-										id="left-logo"
-										class="position-btn"
-										data-position="left"
-										aria-label="Left Logo"
-										data-tooltip="Left Chest"
-									>
-										<i class="fas fa-chevron-left"></i>
-										<span>Left</span>
-									</button>
-									<button
-										id="right-logo"
-										class="position-btn"
-										data-position="right"
-										aria-label="Right Logo"
-										data-tooltip="Right Chest"
-									>
-										<i class="fas fa-chevron-right"></i>
-										<span>Right</span>
-									</button>
-									<button
-										id="back-logo"
-										class="position-btn"
-										data-position="back"
-										aria-label="Back Logo"
-										data-tooltip="Center Back"
-									>
-										<i class="fas fa-arrow-down"></i>
-										<span>Back</span>
+								<div class="control-group">
+									<button id="apply-to-shirt" class="button primary">
+										<i class="fas fa-tshirt"></i>
+										<span>Apply to Shirt</span>
 									</button>
 								</div>
 							</div>
@@ -500,5 +490,27 @@
 				}
 			}
 		</script>
+
+		<!-- Theme toggle button in the navbar -->
+		<li class="nav-item">
+			<button
+				id="themeToggle"
+				class="btn btn-link nav-link"
+				aria-label="Toggle theme"
+			>
+				<i id="themeIcon" class="bi bi-sun-fill"></i>
+				<span id="themeLabel" class="d-none d-md-inline-block ms-1"
+					>Light Mode</span
+				>
+			</button>
+		</li>
+
+		<!-- Add loading message container -->
+		<div
+			id="loading-message"
+			class="position-fixed top-50 start-50 translate-middle bg-white dark:bg-dark p-3 rounded shadow-sm"
+		>
+			Loading models...
+		</div>
 	</body>
 </html>
