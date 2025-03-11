@@ -9,8 +9,8 @@ const router = express.Router();
 // Health check endpoint with more details
 router.route('/ping').get((req, res) => {
   const apiKeyPresent = process.env.FAL_API_KEY ? 'present' : 'missing';
-  res.status(200).json({ 
-    status: 'ok', 
+  res.status(200).json({
+    status: 'ok',
     message: 'Fal.ai Server is running',
     apiKeyStatus: apiKeyPresent,
     timestamp: new Date().toISOString()
@@ -45,16 +45,16 @@ router.route('/').post(async (req, res) => {
     });
 
     const data = await response.json();
-    
+
     // Get the image URL or base64 data depending on the fal.ai response format
     const imageUrl = data.images?.[0]?.url;
-    
+
     // If we have a URL, we need to fetch the image and convert to base64
     if (imageUrl) {
       const imageResponse = await fetch(imageUrl);
       const imageBuffer = await imageResponse.buffer();
       const base64Image = imageBuffer.toString('base64');
-      
+
       // Return in the format expected by the client
       res.status(200).json({ photo: `data:image/png;base64,${base64Image}` });
     } else {

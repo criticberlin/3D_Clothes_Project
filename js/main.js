@@ -1,13 +1,14 @@
-import { setupScene, updateShirtColor, updateShirtTexture, toggleTexture, downloadCanvas, changeModel, updateThemeBackground, toggleAutoRotate, changeCameraView } from './scene.js';
-import { initializeTabs, setupColorPicker, setupFilePicker, setupAIPicker, setupCameraViewButtons, setupTexturePositionControls } from './ui.js';
+import { setupScene, updateShirtColor, updateShirtTexture, toggleTexture, downloadCanvas, changeModel, updateThemeBackground, toggleAutoRotate, changeCameraView, setFabricType } from './scene.js';
+import { initializeTabs, setupColorPicker, setupFilePicker, setupAIPicker, setupCameraViewButtons } from './ui.js';
 import { state, updateState, subscribe } from './state.js';
 import { Logger, Performance } from './utils.js';
+import { initFabricCanvas, clearCanvas, downloadDesign, setColor, setFabricType as setFabricEditorType } from './fabric-integration.js';
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
     // Start measuring initialization time
     Performance.start('app-initialization');
-    
+
     Logger.info('Initializing 3D Shirt Studio...');
 
     // Detect and handle mobile devices
@@ -104,11 +105,38 @@ document.addEventListener('DOMContentLoaded', () => {
             cameraView: 'front', // Default camera view
             autoRotate: false, // Auto-rotation disabled by default
             darkMode: true, // Default to dark mode
+            fabricType: 'cotton', // Default fabric type
+            textureStyle: 'plain' // Default texture style
         });
+
+        // Set up theme toggle directly here instead of relying on other functions
+        setupDirectThemeToggle();
 
         // Initialize the 3D scene
         setupScene().then(() => {
             Logger.info('Scene loaded successfully');
+
+            // Initialize Fabric.js integration
+            // This will be called after DOM is fully loaded in the window load event
+
+            // Connect the color picker with Fabric.js
+            // When the shirt color changes, we'll update the fabric editor color selector
+            subscribe('color', (color) => {
+                // You could add a UI element to toggle this sync behavior
+                // setColor(color); // Uncomment to sync shirt color with fabric drawing color
+            });
+
+            // Connect fabric type selection
+            subscribe('fabricType', (fabricType) => {
+                // Update the Fabric.js editor with the new fabric type
+                setFabricEditorType(fabricType);
+
+                // Update the 3D model material
+                setFabricType(fabricType);
+            });
+
+            // Set up fabric type selector
+            setupFabricTypeSelector();
 
             // Add a slight delay for a smoother transition
             setTimeout(() => {
@@ -118,21 +146,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     loadingOverlay.style.opacity = '0';
                     setTimeout(() => {
                         loadingOverlay.style.display = 'none';
-                        loadingOverlay.style.opacity = '1';
-                    }, 300);
+                        animateWelcome();
+                    }, 500);
+                } else {
+                    animateWelcome();
                 }
-            }, 200);
+            }, 300);
         }).catch(error => {
-            Logger.error('Error initializing scene:', error);
-            const loadingOverlay = document.querySelector('.loading-overlay');
-            if (loadingOverlay) {
-                loadingOverlay.innerHTML = `
-                    <div class="error">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <p>Error loading 3D model. Please refresh the page.</p>
-                    </div>
-                `;
-            }
+            console.error('Failed to initialize scene:', error);
+            Logger.error('Failed to initialize scene:', error);
         });
 
         // Initialize UI components
@@ -143,37 +165,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setupCameraViewButtons();
         setupModelSelector();
         setupMobileNavigation();
-
-        // Initialize theme 
-        const themeToggle = document.getElementById('theme-toggle');
-        const isDarkMode = state.darkMode !== false;
-
-        // Ensure theme is applied to document
-        document.documentElement.classList.toggle('light-theme', !isDarkMode);
-
-        // Apply theme to scene background
-        updateThemeBackground(isDarkMode);
-
-        // Make sure correct icon is displayed
-        if (themeToggle) {
-            themeToggle.innerHTML = isDarkMode
-                ? '<i class="fas fa-sun"></i>'
-                : '<i class="fas fa-moon"></i>';
-        } else {
-            Logger.warn("Theme toggle button not found in the DOM");
-        }
-
-        // Make sure toggle states match the state object
-        const logoToggle = document.getElementById('logo-toggle');
-        const textureToggle = document.getElementById('texture-toggle');
-
-        if (logoToggle) {
-            logoToggle.checked = state.logo !== false;
-        }
-
-        if (textureToggle) {
-            textureToggle.checked = state.stylish === true;
-        }
 
         // Setup download button
         const downloadBtn = document.getElementById('download');
@@ -223,27 +214,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     stylish: false,
                     logoPosition: 'center' // Reset logo position to center
                 });
-
-                // Reset UI elements
-                if (logoToggle) {
-                    logoToggle.checked = true;
-                }
-
-                if (textureToggle) {
-                    textureToggle.checked = false;
-                }
-
-                // Reset logo position buttons
-                const positionButtons = document.querySelectorAll('.position-btn');
-                if (positionButtons.length > 0) {
-                    positionButtons.forEach(btn => {
-                        if (btn.dataset.position === 'center') {
-                            btn.classList.add('active');
-                        } else {
-                            btn.classList.remove('active');
-                        }
-                    });
-                }
 
                 // Reset color picker
                 const colorWheel = document.getElementById('color-wheel');
@@ -317,6 +287,58 @@ document.addEventListener('DOMContentLoaded', () => {
         animateWelcome();
 
         Logger.info('Initialization complete!');
+    }
+
+    // Direct implementation of theme toggle without external dependencies
+    function setupDirectThemeToggle() {
+        const themeToggle = document.getElementById('theme-toggle');
+        if (!themeToggle) {
+            console.error("Theme toggle button not found in the DOM");
+            return;
+        }
+
+        console.log("Setting up direct theme toggle from main.js");
+
+        // Set initial theme
+        const isDarkMode = state.darkMode !== false;
+        document.documentElement.classList.toggle('light-theme', !isDarkMode);
+
+        // Set correct icon
+        themeToggle.innerHTML = isDarkMode
+            ? '<i class="fas fa-sun"></i>'
+            : '<i class="fas fa-moon"></i>';
+
+        // Apply theme to scene
+        updateThemeBackground(isDarkMode);
+
+        // Remove any existing event listeners by cloning the button
+        const newThemeToggle = themeToggle.cloneNode(true);
+        if (themeToggle.parentNode) {
+            themeToggle.parentNode.replaceChild(newThemeToggle, themeToggle);
+        }
+
+        // Add click handler
+        newThemeToggle.addEventListener('click', () => {
+            console.log("Theme toggle clicked");
+
+            // Toggle theme state
+            const newDarkMode = !state.darkMode;
+            console.log(`Switching to ${newDarkMode ? 'dark' : 'light'} mode`);
+
+            // Update state
+            updateState({ darkMode: newDarkMode });
+
+            // Update UI
+            document.documentElement.classList.toggle('light-theme', !newDarkMode);
+
+            // Update button icon
+            newThemeToggle.innerHTML = newDarkMode
+                ? '<i class="fas fa-sun"></i>'
+                : '<i class="fas fa-moon"></i>';
+
+            // Update 3D scene background
+            updateThemeBackground(newDarkMode);
+        });
     }
 
     initializeApp();
@@ -517,20 +539,6 @@ function setInitialTabFromHash() {
 
 // Subscribe to state changes
 subscribe((newState) => {
-    // Update toggle switches to match state
-    const logoToggle = document.getElementById('logo-toggle');
-    const textureToggle = document.getElementById('texture-toggle');
-
-    if (newState.logo !== undefined && logoToggle) {
-        logoToggle.checked = newState.logo;
-        toggleTexture('logo', newState.logo);
-    }
-
-    if (newState.stylish !== undefined && textureToggle) {
-        textureToggle.checked = newState.stylish;
-        toggleTexture('full', newState.stylish);
-    }
-
     // Update color preview if color changed
     if (newState.color) {
         const colorPreview = document.getElementById('color-preview');
@@ -556,4 +564,206 @@ filterButtons.forEach(btn => {
         btn.classList.toggle('active');
         state[filter] = btn.classList.contains('active');
     });
-}); 
+});
+
+/**
+ * Set up the fabric type selector
+ */
+function setupFabricTypeSelector() {
+    // Find fabric type select element added by fabric-integration.js
+    const fabricTypeSelect = document.getElementById('fabric-type-select');
+    if (fabricTypeSelect) {
+        fabricTypeSelect.addEventListener('change', (e) => {
+            const fabricType = e.target.value;
+            updateState({ fabricType });
+        });
+    }
+
+    // Listen for texture style changes
+    const textureStyleSelect = document.getElementById('texture-style-select');
+    if (textureStyleSelect) {
+        textureStyleSelect.addEventListener('change', (e) => {
+            const textureStyle = e.target.value;
+            updateState({ textureStyle });
+        });
+    }
+
+    // Set initial values from state
+    if (fabricTypeSelect && state.fabricType) {
+        fabricTypeSelect.value = state.fabricType;
+    }
+
+    if (textureStyleSelect && state.textureStyle) {
+        textureStyleSelect.value = state.textureStyle;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    console.log('DOM fully loaded and parsed');
+
+    // Check WebGL support first
+    const webGLStatus = window.checkWebGLSupport();
+    if (!webGLStatus.supported) {
+        console.error('WebGL not properly supported:', webGLStatus.message);
+        document.getElementById('loading-message').innerHTML = `
+            <div class="alert alert-danger">
+                ${webGLStatus.message} 3D models may not display correctly on your device.
+            </div>`;
+    } else if (webGLStatus.limitedSupport) {
+        console.warn('Limited WebGL support:', webGLStatus.message);
+    } else {
+        console.log('WebGL support:', webGLStatus.message);
+    }
+
+    // Setup initial theme
+    setupThemeToggle();
+
+    // Ensure the clothesOptions contains all the required keys
+    if (typeof clothesOptions === 'undefined' || !clothesOptions) {
+        console.error('clothesOptions not defined, creating default object');
+        window.clothesOptions = {
+            tshirt: true,
+            hoodie: true,
+            pants: true,
+            shorts: true
+        };
+    }
+
+    // Ensure UI controls are properly initialized
+    setupUIControls();
+
+    // Load all models with proper error handling
+    loadModels().catch(error => {
+        console.error('Error during model loading:', error);
+        document.getElementById('loading-message').innerHTML = `
+            <div class="alert alert-danger">
+                Error loading 3D models: ${error.message}
+            </div>`;
+    });
+});
+
+// Improved model loading function with better error handling
+async function loadModels() {
+    try {
+        document.getElementById('loading-message').textContent = 'Loading models...';
+
+        // Create a loader with specific timeout
+        const loader = new THREE.GLTFLoader();
+
+        // Function to load a single model with timeout and retry
+        const loadModelWithRetry = async (path, maxRetries = 2, timeout = 15000) => {
+            let retries = 0;
+
+            while (retries <= maxRetries) {
+                try {
+                    // Create a promise that rejects after timeout
+                    const timeoutPromise = new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error(`Loading ${path} timed out after ${timeout}ms`)), timeout)
+                    );
+
+                    // Create loading promise
+                    const loadingPromise = new Promise((resolve, reject) => {
+                        console.log(`Loading model: ${path} (attempt ${retries + 1})`);
+                        loader.load(
+                            path,
+                            (gltf) => resolve(gltf),
+                            (xhr) => {
+                                const percentComplete = (xhr.loaded / xhr.total) * 100;
+                                document.getElementById('loading-message').textContent =
+                                    `Loading ${path.split('/').pop()}: ${Math.round(percentComplete)}%`;
+                            },
+                            (error) => reject(new Error(`Error loading ${path}: ${error.message}`))
+                        );
+                    });
+
+                    // Race between loading and timeout
+                    return await Promise.race([loadingPromise, timeoutPromise]);
+                } catch (error) {
+                    retries++;
+                    console.warn(`Attempt ${retries} failed for ${path}: ${error.message}`);
+
+                    if (retries > maxRetries) {
+                        throw error;
+                    }
+
+                    // Wait before retry (exponential backoff)
+                    await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+                }
+            }
+        };
+
+        // Check which models to load based on clothesOptions
+        const modelsToLoad = [];
+
+        if (clothesOptions.tshirt) {
+            modelsToLoad.push({ type: 'tshirt', path: 'models/tshirt.glb' });
+        }
+
+        if (clothesOptions.hoodie) {
+            modelsToLoad.push({ type: 'hoodie', path: 'models/hoodie.glb' });
+        }
+
+        if (clothesOptions.pants) {
+            modelsToLoad.push({ type: 'pants', path: 'models/pants.glb' });
+        }
+
+        if (clothesOptions.shorts) {
+            modelsToLoad.push({ type: 'shorts', path: 'models/shorts.glb' });
+        }
+
+        // Load all models in parallel for efficiency
+        const results = await Promise.allSettled(
+            modelsToLoad.map(model => loadModelWithRetry(model.path)
+                .then(gltf => ({ type: model.type, gltf }))
+            )
+        );
+
+        // Process results
+        results.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+                const { type, gltf } = result.value;
+                console.log(`Successfully loaded ${type} model`);
+
+                // Store model and update UI
+                switch (type) {
+                    case 'tshirt':
+                        window.tshirtModel = gltf.scene;
+                        break;
+                    case 'hoodie':
+                        window.hoodieModel = gltf.scene;
+                        break;
+                    case 'pants':
+                        window.pantsModel = gltf.scene;
+                        break;
+                    case 'shorts':
+                        window.shortsModel = gltf.scene;
+                        break;
+                }
+            } else {
+                console.error(`Failed to load ${modelsToLoad[index].type} model:`, result.reason);
+                // Disable the option in UI if model failed to load
+                const checkbox = document.getElementById(modelsToLoad[index].type + 'Checkbox');
+                if (checkbox) {
+                    checkbox.disabled = true;
+                    checkbox.checked = false;
+                    checkbox.parentNode.classList.add('text-muted');
+                    checkbox.parentNode.title = `Could not load ${modelsToLoad[index].type} model`;
+                }
+            }
+        });
+
+        // Update the scene with loaded models
+        updateScene();
+        document.getElementById('loading-message').textContent = 'Models loaded successfully!';
+        setTimeout(() => {
+            document.getElementById('loading-message').style.display = 'none';
+        }, 2000);
+
+    } catch (error) {
+        console.error('Error in loadModels:', error);
+        throw error;
+    }
+}
+
+// Make sure theme background function is accessible from HTML
+window.updateThemeBackground = updateThemeBackground; 
