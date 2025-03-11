@@ -1,10 +1,14 @@
 import { setupScene, updateShirtColor, updateShirtTexture, toggleTexture, downloadCanvas, changeModel, updateThemeBackground, toggleAutoRotate, changeCameraView } from './scene.js';
-import { initializeTabs, setupColorPicker, setupFilePicker, setupAIPicker, setupCameraViewButtons } from './ui.js';
+import { initializeTabs, setupColorPicker, setupFilePicker, setupAIPicker, setupCameraViewButtons, setupTexturePositionControls } from './ui.js';
 import { state, updateState, subscribe } from './state.js';
+import { Logger, Performance } from './utils.js';
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('Initializing 3D Shirt Studio...');
+    // Start measuring initialization time
+    Performance.start('app-initialization');
+    
+    Logger.info('Initializing 3D Shirt Studio...');
 
     // Detect and handle mobile devices
     const isMobile = window.innerWidth < 768;
@@ -14,14 +18,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add direct event listeners for zoom buttons as a fail-safe
     setTimeout(() => {
-        console.log('Setting up fail-safe zoom button handlers');
+        Logger.info('Setting up fail-safe zoom button handlers');
 
         const zoomInBtn = document.getElementById('zoom-in');
         const zoomOutBtn = document.getElementById('zoom-out');
 
         if (zoomInBtn) {
             zoomInBtn.addEventListener('click', function () {
-                console.log('Zoom in clicked from fail-safe handler');
+                Logger.info('Zoom in clicked from fail-safe handler');
                 // Try the window method first
                 if (window.directZoomCamera) {
                     window.directZoomCamera('in');
@@ -37,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (zoomOutBtn) {
             zoomOutBtn.addEventListener('click', function () {
-                console.log('Zoom out clicked from fail-safe handler');
+                Logger.info('Zoom out clicked from fail-safe handler');
                 // Try the window method first
                 if (window.directZoomCamera) {
                     window.directZoomCamera('out');
@@ -67,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .map(([name]) => name);
 
         if (missingElements.length > 0) {
-            console.warn(`Some DOM elements are not yet available: ${missingElements.join(', ')}`);
+            Logger.warn(`Some DOM elements are not yet available: ${missingElements.join(', ')}`);
             // Wait and try again if elements are missing
             setTimeout(initializeApp, 100);
             return false;
@@ -104,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Initialize the 3D scene
         setupScene().then(() => {
-            console.log('Scene loaded successfully');
+            Logger.info('Scene loaded successfully');
 
             // Add a slight delay for a smoother transition
             setTimeout(() => {
@@ -119,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }, 200);
         }).catch(error => {
-            console.error('Error initializing scene:', error);
+            Logger.error('Error initializing scene:', error);
             const loadingOverlay = document.querySelector('.loading-overlay');
             if (loadingOverlay) {
                 loadingOverlay.innerHTML = `
@@ -156,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? '<i class="fas fa-sun"></i>'
                 : '<i class="fas fa-moon"></i>';
         } else {
-            console.warn("Theme toggle button not found in the DOM");
+            Logger.warn("Theme toggle button not found in the DOM");
         }
 
         // Make sure toggle states match the state object
@@ -175,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const downloadBtn = document.getElementById('download');
         if (downloadBtn) {
             downloadBtn.addEventListener('click', () => {
-                console.log('Downloading design...');
+                Logger.info('Downloading design...');
 
                 // Add visual feedback
                 const originalText = downloadBtn.innerHTML;
@@ -194,14 +198,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, 300);
             });
         } else {
-            console.warn("Download button not found in the DOM");
+            Logger.warn("Download button not found in the DOM");
         }
 
         // Setup reset button
         const resetBtn = document.getElementById('reset');
         if (resetBtn) {
             resetBtn.addEventListener('click', () => {
-                console.log('Resetting design...');
+                Logger.info('Resetting design...');
 
                 // Visual feedback
                 const originalText = resetBtn.innerHTML;
@@ -286,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, 500);
             });
         } else {
-            console.warn("Reset button not found in the DOM");
+            Logger.warn("Reset button not found in the DOM");
         }
 
         // Setup auto-rotate button
@@ -300,7 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 toggleAutoRotate(!isCurrentlyActive);
             });
         } else {
-            console.warn("Auto-rotate button not found in the DOM");
+            Logger.warn("Auto-rotate button not found in the DOM");
         }
 
         // Set default color preview
@@ -312,7 +316,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add welcome animation to tabs
         animateWelcome();
 
-        console.log('Initialization complete!');
+        Logger.info('Initialization complete!');
     }
 
     initializeApp();
@@ -418,7 +422,7 @@ function setupModelSelector() {
                 // Change the 3D model
                 changeModel(newModel)
                     .then(() => {
-                        console.log(`Changed model to ${newModel}`);
+                        Logger.info(`Changed model to ${newModel}`);
 
                         // Restore settings from previous model
                         if (currentColor) updateShirtColor(currentColor);
@@ -447,7 +451,7 @@ function setupModelSelector() {
                         }, 200);
                     })
                     .catch(error => {
-                        console.error(`Error changing to ${newModel}:`, error);
+                        Logger.error(`Error changing to ${newModel}:`, error);
 
                         // Show error in the loading overlay
                         if (loadingOverlay) {

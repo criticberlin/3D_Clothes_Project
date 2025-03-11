@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { state, updateState } from './state.js';
+import { Logger, Performance } from './utils.js';
 
 // Configuration for different model types
 const modelConfig = {
@@ -258,6 +259,33 @@ function calculateDisplacement(uvX, uvY) {
     // Simplified with fewer layers for better performance
     return fbm(uvX * 2, uvY * 2, 2, 2.0, 0.5) * 0.5;
 }
+
+// Add debounce function for performance optimization
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        const context = this;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(context, args), wait);
+    };
+}
+
+// Debounced version of updateCombinedTexture
+const debouncedUpdateTexture = debounce(function() {
+    Performance.start('texture-update');
+    textureState.baseTexture = createBaseTexture();
+
+    // Dispatch a custom event that scene.js can listen for
+    window.dispatchEvent(
+        new CustomEvent('texture-updated', {
+            detail: {
+                baseTexture: textureState.baseTexture,
+                bumpMap: textureState.bumpMap
+            }
+        })
+    );
+    Performance.end('texture-update', 50); // Performance warning if above 50ms
+}, 150); // 150ms debounce time
 
 /**
  * Initialize texture mapper with base textures
@@ -652,17 +680,8 @@ function mapCameraViewToTextureView(cameraView) {
  * Update the combined texture and trigger material update
  */
 function updateCombinedTexture() {
-    textureState.baseTexture = createBaseTexture();
-
-    // Dispatch a custom event that scene.js can listen for
-    window.dispatchEvent(
-        new CustomEvent('texture-updated', {
-            detail: {
-                baseTexture: textureState.baseTexture,
-                bumpMap: textureState.bumpMap
-            }
-        })
-    );
+    // Use the debounced version to prevent multiple rapid updates
+    debouncedUpdateTexture();
 }
 
 /**

@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { state, updateState } from './state.js';
 import { initTextureMapper, loadCustomImage, setModelType, clearCustomImage } from './texture-mapper.js';
+import { Logger, Performance } from './utils.js';
 
 // ============================================================================
 // Global Variables
@@ -1928,28 +1929,34 @@ function ensureCameraControlsExist() {
 // Animation and Rendering
 // ============================================================================
 
+// Variables for FPS control
+let lastFrameTime = 0;
+const targetFPS = 60;
+const frameInterval = 1000 / targetFPS;
+
 // Animation loop
-function animate() {
+function animate(currentTime) {
     requestAnimationFrame(animate);
+    
+    // Limit frame rate for better performance
+    const elapsed = currentTime - lastFrameTime;
+    if (elapsed < frameInterval) return;
+    
+    // Calculate actual FPS
+    const actualFPS = 1000 / elapsed;
+    lastFrameTime = currentTime - (elapsed % frameInterval);
+    
+    // Start performance measurement
+    Performance.start('render-frame');
 
     // Smooth camera position movements
     if (camera.position.distanceTo(targetCameraPosition) > 0.01) {
         camera.position.lerp(targetCameraPosition, 0.1);
     }
 
-    // ONLY check our global window variable for rotation
+    // Check for rotation
     if (window.GLOBAL_ROTATION_ENABLED === true && group) {
-        // Directly rotate the model group around the specified axis
         group.rotateOnAxis(rotationAxis, rotationSpeed);
-
-        // Notify in console so we can see it's working
-        if (window.frameCount === undefined) {
-            window.frameCount = 0;
-        }
-        window.frameCount++;
-        if (window.frameCount % 60 === 0) { // Log every ~1 second
-            console.log("Rotating model...");
-        }
     }
 
     // Update controls for damping even when not auto-rotating
@@ -1961,6 +1968,9 @@ function animate() {
     if (scene && camera) {
         renderer.render(scene, camera);
     }
+    
+    // End performance measurement
+    Performance.end('render-frame');
 }
 
 // Helper to determine if we're currently in a view transition
@@ -2913,3 +2923,31 @@ document.addEventListener('DOMContentLoaded', function () {
         console.warn('Could not find rotation button');
     }
 });
+
+function toggleRotation() {
+    rotationEnabled = !rotationEnabled;
+    
+    // Update the global window variable
+    window.GLOBAL_ROTATION_ENABLED = rotationEnabled;
+    
+    // Update the button state
+    const rotateButton = document.getElementById('rotate-view');
+    const icon = rotateButton?.querySelector('i');
+    
+    if (rotateButton) {
+        if (rotationEnabled) {
+            rotateButton.classList.add('active');
+            rotateButton.title = 'Stop Rotation';
+            if (icon) icon.className = 'fas fa-pause';
+        } else {
+            rotateButton.classList.remove('active');
+            rotateButton.title = 'Start Rotation';
+            if (icon) icon.className = 'fas fa-sync-alt';
+        }
+    }
+
+    // Force an immediate render to apply or stop rotation
+    if (scene && camera) {
+        renderer.render(scene, camera);
+    }
+}

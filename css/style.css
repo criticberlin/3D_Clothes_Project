@@ -623,14 +623,48 @@ body {
 }
 
 .ai-preview {
-	height: 180px;
+	min-height: 180px;
+	max-height: 400px;
 	background-color: var(--bg-tertiary);
 	border-radius: var(--border-radius);
 	display: flex;
+	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	overflow: hidden;
+	overflow: auto;
 	box-shadow: var(--shadow-sm);
+	padding: 10px;
+}
+
+.ai-preview img {
+	max-width: 100%;
+	height: auto;
+	object-fit: contain;
+	border-radius: 4px;
+}
+
+.ai-preview p {
+	margin: 0;
+	padding: 10px;
+	text-align: center;
+	font-size: 14px;
+	color: var(--text-secondary);
+}
+
+.ai-preview .error p {
+	color: #e53935;
+}
+
+.ai-preview .loading p {
+	margin-top: 8px;
+}
+
+.ai-result {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
 }
 
 .generating {

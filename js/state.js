@@ -63,6 +63,4 @@ export const updateState = (updates) => {
 
     // Notify subscribers
     callbacks.forEach(callback => callback(state));
-
-    console.log('State updated:', state);
 }; 

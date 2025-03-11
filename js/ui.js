@@ -1,6 +1,7 @@
 import { updateState, state } from './state.js';
 import { updateShirtColor, updateShirtTexture, toggleTexture, changeCameraView, updateThemeBackground } from './scene.js';
 import { loadCustomImage, clearCustomImage, showBoundingBoxesForCameraView, setTexturePosition } from './texture-mapper.js';
+import { generateAIImage, checkAIServerStatus } from './ai-integration.js';
 
 // Popular t-shirt colors with their hex codes
 const colors = [
@@ -536,202 +537,173 @@ export function setupAIPicker() {
     const promptInput = document.getElementById('ai-prompt');
     const generateBtn = document.getElementById('ai-generate');
     const preview = document.querySelector('.ai-preview');
-
-    if (!promptInput || !generateBtn || !preview) return;
-
-    // Server status tracking
-    let serverCheckAttempted = false;
-    let isServerOnline = false;
-
+    
+    if (!promptInput || !generateBtn || !preview) {
+        console.warn('AI Picker elements not found');
+        return;
+    }
+    
+    let isGenerating = false;
+    let serverIsOnline = false;
+    
     // Function to check server status
-    const checkServerStatus = () => {
-        if (serverCheckAttempted) return;
-        serverCheckAttempted = true;
-
+    const checkServerStatus = async () => {
         preview.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Checking AI server status...</p></div>';
-
-        // Try to ping the server
-        fetch('http://localhost:8080/api/v1/dalle/ping', {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
-        })
-            .then(response => {
-                if (response.ok) {
-                    isServerOnline = true;
-                    preview.innerHTML = '<div class="empty-state"><i class="fas fa-robot"></i><p>Ready to generate designs. Enter a prompt to begin.</p></div>';
-                } else {
-                    throw new Error('Server responded but is not ready');
-                }
-            })
-            .catch(() => {
-                isServerOnline = false;
+        
+        try {
+            // Use the new checkAIServerStatus function from ai-integration.js
+            serverIsOnline = await checkAIServerStatus();
+            
+            if (serverIsOnline) {
+                preview.innerHTML = '<p>Enter a prompt below to generate a design</p>';
+                generateBtn.disabled = false;
+            } else {
                 preview.innerHTML = `
-                    <div class="error">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <p>AI server is not running. <button id="ai-help" class="button secondary small">Learn how to start</button></p>
-                    </div>
+                <div class="error">
+                    <p>AI server is not running. <button id="ai-help" class="button secondary small">Learn how to start</button></p>
+                </div>
                 `;
-
-                // Add event listener to help button
+                
                 const helpBtn = document.getElementById('ai-help');
                 if (helpBtn) {
                     helpBtn.addEventListener('click', () => {
                         showAISetupInstructions();
                     });
                 }
-            });
+                
+                generateBtn.disabled = true;
+            }
+        } catch (error) {
+            console.error('Error checking server status:', error);
+            preview.innerHTML = '<div class="error"><p>Error connecting to AI server</p></div>';
+            generateBtn.disabled = true;
+        }
     };
-
+    
     // Function to show AI setup instructions
     const showAISetupInstructions = () => {
-        // Create modal with setup instructions
         const modal = document.createElement('div');
         modal.className = 'modal';
         modal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Setting up the AI Server</h3>
-                    <button class="modal-close"><i class="fas fa-times"></i></button>
-                </div>
-                <div class="modal-body">
-                    <p>To use the AI Design Generator, you need to set up a local server. Follow these steps:</p>
-                    <ol>
-                        <li>Clone the AI server repository: <code>git clone https://github.com/example/ai-server.git</code></li>
-                        <li>Install dependencies: <code>npm install</code></li>
-                        <li>Start the server: <code>npm start</code></li>
-                    </ol>
-                    <p>Once the server is running on <code>http://localhost:8080</code>, refresh this page to connect.</p>
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h3>Setting up the AI Server</h3>
+            <div class="modal-body">
+                <p>To use the AI Design Generator, you need to set up a local server. Follow these steps:</p>
+                <ol>
+                    <li>Clone the AI server repository: <code>git clone https://github.com/example/ai-server.git</code></li>
+                    <li>Navigate to the server directory: <code>cd server</code></li>
+                    <li>Install dependencies: <code>npm install</code></li>
+                    <li>Create a <code>.env</code> file with your AI API key</li>
+                    <li>Start the server: <code>npm start</code></li>
+                </ol>
+                <p>Once the server is running, refresh this page and try again.</p>
+                <div class="note">
+                    <p><strong>Note:</strong> The AI server is now using fal.ai for image generation.</p>
                 </div>
             </div>
+        </div>
         `;
+        
         document.body.appendChild(modal);
-
-        // Add event listener to close button
-        const closeBtn = modal.querySelector('.modal-close');
+        
+        const closeBtn = modal.querySelector('.close');
         closeBtn.addEventListener('click', () => {
             document.body.removeChild(modal);
         });
-
-        // Close when clicking outside modal content
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                document.body.removeChild(modal);
-            }
-        });
     };
-
-    // Check server status when tab is clicked
-    document.querySelector('.tab-btn[data-tab="ai"]').addEventListener('click', checkServerStatus);
-
+    
+    // Check server status when AI tab is clicked
+    document.querySelector('.tab-btn[data-tab="ai"]')?.addEventListener('click', checkServerStatus);
+    
+    // Initial server status check
+    checkServerStatus();
+    
     // Handle generate button click
-    generateBtn.addEventListener('click', () => {
+    generateBtn.addEventListener('click', async () => {
+        if (isGenerating) return;
+        
         const prompt = promptInput.value.trim();
-
         if (!prompt) {
-            // Show error if prompt is empty
-            promptInput.classList.add('error');
-            setTimeout(() => promptInput.classList.remove('error'), 500);
+            showToast('Please enter a prompt first');
             return;
         }
-
-        if (!isServerOnline) {
+        
+        if (!serverIsOnline) {
             // If server is not online, try checking again
-            checkServerStatus();
-            return;
+            await checkServerStatus();
+            if (!serverIsOnline) {
+                return;
+            }
         }
-
-        // Show loading state
+        
+        isGenerating = true;
         generateBtn.disabled = true;
         generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
         preview.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Creating your design...</p></div>';
-
-        // Call AI server API
-        fetch('http://localhost:8080/api/v1/dalle', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                prompt,
-            }),
-        })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Server responded with ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.photo) {
-                    // Create a preview image
-                    preview.innerHTML = '';
-                    const img = document.createElement('img');
-                    img.src = data.photo;
-                    preview.appendChild(img);
-
-                    // Add apply button
-                    const applyBtn = document.createElement('button');
-                    applyBtn.className = 'button primary apply-ai-btn';
-                    applyBtn.innerHTML = '<i class="fas fa-check"></i> Apply to Shirt';
-                    preview.appendChild(applyBtn);
-
-                    // Handle apply button click
-                    applyBtn.addEventListener('click', () => {
-                        const isLogoActive = document.getElementById('logo-toggle').checked;
-                        const isTextureActive = document.getElementById('texture-toggle').checked;
-
-                        let textureType;
-                        if (isLogoActive) {
-                            textureType = 'logo';
-                            updateState({
-                                logoDecal: data.photo,
-                            });
-                        } else if (isTextureActive) {
-                            textureType = 'full';
-                            updateState({
-                                fullDecal: data.photo,
-                            });
-                        } else {
-                            textureType = 'logo';
-                            document.getElementById('logo-toggle').checked = true;
-                            updateState({
-                                logo: true,
-                                isLogoTexture: true,
-                                logoDecal: data.photo,
-                            });
-                        }
-
-                        // Update the 3D model with the AI-generated image
-                        updateShirtTexture(data.photo, textureType);
-                        toggleTexture(textureType, true);
-
-                        // Show success feedback
-                        applyBtn.innerHTML = '<i class="fas fa-check"></i> Applied!';
-                        applyBtn.disabled = true;
-                        setTimeout(() => {
-                            applyBtn.innerHTML = '<i class="fas fa-check"></i> Apply to Shirt';
-                            applyBtn.disabled = false;
-                        }, 1500);
-                    });
-                } else {
-                    throw new Error('No image data received from the server');
-                }
-            })
-            .catch(error => {
-                console.error('Error generating AI image:', error);
+        
+        // Use the new generateAIImage function from ai-integration.js
+        generateAIImage(prompt, {
+            onSuccess: (imageData) => {
+                // Show the generated image with an apply button
                 preview.innerHTML = `
-                    <div class="error">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <p>Error generating image: ${error.message}</p>
-                    </div>
+                <div class="ai-result">
+                    <img src="${imageData}" alt="Generated design" />
+                    <button class="button primary apply-ai-btn">Apply to Shirt</button>
+                </div>
                 `;
-            })
-            .finally(() => {
-                // Reset button state
+                
+                // Add event listener to the apply button
+                const applyBtn = preview.querySelector('.apply-ai-btn');
+                if (applyBtn) {
+                    applyBtn.addEventListener('click', () => {
+                        // Get the current view/tab (logo or full texture)
+                        const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab;
+                        
+                        if (activeTab === 'logo') {
+                            // Apply as logo
+                            updateShirtTexture(imageData, 'logo');
+                            updateState({ logo: true });
+                        } else {
+                            // Apply as full texture
+                            updateShirtTexture(imageData, 'full');
+                            updateState({ stylish: true });
+                        }
+                        
+                        showToast('Applied AI design to shirt');
+                    });
+                }
+            },
+            onError: (errorMessage) => {
+                preview.innerHTML = `<div class="error"><p>Error: ${errorMessage}</p></div>`;
+                console.error('Error generating AI image:', errorMessage);
+            },
+            onEnd: () => {
+                isGenerating = false;
                 generateBtn.disabled = false;
-                generateBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Generate';
-            });
+                generateBtn.innerHTML = 'Generate';
+            }
+        });
     });
+    
+    // Helper functions for UI feedback
+    function showToast(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.classList.add('show');
+        }, 10);
+        
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => {
+                document.body.removeChild(toast);
+            }, 300);
+        }, 3000);
+    }
 }
 
 // Enhance logo position buttons with improved feedback
