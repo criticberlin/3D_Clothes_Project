@@ -2,7 +2,6 @@ import express from 'express';
 import * as dotenv from 'dotenv';
 import cors from 'cors';
 
-import dalleRoutes from './routes/dalle.routes.js';
 import falaiRoutes from './routes/falai.routes.js';
 
 dotenv.config();
@@ -22,14 +21,11 @@ app.options('*', cors());
 
 app.use(express.json({ limit: "50mb" }))
 
-// Original OpenAI DALL-E route
-app.use("/api/v1/dalle", dalleRoutes);
-
-// New fal.ai route - use this instead of DALL-E
+// fal.ai route for AI image generation
 app.use("/api/v1/falai", falaiRoutes);
 
 app.get('/', (req, res) => {
-  res.status(200).json({ message: "AI Image Generation Server" })
+  res.status(200).json({ message: "AI Image Generation Server (fal.ai)" })
 })
 
 app.listen(PORT, () => console.log(`Server has started on port ${PORT}`))
