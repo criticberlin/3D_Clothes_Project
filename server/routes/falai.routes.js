@@ -6,19 +6,38 @@ dotenv.config();
 
 const router = express.Router();
 
+// Validate API key
+function validateApiKey() {
+  if (!process.env.FAL_API_KEY) {
+    throw new Error('FAL_API_KEY is not set in environment variables');
+  }
+}
+
 // Health check endpoint with more details
 router.route('/ping').get((req, res) => {
-  const apiKeyPresent = process.env.FAL_API_KEY ? 'present' : 'missing';
-  res.status(200).json({
-    status: 'ok',
-    message: 'Fal.ai Server is running',
-    apiKeyStatus: apiKeyPresent,
-    timestamp: new Date().toISOString()
-  });
+  try {
+    validateApiKey();
+    res.status(200).json({
+      status: 'ok',
+      message: 'Fal.ai Server is running',
+      apiKeyStatus: 'present',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(200).json({
+      status: 'error',
+      message: 'Fal.ai Server is running but not properly configured',
+      apiKeyStatus: 'missing',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 router.route('/').post(async (req, res) => {
   try {
+    validateApiKey();
+    
     const { prompt } = req.body;
 
     if (!prompt) {
@@ -40,9 +59,15 @@ router.route('/').post(async (req, res) => {
         width: 1024,
         height: 1024,
         num_inference_steps: 40,
-        guidance_scale: 7.5
+        guidance_scale: 7.5,
+        num_images: 1
       })
     });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Fal.ai API responded with status: ${response.status}`);
+    }
 
     const data = await response.json();
 
@@ -52,13 +77,18 @@ router.route('/').post(async (req, res) => {
     // If we have a URL, we need to fetch the image and convert to base64
     if (imageUrl) {
       const imageResponse = await fetch(imageUrl);
+      if (!imageResponse.ok) {
+        throw new Error('Failed to fetch generated image');
+      }
       const imageBuffer = await imageResponse.buffer();
       const base64Image = imageBuffer.toString('base64');
 
       // Return in the format expected by the client
       res.status(200).json({ photo: `data:image/png;base64,${base64Image}` });
+    } else if (data.error) {
+      throw new Error(data.error);
     } else {
-      throw new Error("Failed to generate image");
+      throw new Error("Failed to generate image - no URL returned");
     }
   } catch (error) {
     console.error("Error generating image:", error);

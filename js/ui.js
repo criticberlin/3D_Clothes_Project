@@ -448,11 +448,238 @@ styleElement.textContent = `
         color: var(--gray-400);
         font-style: italic;
     }
+    
+    .ai-buttons {
+        display: flex;
+        gap: 10px;
+        margin-top: 12px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .ai-result {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        max-width: 100%;
+        margin: 0 auto;
+    }
+    
+    .ai-result img {
+        max-width: 100%;
+        width: auto;
+        height: auto;
+        max-height: 350px;
+        object-fit: contain;
+        border-radius: var(--border-radius-sm);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+    
+    .ai-preview {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 350px;
+        padding: 15px;
+        background-color: var(--bg-secondary);
+        border-radius: var(--border-radius-md);
+        box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.1);
+        margin-bottom: 15px;
+    }
+    
+    /* Loading indicator inside AI preview */
+    .ai-preview .loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        min-height: 200px;
+    }
+    
+    .ai-preview .loading i {
+        font-size: 2.5rem;
+        margin-bottom: 15px;
+        color: var(--primary-color);
+    }
+    
+    /* Fabric editor styling */
+    .fabric-canvas-wrapper {
+        width: 100%;
+        max-width: 650px;
+        margin: 0 auto 20px;
+        border-radius: var(--border-radius-md);
+        overflow: hidden;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+        background-color: #f8f8f8;
+        position: relative;
+    }
+    
+    .fabric-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        padding: 20px;
+        background-color: var(--bg-secondary);
+        border-radius: var(--border-radius-md);
+        margin-bottom: 20px;
+        max-width: 650px;
+        margin-left: auto;
+        margin-right: auto;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .canvas-container {
+        margin: 0 auto;
+        border-radius: var(--border-radius-md);
+        overflow: hidden;
+    }
+    
+    #finish-ai-edit {
+        margin: 15px auto;
+        display: block;
+        min-width: 200px;
+        font-weight: 600;
+        padding: 12px 24px;
+        font-size: 1.05rem;
+        transition: all 0.2s ease-in-out;
+    }
+    
+    #finish-ai-edit:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    }
+    
+    /* Tool buttons styling */
+    .tool-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-sm);
+        padding: 8px 12px;
+        margin-right: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .tool-btn:hover {
+        background-color: var(--primary-color-light);
+        color: var(--primary-color);
+    }
+    
+    .tool-btn.active {
+        background-color: var(--primary-color);
+        color: white;
+        border-color: var(--primary-color);
+    }
+    
+    .tool-btn i {
+        margin-right: 5px;
+    }
+    
+    /* Control groups in fabric editor */
+    .control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 12px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--border-color-light);
+    }
+    
+    .control-group:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+    }
+    
+    .control-group label {
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 5px;
+    }
+    
+    .fabric-select {
+        padding: 8px 12px;
+        border-radius: var(--border-radius-sm);
+        border: 1px solid var(--border-color);
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: inherit;
+        font-size: 0.9rem;
+        transition: border-color 0.2s ease;
+    }
+    
+    .fabric-select:focus {
+        outline: none;
+        border-color: var(--primary-color);
+    }
+    
+    /* Tool organization */
+    .editor-tools {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 15px;
+    }
+    
+    .shape-menu {
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        background-color: var(--bg-primary);
+        border-radius: var(--border-radius-sm);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+        z-index: 10;
+        overflow: hidden;
+        border: 1px solid var(--border-color);
+    }
+    
+    .shape-btn {
+        padding: 8px 12px;
+        background: none;
+        border: none;
+        text-align: left;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        color: var(--text-primary);
+    }
+    
+    .shape-btn:hover {
+        background-color: var(--bg-hover);
+    }
+    
+    /* Editor sections */
+    .editor-section-title {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 0 0 12px 0;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+    }
+    
+    .editor-section-title i {
+        margin-right: 8px;
+        color: var(--primary-color);
+    }
 `;
 document.head.appendChild(styleElement);
 
-// Improved AI Picker with better status indicators and error handling
+// Track if AI picker has been set up
+let aiPickerInitialized = false;
+
 export function setupAIPicker() {
+    // If already initialized, don't set up again
+    if (aiPickerInitialized) {
+        console.log('AI Picker already initialized, skipping setup');
+        return;
+    }
+
     const promptInput = document.getElementById('ai-prompt');
     const generateBtn = document.getElementById('ai-generate');
     const preview = document.querySelector('.ai-preview');
@@ -461,6 +688,9 @@ export function setupAIPicker() {
         console.warn('AI Picker elements not found');
         return;
     }
+
+    console.log('Setting up AI Picker with generate button:', generateBtn.id);
+    aiPickerInitialized = true;
 
     let isGenerating = false;
     let serverIsOnline = false;
@@ -539,8 +769,16 @@ export function setupAIPicker() {
     checkServerStatus();
 
     // Handle generate button click
-    generateBtn.addEventListener('click', async () => {
-        if (isGenerating) return;
+    generateBtn.addEventListener('click', async (event) => {
+        console.log('Generate button clicked', new Date().toISOString());
+        console.log('Event:', event.type, event.target.id);
+        console.log('Is generating:', isGenerating);
+        console.trace('Click handler stack trace');
+
+        if (isGenerating) {
+            console.log('Ignoring click because generation is already in progress');
+            return;
+        }
 
         const prompt = promptInput.value.trim();
         if (!prompt) {
@@ -564,11 +802,15 @@ export function setupAIPicker() {
         // Use the new generateAIImage function from ai-integration.js
         generateAIImage(prompt, {
             onSuccess: (imageData) => {
-                // Show the generated image with an apply button
+                // Show the generated image with buttons for apply, edit, and download
                 preview.innerHTML = `
                 <div class="ai-result">
                     <img src="${imageData}" alt="Generated design" />
-                    <button class="button primary apply-ai-btn">Apply to Shirt</button>
+                    <div class="ai-buttons">
+                        <button class="button primary apply-ai-btn">Apply to Shirt</button>
+                        <button class="button secondary edit-ai-btn"><i class="fas fa-pencil-alt"></i> Edit</button>
+                        <button class="button secondary download-ai-btn"><i class="fas fa-download"></i> Download</button>
+                    </div>
                 </div>
                 `;
 
@@ -581,6 +823,85 @@ export function setupAIPicker() {
                         updateState({ stylish: true });
 
                         showToast('Applied AI design to shirt');
+                    });
+                }
+
+                // Add event listener to the edit button
+                const editBtn = preview.querySelector('.edit-ai-btn');
+                if (editBtn) {
+                    editBtn.addEventListener('click', () => {
+                        // Import the necessary function from fabric-integration.js
+                        import('./fabric-integration.js').then(module => {
+                            // Open the image in the fabric canvas for editing
+                            if (typeof module.openImageInEditor === 'function') {
+                                module.openImageInEditor(imageData, editedImageData => {
+                                    // Update the preview with the edited image
+                                    const resultImg = preview.querySelector('.ai-result img');
+                                    if (resultImg) {
+                                        resultImg.src = editedImageData;
+                                    }
+                                    
+                                    // Also update the image data for the apply and download buttons
+                                    if (applyBtn) {
+                                        applyBtn.onclick = () => {
+                                            updateShirtTexture(editedImageData, 'full');
+                                            updateState({ stylish: true });
+                                            showToast('Applied edited design to shirt');
+                                        };
+                                    }
+                                    
+                                    if (downloadBtn) {
+                                        downloadBtn.onclick = () => {
+                                            const link = document.createElement('a');
+                                            link.href = editedImageData;
+                                            link.download = `ai-design-edited-${Date.now()}.png`;
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                            showToast('Downloading edited design');
+                                        };
+                                    }
+                                });
+                            } else {
+                                // Fallback if openImageInEditor isn't available
+                                showToast('Editor functionality not available');
+                                console.error('openImageInEditor function not found in fabric-integration.js');
+                                
+                                // Switch to the file picker tab which has the fabric editor
+                                const fileTab = document.querySelector('.tab-btn[data-tab="file"]');
+                                if (fileTab) {
+                                    fileTab.click();
+                                    
+                                    // Add a small delay to let the tab switch complete
+                                    setTimeout(() => {
+                                        // Try to access the initFabricCanvas function
+                                        module.initFabricCanvas && module.initFabricCanvas(imageData);
+                                        showToast('Please use the editor to customize your design');
+                                    }, 300);
+                                }
+                            }
+                        }).catch(error => {
+                            console.error('Error importing fabric-integration.js:', error);
+                            showToast('Could not open editor');
+                        });
+                    });
+                }
+
+                // Add event listener to the download button
+                const downloadBtn = preview.querySelector('.download-ai-btn');
+                if (downloadBtn) {
+                    downloadBtn.addEventListener('click', () => {
+                        // Create a temporary link element
+                        const link = document.createElement('a');
+                        link.href = imageData;
+                        link.download = `ai-design-${Date.now()}.png`;
+                        
+                        // Append to the document, click it, and remove it
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        
+                        showToast('Downloading AI design');
                     });
                 }
             },
@@ -721,7 +1042,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Initialize all components
         initializeTabs();
         setupFilePicker();
-        setupAIPicker();
         setupCameraViewButtons();
         setupThemeToggle();
     } catch (error) {

@@ -22,14 +22,27 @@ const FABRIC_PATTERNS = {
 
 /**
  * Initialize the Fabric.js canvas
+ * @param {number} width - Optional canvas width (defaults to container width or 500)
+ * @param {number} height - Optional canvas height (defaults to width for square canvas)
  */
-export function initFabricCanvas() {
+export function initFabricCanvas(width, height) {
+    // Get the canvas container element
+    const container = document.querySelector('.fabric-canvas-wrapper');
+    
+    // Determine canvas size
+    let canvasWidth = width || (container ? container.clientWidth : 500);
+    let canvasHeight = height || canvasWidth;
+    
+    // Limit maximum size for performance
+    canvasWidth = Math.min(canvasWidth, 800);
+    canvasHeight = Math.min(canvasHeight, 800);
+    
     // Create canvas instance
     canvas = new fabric.Canvas('fabric-canvas', {
         backgroundColor: 'rgba(255, 255, 255, 0.0)',
         preserveObjectStacking: true,
-        width: 300,
-        height: 300,
+        width: canvasWidth,
+        height: canvasHeight,
         selection: true
     });
 
@@ -58,6 +71,15 @@ export function initFabricCanvas() {
 
     // Set initial canvas background based on theme
     updateCanvasBackgroundForTheme();
+    
+    // Update any container styling if needed
+    if (container) {
+        container.style.height = canvasHeight + 'px';
+        container.style.width = canvasWidth + 'px';
+        container.style.margin = '0 auto';
+    }
+    
+    return canvas;
 }
 
 /**
@@ -158,14 +180,51 @@ function createFabricPattern(type, size) {
  * Set up event listeners for Fabric.js tools
  */
 function setupEventListeners() {
+    // Create a container for the editor tools if it doesn't exist
+    let editorTools = document.querySelector('.editor-tools');
+    if (!editorTools) {
+        editorTools = document.createElement('div');
+        editorTools.className = 'editor-tools';
+        
+        // Add a section title
+        const toolsTitle = document.createElement('h3');
+        toolsTitle.className = 'editor-section-title';
+        toolsTitle.innerHTML = '<i class="fas fa-paint-brush"></i> Drawing Tools';
+        
+        // Add the title and tools container to the fabric controls
+        const fabricControls = document.querySelector('.fabric-controls');
+        if (fabricControls) {
+            fabricControls.insertBefore(toolsTitle, fabricControls.firstChild);
+            fabricControls.insertBefore(editorTools, fabricControls.children[1]);
+        }
+    }
+    
     // Text button
-    document.getElementById('add-text').addEventListener('click', () => {
+    let textBtn = document.getElementById('add-text');
+    if (!textBtn) {
+        textBtn = document.createElement('button');
+        textBtn.id = 'add-text';
+        textBtn.className = 'tool-btn';
+        textBtn.innerHTML = '<i class="fas fa-font"></i> Text';
+        editorTools.appendChild(textBtn);
+    }
+    
+    textBtn.addEventListener('click', () => {
         setMode('text');
         addText('Edit this text');
     });
 
     // Shape button
-    document.getElementById('add-shape').addEventListener('click', () => {
+    let shapeBtn = document.getElementById('add-shape');
+    if (!shapeBtn) {
+        shapeBtn = document.createElement('button');
+        shapeBtn.id = 'add-shape';
+        shapeBtn.className = 'tool-btn';
+        shapeBtn.innerHTML = '<i class="fas fa-shapes"></i> Shape';
+        editorTools.appendChild(shapeBtn);
+    }
+    
+    shapeBtn.addEventListener('click', () => {
         setMode('shape');
         const shapeMenu = document.createElement('div');
         shapeMenu.className = 'shape-menu';
@@ -182,8 +241,10 @@ function setupEventListeners() {
         }
 
         // Add and position the menu
-        const shapeButton = document.getElementById('add-shape');
-        shapeButton.parentNode.appendChild(shapeMenu);
+        shapeBtn.parentNode.appendChild(shapeMenu);
+        const btnRect = shapeBtn.getBoundingClientRect();
+        shapeMenu.style.left = btnRect.left + 'px';
+        shapeMenu.style.top = (btnRect.bottom + 5) + 'px';
 
         // Add event listeners for shape buttons
         document.querySelectorAll('.shape-btn').forEach(btn => {
@@ -193,33 +254,94 @@ function setupEventListeners() {
                 shapeMenu.remove();
             });
         });
+        
+        // Close menu when clicking elsewhere
+        document.addEventListener('click', function closeMenu(e) {
+            if (!shapeMenu.contains(e.target) && e.target !== shapeBtn) {
+                shapeMenu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        });
     });
 
     // Free drawing button
-    document.getElementById('draw-free').addEventListener('click', () => {
+    let drawBtn = document.getElementById('draw-free');
+    if (!drawBtn) {
+        drawBtn = document.createElement('button');
+        drawBtn.id = 'draw-free';
+        drawBtn.className = 'tool-btn';
+        drawBtn.innerHTML = '<i class="fas fa-pencil-alt"></i> Draw';
+        editorTools.appendChild(drawBtn);
+    }
+    
+    drawBtn.addEventListener('click', () => {
         setMode('draw');
         canvas.isDrawingMode = true;
     });
+    
+    // Selection tool button
+    let selectBtn = document.getElementById('select-tool');
+    if (!selectBtn) {
+        selectBtn = document.createElement('button');
+        selectBtn.id = 'select-tool';
+        selectBtn.className = 'tool-btn';
+        selectBtn.innerHTML = '<i class="fas fa-mouse-pointer"></i> Select';
+        editorTools.appendChild(selectBtn);
+    }
+    
+    selectBtn.addEventListener('click', () => {
+        setMode('select');
+        canvas.isDrawingMode = false;
+    });
+
+    // Create a fabric properties section title
+    const fabricTitle = document.createElement('h3');
+    fabricTitle.className = 'editor-section-title';
+    fabricTitle.innerHTML = '<i class="fas fa-tshirt"></i> Fabric Properties';
+    
+    // Add fabric type and texture selectors in a new section
+    const fabricSection = document.createElement('div');
+    fabricSection.className = 'control-group fabric-properties';
+    
+    // Add the fabric section after the tools
+    const fabricControls = document.querySelector('.fabric-controls');
+    if (fabricControls) {
+        fabricControls.appendChild(fabricTitle);
+        fabricControls.appendChild(fabricSection);
+    }
 
     // Create and add fabric type selector
-    addFabricTypeSelector();
+    addFabricTypeSelector(fabricSection);
 
     // Create and add texture style selector
-    addTextureStyleSelector();
+    addTextureStyleSelector(fabricSection);
 
-    // Apply to shirt button
-    document.getElementById('apply-to-shirt').addEventListener('click', () => {
+    // Apply to shirt button - with proper styling
+    let applyBtn = document.getElementById('apply-to-shirt');
+    if (!applyBtn) {
+        applyBtn = document.createElement('button');
+        applyBtn.id = 'apply-to-shirt';
+        applyBtn.className = 'button primary';
+        applyBtn.style.marginTop = '20px';
+        applyBtn.style.width = '100%';
+        applyBtn.style.padding = '10px';
+        applyBtn.innerHTML = '<i class="fas fa-tshirt"></i> Apply to Shirt';
+        fabricControls.appendChild(applyBtn);
+    }
+    
+    applyBtn.addEventListener('click', () => {
         applyDesignToShirt();
     });
 }
 
 /**
  * Add fabric type selector to the UI
+ * @param {HTMLElement} container - The container to add the selector to
  */
-function addFabricTypeSelector() {
+function addFabricTypeSelector(container = document.querySelector('.fabric-controls')) {
     // Create the fabric type selector container
     const fabricTypeContainer = document.createElement('div');
-    fabricTypeContainer.className = 'fabric-type-container control-group';
+    fabricTypeContainer.className = 'fabric-type-container';
     fabricTypeContainer.innerHTML = `
         <label for="fabric-type-select">Fabric Type:</label>
         <select id="fabric-type-select" class="fabric-select">
@@ -230,9 +352,8 @@ function addFabricTypeSelector() {
         </select>
     `;
 
-    // Add to the fabric controls
-    const fabricControls = document.querySelector('.fabric-controls');
-    fabricControls.appendChild(fabricTypeContainer);
+    // Add to the specified container
+    container.appendChild(fabricTypeContainer);
 
     // Add event listener for fabric type changes
     document.getElementById('fabric-type-select').addEventListener('change', (e) => {
@@ -243,11 +364,12 @@ function addFabricTypeSelector() {
 
 /**
  * Add texture style selector to the UI
+ * @param {HTMLElement} container - The container to add the selector to
  */
-function addTextureStyleSelector() {
+function addTextureStyleSelector(container = document.querySelector('.fabric-controls')) {
     // Create the texture style selector container
     const textureStyleContainer = document.createElement('div');
-    textureStyleContainer.className = 'texture-style-container control-group';
+    textureStyleContainer.className = 'texture-style-container';
     textureStyleContainer.innerHTML = `
         <label for="texture-style-select">Weave Pattern:</label>
         <select id="texture-style-select" class="fabric-select">
@@ -259,9 +381,8 @@ function addTextureStyleSelector() {
         </select>
     `;
 
-    // Add to the fabric controls
-    const fabricControls = document.querySelector('.fabric-controls');
-    fabricControls.appendChild(textureStyleContainer);
+    // Add to the specified container
+    container.appendChild(textureStyleContainer);
 
     // Add event listener for texture style changes
     document.getElementById('texture-style-select').addEventListener('change', (e) => {
@@ -545,15 +666,249 @@ function simulateFabricLighting(canvasEl) {
 }
 
 /**
- * Clear the canvas
+ * Open an image in the fabric editor
+ * @param {string} imageData - Base64 image data
+ * @param {function} callback - Function to call with the edited image data
  */
-export function clearCanvas() {
-    canvas.getObjects().forEach(obj => {
-        if (obj !== canvas.getObjects()[0]) { // Keep the background
-            canvas.remove(obj);
+export function openImageInEditor(imageData, callback) {
+    // Create temporary image to get dimensions
+    const tempImg = new Image();
+    tempImg.onload = function() {
+        // Calculate optimal canvas size based on image dimensions
+        const imgWidth = tempImg.width;
+        const imgHeight = tempImg.height;
+        
+        // Set a reasonable max size for the editor
+        const maxWidth = 650;
+        const maxHeight = 650;
+        
+        // Calculate the optimal canvas size (maintain aspect ratio)
+        let canvasWidth, canvasHeight;
+        
+        if (imgWidth > imgHeight) {
+            // Landscape image
+            canvasWidth = Math.min(imgWidth, maxWidth);
+            canvasHeight = Math.round((imgHeight / imgWidth) * canvasWidth);
+        } else {
+            // Portrait or square image
+            canvasHeight = Math.min(imgHeight, maxHeight);
+            canvasWidth = Math.round((imgWidth / imgHeight) * canvasHeight);
         }
-    });
-    canvas.renderAll();
+        
+        // Ensure minimum dimensions
+        canvasWidth = Math.max(canvasWidth, 400);
+        canvasHeight = Math.max(canvasHeight, 400);
+        
+        // Initialize the canvas with the calculated dimensions
+        if (!canvas) {
+            initFabricCanvas(canvasWidth, canvasHeight);
+        } else {
+            // Resize existing canvas
+            canvas.setWidth(canvasWidth);
+            canvas.setHeight(canvasHeight);
+            
+            // Resize the background rectangle
+            const background = canvas.getObjects()[0];
+            if (background) {
+                background.set({
+                    width: canvasWidth,
+                    height: canvasHeight
+                });
+            }
+        }
+        
+        // Clear any existing content (except the background)
+        clearCanvas(true);
+        
+        // Switch to the file tab to show the editor
+        const fileTab = document.querySelector('.tab-btn[data-tab="file"]');
+        if (fileTab) {
+            fileTab.click();
+        }
+        
+        // Add an editing title to the fabric controls
+        const editorContainer = document.querySelector('.fabric-controls');
+        if (editorContainer) {
+            // Remove any existing title
+            const existingTitle = document.querySelector('.ai-edit-title');
+            if (existingTitle) {
+                existingTitle.remove();
+            }
+            
+            // Add a prominent title for the AI editing mode
+            const aiEditTitle = document.createElement('div');
+            aiEditTitle.className = 'ai-edit-title';
+            aiEditTitle.innerHTML = `
+                <h2><i class="fas fa-magic"></i> Edit AI Generated Image</h2>
+                <p>Customize your AI design using the tools below.</p>
+            `;
+            
+            // Insert at the beginning of the container
+            editorContainer.insertBefore(aiEditTitle, editorContainer.firstChild);
+            
+            // Add styles for the title if not already in the document
+            if (!document.querySelector('style#ai-edit-styles')) {
+                const styleElement = document.createElement('style');
+                styleElement.id = 'ai-edit-styles';
+                styleElement.textContent = `
+                    .ai-edit-title {
+                        text-align: center;
+                        margin-bottom: 20px;
+                        padding-bottom: 15px;
+                        border-bottom: 2px solid var(--primary-color-light);
+                    }
+                    
+                    .ai-edit-title h2 {
+                        color: var(--primary-color);
+                        margin: 0 0 10px 0;
+                        font-size: 1.5rem;
+                    }
+                    
+                    .ai-edit-title p {
+                        color: var(--text-secondary);
+                        margin: 0;
+                        font-size: 0.95rem;
+                    }
+                    
+                    .ai-edit-actions {
+                        display: flex;
+                        justify-content: center;
+                        margin-top: 20px;
+                        padding-top: 20px;
+                        border-top: 2px solid var(--primary-color-light);
+                    }
+                `;
+                document.head.appendChild(styleElement);
+            }
+            
+            // Remove any existing finish button
+            const existingFinishButton = document.getElementById('finish-ai-edit');
+            if (existingFinishButton) {
+                existingFinishButton.remove();
+            }
+        }
+        
+        // Load the image into the canvas
+        fabric.Image.fromURL(imageData, function(img) {
+            // Calculate scaling to fit the canvas while maintaining aspect ratio
+            const scaleFactor = Math.min(
+                (canvas.width - 40) / img.width,
+                (canvas.height - 40) / img.height
+            );
+            
+            // Apply scaling
+            img.scale(scaleFactor);
+            
+            // Center the image
+            img.set({
+                left: canvas.width / 2,
+                top: canvas.height / 2,
+                originX: 'center',
+                originY: 'center'
+            });
+            
+            // Add to canvas
+            canvas.add(img);
+            canvas.setActiveObject(img);
+            canvas.renderAll();
+            
+            // Update container styling
+            const container = document.querySelector('.fabric-canvas-wrapper');
+            if (container) {
+                container.style.height = canvasHeight + 'px';
+                container.style.width = canvasWidth + 'px';
+                container.style.margin = '0 auto';
+                container.style.overflow = 'hidden';
+            }
+            
+            // Show notification
+            showNotification('AI image loaded for editing. Use the tools to customize it.');
+            
+            // Add a special button to finish editing in a dedicated container
+            const editorContainer = document.querySelector('.fabric-controls');
+            if (editorContainer) {
+                // Create a container for the finish action
+                const actionsContainer = document.createElement('div');
+                actionsContainer.className = 'ai-edit-actions';
+                
+                // Create the finish button
+                const finishButton = document.createElement('button');
+                finishButton.id = 'finish-ai-edit';
+                finishButton.className = 'button primary';
+                finishButton.innerHTML = '<i class="fas fa-check"></i> Save and Return to AI';
+                
+                // Add the button to the container
+                actionsContainer.appendChild(finishButton);
+                
+                // Add the container to the editor
+                editorContainer.appendChild(actionsContainer);
+                
+                // Add event listener to the finish button
+                finishButton.addEventListener('click', function() {
+                    // Convert canvas to image data
+                    const editedImageData = canvas.toDataURL('image/png');
+                    
+                    // Switch back to AI tab
+                    const aiTab = document.querySelector('.tab-btn[data-tab="ai"]');
+                    if (aiTab) {
+                        aiTab.click();
+                    }
+                    
+                    // Call the callback with the edited image
+                    if (typeof callback === 'function') {
+                        callback(editedImageData);
+                    }
+                    
+                    // Clean up after editing is complete
+                    // Remove the AI editing title
+                    const aiEditTitle = document.querySelector('.ai-edit-title');
+                    if (aiEditTitle) {
+                        aiEditTitle.remove();
+                    }
+                    
+                    // Remove the actions container
+                    actionsContainer.remove();
+                    
+                    // Show notification
+                    showNotification('Edited image saved! You can now apply it to your shirt.');
+                });
+            }
+        });
+    };
+    
+    // Set the source to load the image
+    tempImg.src = imageData;
+}
+
+/**
+ * Clear the canvas
+ * @param {boolean} keepBackground - Whether to keep the background rectangle
+ */
+export function clearCanvas(keepBackground = false) {
+    if (!canvas) return;
+    
+    if (keepBackground) {
+        // Keep only the background rectangle (first object)
+        const background = canvas.getObjects()[0];
+        canvas.clear();
+        if (background) {
+            canvas.add(background);
+        }
+    } else {
+        // Get the background rectangle (first object)
+        const background = canvas.getObjects()[0];
+        
+        // Clear the canvas
+        canvas.clear();
+        
+        // Add back the background if it existed
+        if (background) {
+            canvas.add(background);
+        }
+        
+        // Reset all objects on top of the background
+        canvas.renderAll();
+    }
 }
 
 /**
