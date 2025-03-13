@@ -3,17 +3,107 @@ import { updateShirtColor, updateShirtTexture, toggleTexture, changeCameraView, 
 import { loadCustomImage, clearCustomImage, showBoundingBoxesForCameraView, setTexturePosition } from './texture-mapper.js';
 import { generateAIImage, checkAIServerStatus } from './ai-integration.js';
 
-// Popular t-shirt colors with their hex codes
-const colors = [
-    { name: 'White', hex: '#FFFFFF' },
-    { name: 'Black', hex: '#000000' },
-    { name: 'Gray', hex: '#606060' },      // Charcoal Gray
-    { name: 'Navy Blue', hex: '#000080' },
-    { name: 'Beige', hex: '#F5F5DC' },     // Khaki
-    { name: 'Olive Green', hex: '#556B2F' },
-    { name: 'Brown', hex: '#8B4513' },     // Saddle Brown
-    { name: 'Burgundy', hex: '#800020' }
-];
+// Define preset colors for t-shirts
+export const presetColors = {
+    'White': '#FFFFFF',
+    'Black': '#000000',
+    'Gray': '#808080',
+    'Navy Blue': '#000080',
+    'Beige': '#F5F5DC',
+    'Olive Green': '#556B2F',
+    'Brown': '#8B4513',
+    'Burgundy': '#800020'
+};
+
+// The default color
+export const defaultColor = '#FFFFFF';
+
+/**
+ * Initialize color picker and preset colors
+ */
+export function initializeColorPicker() {
+    const colorPreview = document.getElementById('color-preview');
+    const colorName = document.getElementById('color-name');
+    const colorHex = document.getElementById('color-hex');
+    const presetsContainer = document.querySelector('.preset-colors .colors');
+
+    if (!colorPreview || !colorName || !colorHex || !presetsContainer) {
+        console.warn('Color picker elements not found');
+        return;
+    }
+
+    // Set up color preview as a color picker
+    colorPreview.addEventListener('click', () => {
+        // Create a color input element
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.value = colorHex.textContent || defaultColor;
+
+        // Trigger click on the input to open color picker
+        colorInput.addEventListener('input', (e) => {
+            const newColor = e.target.value;
+            updateColorUI(newColor, 'Custom');
+            updateShirtColor(newColor);
+            updateState({ color: newColor });
+        });
+
+        colorInput.addEventListener('change', (e) => {
+            const newColor = e.target.value;
+            updateColorUI(newColor, 'Custom');
+            updateShirtColor(newColor);
+            updateState({ color: newColor });
+        });
+
+        colorInput.click();
+    });
+
+    // Add preset colors to the container
+    presetsContainer.innerHTML = '';
+    Object.entries(presetColors).forEach(([name, hex]) => {
+        const colorBtn = document.createElement('button');
+        colorBtn.className = 'color-btn';
+        colorBtn.style.backgroundColor = hex;
+        colorBtn.setAttribute('data-color', hex);
+        colorBtn.setAttribute('data-name', name);
+        colorBtn.title = name;
+
+        // Add name label that appears on hover
+        const nameLabel = document.createElement('span');
+        nameLabel.className = 'color-name-label';
+        nameLabel.textContent = name;
+        colorBtn.appendChild(nameLabel);
+
+        colorBtn.addEventListener('click', () => {
+            updateColorUI(hex, name);
+            updateShirtColor(hex);
+            updateState({ color: hex });
+
+            // Update active state
+            document.querySelectorAll('.color-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            colorBtn.classList.add('active');
+        });
+
+        presetsContainer.appendChild(colorBtn);
+    });
+
+    // Initialize with default color
+    updateColorUI(defaultColor, 'White');
+}
+
+/**
+ * Update the color UI with the given color and name
+ */
+function updateColorUI(hexColor, colorNameText) {
+    const colorPreview = document.getElementById('color-preview');
+    const colorName = document.getElementById('color-name');
+    const colorHex = document.getElementById('color-hex');
+
+    if (colorPreview) colorPreview.style.backgroundColor = hexColor;
+    if (colorName) colorName.textContent = colorNameText;
+    if (colorHex) colorHex.textContent = hexColor;
+}
 
 /**
  * Initialize the tabs navigation
@@ -55,132 +145,9 @@ export function initializeTabs() {
 
     // Set up theme toggle
     setupThemeToggle();
-}
 
-/**
- * Set up color picker functionality
- */
-export function setupColorPicker() {
-    // Set up color wheel
-    const colorWheel = document.getElementById('color-wheel');
-    const colorHexDisplay = document.getElementById('color-hex');
-    const colorPreview = document.getElementById('color-preview');
-    const colorNameDisplay = document.getElementById('color-name');
-
-    // Create color name display if it doesn't exist
-    if (colorHexDisplay && !colorNameDisplay) {
-        const nameDisplay = document.createElement('div');
-        nameDisplay.id = 'color-name';
-        nameDisplay.className = 'color-name-display';
-        colorHexDisplay.parentNode.insertBefore(nameDisplay, colorHexDisplay.nextSibling);
-    }
-
-    // Default color is the first in our palette
-    const defaultColor = colors[0].hex;
-    const defaultName = colors[0].name;
-
-    if (colorWheel) {
-        // Set initial color
-        colorWheel.value = state.color || defaultColor;
-
-        const colorName = document.getElementById('color-name');
-        if (colorName) {
-            // Find the color name from the hex value
-            const colorObj = colors.find(c => c.hex === (state.color || defaultColor)) || colors[0];
-            colorName.textContent = colorObj.name;
-        }
-
-        colorHexDisplay.textContent = (state.color || defaultColor).toUpperCase();
-        colorPreview.style.backgroundColor = state.color || defaultColor;
-
-        colorWheel.addEventListener('input', (e) => {
-            const newColor = e.target.value;
-            colorHexDisplay.textContent = newColor.toUpperCase();
-            colorPreview.style.backgroundColor = newColor;
-
-            // Try to find matching color name or show "Custom"
-            const colorObj = colors.find(c => c.hex.toUpperCase() === newColor.toUpperCase());
-            if (colorName) {
-                colorName.textContent = colorObj ? colorObj.name : "Custom";
-            }
-
-            // Add subtle animation to the color preview
-            colorPreview.classList.add('pulse');
-            setTimeout(() => colorPreview.classList.remove('pulse'), 500);
-
-            updateState({ color: newColor });
-            updateShirtColor(newColor);
-
-            // Remove active class from all preset color buttons
-            document.querySelectorAll('.color-btn').forEach(btn =>
-                btn.classList.remove('active')
-            );
-        });
-    }
-
-    // Set up preset colors
-    const colorContainer = document.querySelector('.colors');
-    if (!colorContainer) return;
-
-    // Clear existing color buttons to avoid duplicates
-    colorContainer.innerHTML = '';
-
-    // Create color buttons
-    colors.forEach((color, index) => {
-        const button = document.createElement('button');
-        button.className = 'color-btn';
-        button.style.backgroundColor = color.hex;
-        button.dataset.color = color.hex;
-        button.setAttribute('aria-label', `Select color ${color.name}`);
-        button.setAttribute('title', color.name);
-
-        // Add color name label inside button
-        const nameLabel = document.createElement('span');
-        nameLabel.className = 'color-name-label';
-        nameLabel.textContent = color.name;
-        button.appendChild(nameLabel);
-
-        // Set the first color as active by default, or match current state
-        if ((state.color === undefined && index === 0) || color.hex === state.color) {
-            button.classList.add('active');
-        }
-
-        button.addEventListener('click', () => {
-            // Remove active class from all buttons
-            document.querySelectorAll('.color-btn').forEach(btn =>
-                btn.classList.remove('active')
-            );
-
-            // Add active class to clicked button
-            button.classList.add('active');
-
-            // Add animation to the button
-            button.classList.add('pulse');
-            setTimeout(() => button.classList.remove('pulse'), 500);
-
-            // Update color wheel and preview
-            if (colorWheel) {
-                colorWheel.value = color.hex;
-                colorHexDisplay.textContent = color.hex.toUpperCase();
-                colorPreview.style.backgroundColor = color.hex;
-
-                const colorName = document.getElementById('color-name');
-                if (colorName) {
-                    colorName.textContent = color.name;
-                }
-
-                // Add animation to preview
-                colorPreview.classList.add('pulse');
-                setTimeout(() => colorPreview.classList.remove('pulse'), 500);
-            }
-
-            // Update shirt color
-            updateState({ color: color.hex });
-            updateShirtColor(color.hex);
-        });
-
-        colorContainer.appendChild(button);
-    });
+    // Initialize color picker
+    initializeColorPicker();
 }
 
 // Setup camera view buttons to show appropriate bounding boxes
@@ -609,18 +576,9 @@ export function setupAIPicker() {
                 const applyBtn = preview.querySelector('.apply-ai-btn');
                 if (applyBtn) {
                     applyBtn.addEventListener('click', () => {
-                        // Get the current view/tab (logo or full texture)
-                        const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab;
-
-                        if (activeTab === 'logo') {
-                            // Apply as logo
-                            updateShirtTexture(imageData, 'logo');
-                            updateState({ logo: true });
-                        } else {
-                            // Apply as full texture
-                            updateShirtTexture(imageData, 'full');
-                            updateState({ stylish: true });
-                        }
+                        // Apply as full texture
+                        updateShirtTexture(imageData, 'full');
+                        updateState({ stylish: true });
 
                         showToast('Applied AI design to shirt');
                     });
@@ -661,7 +619,7 @@ export function setupAIPicker() {
 /**
  * Setup theme toggle button
  */
-function setupThemeToggle() {
+export function setupThemeToggle() {
     console.log('Setting up theme toggle...');
 
     // Get the theme toggle elements
@@ -762,7 +720,6 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
         // Initialize all components
         initializeTabs();
-        setupColorPicker();
         setupFilePicker();
         setupAIPicker();
         setupCameraViewButtons();

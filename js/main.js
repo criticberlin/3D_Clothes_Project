@@ -1,8 +1,8 @@
 import { setupScene, updateShirtColor, updateShirtTexture, toggleTexture, downloadCanvas, changeModel, updateThemeBackground, toggleAutoRotate, changeCameraView, setFabricType } from './scene.js';
-import { initializeTabs, setupColorPicker, setupFilePicker, setupAIPicker, setupCameraViewButtons } from './ui.js';
+import { initializeTabs, setupFilePicker, setupAIPicker, setupCameraViewButtons, defaultColor, presetColors, setupThemeToggle } from './ui.js';
 import { state, updateState, subscribe } from './state.js';
 import { Logger, Performance } from './utils.js';
-import { initFabricCanvas, clearCanvas, downloadDesign, setColor, setFabricType as setFabricEditorType } from './fabric-integration.js';
+import { initFabricCanvas, clearCanvas, downloadDesign, setFabricType as setFabricEditorType } from './fabric-integration.js';
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
@@ -87,26 +87,25 @@ document.addEventListener('DOMContentLoaded', () => {
             return; // Exit if elements aren't available yet
         }
 
-        // Default color (first color in the rainbow palette)
-        const defaultColor = '#FF0000';
-
         // Set default state (match original project)
         updateState({
             intro: true,
             color: defaultColor,
-            isLogoTexture: false,
             isFullTexture: false,
-            logoDecal: null,
             fullDecal: null,
-            logo: false,  // Logo disabled by default
             stylish: false, // For the toggle button
             currentModel: 'tshirt', // Default model is t-shirt
-            logoPosition: 'center', // Reset logo position to center
             cameraView: 'front', // Default camera view
             autoRotate: false, // Auto-rotation disabled by default
             darkMode: true, // Default to dark mode
             fabricType: 'cotton', // Default fabric type
             textureStyle: 'plain' // Default texture style
+        });
+
+        // Subscribe to color changes to update the 3D model
+        subscribe('color', (color) => {
+            // Update the shirt color
+            updateShirtColor(color);
         });
 
         // Set up theme toggle directly here instead of relying on other functions
@@ -116,15 +115,29 @@ document.addEventListener('DOMContentLoaded', () => {
         setupScene().then(() => {
             Logger.info('Scene loaded successfully');
 
+            try {
+                // Set initial shirt color
+                const initialColor = state.color || defaultColor;
+                Logger.info(`Setting initial shirt color: ${initialColor}`);
+                updateShirtColor(initialColor);
+            } catch (error) {
+                Logger.error('Error setting initial color:', error);
+            }
+
+            // Try to load the default model explicitly
+            if (!window.shirtMesh) {
+                Logger.info('Shirt mesh not found, trying to load default model');
+                changeModel('tshirt')
+                    .then(() => {
+                        Logger.info('Default model loaded');
+                    })
+                    .catch(error => {
+                        Logger.error('Error loading default model:', error);
+                    });
+            }
+
             // Initialize Fabric.js integration
             // This will be called after DOM is fully loaded in the window load event
-
-            // Connect the color picker with Fabric.js
-            // When the shirt color changes, we'll update the fabric editor color selector
-            subscribe('color', (color) => {
-                // You could add a UI element to toggle this sync behavior
-                // setColor(color); // Uncomment to sync shirt color with fabric drawing color
-            });
 
             // Connect fabric type selection
             subscribe('fabricType', (fabricType) => {
@@ -159,7 +172,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Initialize UI components
         initializeTabs();
-        setupColorPicker();
         setupFilePicker();
         setupAIPicker();
         setupCameraViewButtons();
@@ -203,71 +215,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 resetBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Resetting...';
                 resetBtn.disabled = true;
 
-                // Reset to default state - match original project defaults
+                // Reset to default state
                 updateState({
-                    color: defaultColor,
-                    isLogoTexture: false,
                     isFullTexture: false,
-                    logoDecal: null,
                     fullDecal: null,
-                    logo: false,
-                    stylish: false,
-                    logoPosition: 'center' // Reset logo position to center
+                    stylish: false
                 });
-
-                // Reset UI elements
-                if (logoToggle) {
-                    logoToggle.checked = true;
-                }
 
                 if (textureToggle) {
                     textureToggle.checked = false;
                 }
 
-                // Reset logo position buttons
-                const positionButtons = document.querySelectorAll('.position-btn');
-                if (positionButtons.length > 0) {
-                    positionButtons.forEach(btn => {
-                        if (btn.dataset.position === 'center') {
-                            btn.classList.add('active');
-                        } else {
-                            btn.classList.remove('active');
-                        }
-                    });
-                }
-
-                // Reset color picker
-                const colorWheel = document.getElementById('color-wheel');
-                const colorHex = document.getElementById('color-hex');
-                const colorPreview = document.getElementById('color-preview');
-
-                if (colorWheel) {
-                    colorWheel.value = defaultColor;
-                }
-
-                if (colorHex) {
-                    colorHex.textContent = defaultColor;
-                }
-
-                if (colorPreview) {
-                    colorPreview.style.backgroundColor = defaultColor;
-                }
-
-                // Update active color button
-                const colorButtons = document.querySelectorAll('.color-btn');
-                if (colorButtons.length > 0) {
-                    colorButtons.forEach(btn => {
-                        if (btn.dataset.color === defaultColor) {
-                            btn.classList.add('active');
-                        } else {
-                            btn.classList.remove('active');
-                        }
-                    });
-                }
-
-                // Update shirt model
-                updateShirtColor(defaultColor);
-                toggleTexture('logo', false);
+                // First disable textures
                 toggleTexture('full', false);
 
                 // Reset preview areas
@@ -297,12 +256,6 @@ document.addEventListener('DOMContentLoaded', () => {
             Logger.warn("Auto-rotate button not found in the DOM");
         }
 
-        // Set default color preview
-        const colorPreview = document.getElementById('color-preview');
-        if (colorPreview) {
-            colorPreview.style.backgroundColor = state.color || defaultColor;
-        }
-
         // Add welcome animation to tabs
         animateWelcome();
 
@@ -321,14 +274,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Set initial theme
         const isDarkMode = state.darkMode !== false;
+
+        // Apply theme to document
         document.documentElement.classList.toggle('light-theme', !isDarkMode);
 
         // Set correct icon
         themeToggle.innerHTML = isDarkMode
-            ? '<i class="fas fa-sun"></i>'
-            : '<i class="fas fa-moon"></i>';
+            ? '<i class="fas fa-sun"></i>' // Sun icon for dark mode (indicates switch to light)
+            : '<i class="fas fa-moon"></i>'; // Moon icon for light mode (indicates switch to dark)
 
-        // Apply theme to scene
+        // Apply theme to scene immediately
         updateThemeBackground(isDarkMode);
 
         // Remove any existing event listeners by cloning the button
@@ -337,9 +292,13 @@ document.addEventListener('DOMContentLoaded', () => {
             themeToggle.parentNode.replaceChild(newThemeToggle, themeToggle);
         }
 
-        // Add click handler
+        // Add click handler with visual feedback
         newThemeToggle.addEventListener('click', () => {
             console.log("Theme toggle clicked");
+
+            // Add clicking animation
+            newThemeToggle.classList.add('active');
+            setTimeout(() => newThemeToggle.classList.remove('active'), 300);
 
             // Toggle theme state
             const newDarkMode = !state.darkMode;
@@ -348,16 +307,26 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update state
             updateState({ darkMode: newDarkMode });
 
-            // Update UI
+            // Update UI with a smooth transition
             document.documentElement.classList.toggle('light-theme', !newDarkMode);
 
-            // Update button icon
-            newThemeToggle.innerHTML = newDarkMode
-                ? '<i class="fas fa-sun"></i>'
-                : '<i class="fas fa-moon"></i>';
+            // Update button icon with a smooth transition
+            newThemeToggle.style.transition = 'transform 0.3s ease, background-color 0.3s ease';
+            newThemeToggle.style.transform = 'rotate(180deg)';
+
+            setTimeout(() => {
+                newThemeToggle.innerHTML = newDarkMode
+                    ? '<i class="fas fa-sun"></i>'
+                    : '<i class="fas fa-moon"></i>';
+
+                newThemeToggle.style.transform = 'rotate(0deg)';
+            }, 150);
 
             // Update 3D scene background
             updateThemeBackground(newDarkMode);
+
+            // Save preference in localStorage
+            localStorage.setItem('theme', newDarkMode ? 'dark' : 'light');
         });
     }
 
@@ -370,7 +339,6 @@ function animateWelcome() {
         '.model-selector',
         '.tab-navigation',
         '#color-picker',
-        '.logo-position-options',
         '.action-buttons'
     ];
 
@@ -446,11 +414,8 @@ function setupModelSelector() {
 
                 // Preserve current textures when changing models
                 const currentColor = state.color;
-                const currentLogoDecal = state.logoDecal;
                 const currentFullDecal = state.fullDecal;
-                const logoVisible = state.logo;
                 const fullTextureVisible = state.stylish;
-                const logoPosition = state.logoPosition; // Preserve logo position
 
                 // Update state
                 updateState({ currentModel: newModel });
@@ -466,16 +431,9 @@ function setupModelSelector() {
                     .then(() => {
                         Logger.info(`Changed model to ${newModel}`);
 
-                        // Restore settings from previous model
-                        if (currentColor) updateShirtColor(currentColor);
-
-                        // Make sure logo position is applied before updating textures
-                        if (logoPosition) updateState({ logoPosition });
-
-                        if (logoVisible && currentLogoDecal) updateShirtTexture(currentLogoDecal, 'logo');
+                        // Restore textures if needed
                         if (fullTextureVisible && currentFullDecal) updateShirtTexture(currentFullDecal, 'full');
 
-                        toggleTexture('logo', logoVisible);
                         toggleTexture('full', fullTextureVisible);
 
                         // Reset camera to default position for this model type
@@ -557,25 +515,6 @@ function setInitialTabFromHash() {
     }
 }
 
-// Subscribe to state changes
-subscribe((newState) => {
-    // Update color preview if color changed
-    if (newState.color) {
-        const colorPreview = document.getElementById('color-preview');
-        if (colorPreview) {
-            colorPreview.style.backgroundColor = newState.color;
-        }
-    }
-
-    // Update model selector if model changed
-    if (newState.currentModel) {
-        const modelOption = document.querySelector(`input[name="model-type"][value="${newState.currentModel}"]`);
-        if (modelOption && !modelOption.checked) {
-            modelOption.checked = true;
-        }
-    }
-});
-
 // Setup filter buttons
 const filterButtons = document.querySelectorAll('.filter-btn[data-filter]');
 filterButtons.forEach(btn => {
@@ -635,8 +574,12 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log('WebGL support:', webGLStatus.message);
     }
 
-    // Setup initial theme
-    setupThemeToggle();
+    // Use the imported setupThemeToggle function from ui.js
+    if (typeof setupThemeToggle === 'function') {
+        setupThemeToggle();
+    } else {
+        console.warn('setupThemeToggle function not available, using default theme');
+    }
 
     // Ensure the clothesOptions contains all the required keys
     if (typeof clothesOptions === 'undefined' || !clothesOptions) {

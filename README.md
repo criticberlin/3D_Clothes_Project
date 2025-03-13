@@ -68,19 +68,23 @@ The application employs a sophisticated mathematical framework for texture manip
 │   └── threejs.png             # Logo image
 ├── css/                        # CSS stylesheets
 │   └── style.css               # Main stylesheet
+├── models/                     # 3D model files
+│   ├── tshirt.glb              # 3D T-shirt model
+│   └── hoodie.glb              # 3D hoodie model
 ├── js/                         # JavaScript modules
 │   ├── main.js                 # Main application entry point
 │   ├── scene.js                # Three.js scene setup
 │   ├── state.js                # State management
 │   ├── ui.js                   # UI components and interactions
-│   └── texture-mapper.js       # Advanced texture mapping system
+│   ├── texture-mapper.js       # Advanced texture mapping system
+│   ├── fabric-integration.js   # Fabric.js integration
+│   ├── advanced-calculations.js # Advanced mathematical calculations
+│   ├── utils.js                # Utility functions
+│   └── ai-integration.js       # AI integration
 ├── server/                     # Backend for AI features
-│   ├── server.js               # Express server setup
+│   ├── index.js                # Express server setup
 │   └── package.json            # Node.js dependencies
 ├── index.html                  # Main HTML file
-├── debug-texture-mapper.js     # Debugging utilities
-├── shirt_baked.glb             # 3D T-shirt model
-├── hoodie_baked.glb            # 3D hoodie model
 ├── TEXTURE-MAPPER-IMPLEMENTATION.md # Implementation guide
 ├── AI-FEATURE-SETUP.md         # AI setup instructions
 └── README.md                   # This file

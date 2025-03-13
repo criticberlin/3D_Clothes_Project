@@ -38,8 +38,11 @@
 				console.log('Setting up direct theme toggle from HTML')
 				const themeToggle = document.getElementById('theme-toggle')
 				if (themeToggle) {
-					// Set initial state - default is dark mode
-					let isDarkMode = true
+					// Get theme from localStorage or default to dark mode
+					const savedTheme = localStorage.getItem('theme')
+					let isDarkMode = savedTheme ? savedTheme === 'dark' : true
+
+					// Apply theme
 					document.documentElement.classList.toggle('light-theme', !isDarkMode)
 
 					// Set correct icon
@@ -54,16 +57,30 @@
 						// Toggle theme state
 						isDarkMode = !isDarkMode
 
-						// Update UI
+						// Save preference
+						localStorage.setItem('theme', isDarkMode ? 'dark' : 'light')
+
+						// Update UI with animation
+						themeToggle.classList.add('active')
+						setTimeout(() => themeToggle.classList.remove('active'), 300)
+
 						document.documentElement.classList.toggle(
 							'light-theme',
 							!isDarkMode
 						)
 
-						// Update button icon
-						themeToggle.innerHTML = isDarkMode
-							? '<i class="fas fa-sun"></i>'
-							: '<i class="fas fa-moon"></i>'
+						// Update button icon with animation
+						themeToggle.style.transition =
+							'transform 0.3s ease, background-color 0.3s ease'
+						themeToggle.style.transform = 'rotate(180deg)'
+
+						setTimeout(() => {
+							themeToggle.innerHTML = isDarkMode
+								? '<i class="fas fa-sun"></i>'
+								: '<i class="fas fa-moon"></i>'
+
+							themeToggle.style.transform = 'rotate(0deg)'
+						}, 150)
 
 						// Update state if available
 						if (window.updateState) {
@@ -180,22 +197,17 @@
 								</div>
 
 								<div class="color-wheel-container">
-									<input
-										type="color"
-										id="color-wheel"
-										value="#EFBD48"
-										aria-label="Color Wheel"
-									/>
 									<div class="selected-color-display">
 										<div class="color-preview" id="color-preview"></div>
-										<span id="color-hex">#EFBD48</span>
+										<div id="color-name" class="color-name-display"></div>
+										<span id="color-hex">#FFFFFF</span>
 									</div>
 								</div>
 
 								<div class="preset-colors">
 									<h4>Preset Colors</h4>
 									<div class="colors">
-										<!-- Colors will be added dynamically -->
+										<!-- Colors will be added dynamically by JavaScript -->
 									</div>
 								</div>
 							</div>
@@ -398,7 +410,7 @@
 							class="control-btn"
 							aria-label="Auto Rotate"
 							title="Auto Rotate"
-							onclick="window.TOGGLE_ROTATION()"
+							onclick="window.directToggleRotation && window.directToggleRotation()"
 						>
 							<i class="fas fa-redo"></i>
 						</button>
@@ -415,9 +427,6 @@
 
 		<!-- Script Imports -->
 		<script type="module" src="js/main.js"></script>
-
-		<!-- Debug Scripts (remove in production) -->
-		<script src="debug-texture-mapper.js"></script>
 
 		<!-- Direct camera control script -->
 		<script>

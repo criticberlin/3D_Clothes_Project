@@ -55,6 +55,9 @@ export function initFabricCanvas() {
 
     // Set up event listeners
     setupEventListeners();
+
+    // Set initial canvas background based on theme
+    updateCanvasBackgroundForTheme();
 }
 
 /**
@@ -391,11 +394,18 @@ function addShape(shapeType) {
 }
 
 /**
- * Apply the current design to the t-shirt with advanced perspective correction
+ * Apply the current design to the 3D shirt
  */
 function applyDesignToShirt() {
     try {
-        // Calculate perspective based on shirt curvature
+        // Get the canvas element
+        const canvas = window.fabricCanvas;
+        if (!canvas) {
+            console.error("Fabric canvas not initialized");
+            return;
+        }
+
+        // Apply perspective transformation for more realistic mapping
         const perspectiveOptions = {
             perspectiveX: 0.05,  // Slight horizontal perspective for realism
             perspectiveY: 0.1,   // Vertical perspective for chest curvature
@@ -430,8 +440,8 @@ function applyDesignToShirt() {
             designImage = canvas.lowerCanvasEl.toDataURL('image/png');
         }
 
-        // Apply as logo texture to the t-shirt
-        updateShirtTexture(designImage, 'logo');
+        // Apply as full texture to the t-shirt
+        updateShirtTexture(designImage, 'full');
 
         // Show success message
         showNotification('Design applied successfully!', 'success');
@@ -628,6 +638,27 @@ function updateCanvasSize() {
         canvas.setHeight(width); // Make it square
         canvas.renderAll();
     }
+}
+
+/**
+ * Update canvas background color based on theme
+ */
+function updateCanvasBackgroundForTheme() {
+    const isDarkMode = document.documentElement.classList.contains('dark-theme') ||
+        !document.documentElement.classList.contains('light-theme');
+
+    const fabricContainer = document.querySelector('.canvas-container');
+    if (fabricContainer) {
+        fabricContainer.style.backgroundColor = isDarkMode ? '#222222' : '#ffffff';
+    }
+
+    // Also listen for theme changes
+    window.addEventListener('theme-changed', (e) => {
+        const isDarkMode = e.detail && e.detail.darkMode !== false;
+        if (fabricContainer) {
+            fabricContainer.style.backgroundColor = isDarkMode ? '#222222' : '#ffffff';
+        }
+    });
 }
 
 // Initialize and set up window resize listener
