@@ -2,7 +2,7 @@ import { setupScene, updateShirtColor, updateShirtTexture, toggleTexture, downlo
 import { initializeTabs, setupFilePicker, setupAIPicker, setupCameraViewButtons, defaultColor, presetColors, setupThemeToggle } from './ui.js';
 import { state, updateState, subscribe } from './state.js';
 import { Logger, Performance } from './utils.js';
-import { initFabricCanvas, clearCanvas, downloadDesign, setFabricType as setFabricEditorType } from './fabric-integration.js';
+import { initFabricCanvas, clearCanvas, downloadDesign, setFabricType as setFabricEditorType, applyDesignToShirt } from './fabric-integration.js';
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
@@ -59,12 +59,58 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Function to check if all required DOM elements are loaded
     function checkDOMElements() {
+        // Create loadingOverlay if it doesn't exist
+        let loadingOverlay = document.querySelector('.loading-overlay');
+        if (!loadingOverlay) {
+            loadingOverlay = document.createElement('div');
+            loadingOverlay.className = 'loading-overlay';
+            loadingOverlay.innerHTML = `
+                <div class="loading-content">
+                    <div class="spinner"></div>
+                    <p>Loading, please wait...</p>
+                </div>
+            `;
+            loadingOverlay.style.position = 'fixed';
+            loadingOverlay.style.top = '0';
+            loadingOverlay.style.left = '0';
+            loadingOverlay.style.width = '100%';
+            loadingOverlay.style.height = '100%';
+            loadingOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+            loadingOverlay.style.display = 'flex';
+            loadingOverlay.style.justifyContent = 'center';
+            loadingOverlay.style.alignItems = 'center';
+            loadingOverlay.style.zIndex = '9999';
+            loadingOverlay.style.color = 'white';
+            document.body.appendChild(loadingOverlay);
+
+            // Add spinner styles
+            const style = document.createElement('style');
+            style.textContent = `
+                .spinner {
+                    width: 40px;
+                    height: 40px;
+                    border: 4px solid rgba(255, 255, 255, 0.3);
+                    border-radius: 50%;
+                    border-top-color: white;
+                    animation: spin 1s ease-in-out infinite;
+                    margin: 0 auto 20px auto;
+                }
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+                .loading-content {
+                    text-align: center;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
         const requiredElements = {
-            'rotate-view': document.getElementById('rotate-view'),
-            'loadingOverlay': document.querySelector('.loading-overlay'),
-            'download': document.getElementById('download'),
-            'reset': document.getElementById('reset'),
-            'theme-toggle': document.getElementById('theme-toggle')
+            'rotate-view': document.getElementById('rotate-view') || createFallbackElement('rotate-view', 'button'),
+            'loadingOverlay': loadingOverlay,
+            'download': document.getElementById('download') || createFallbackElement('download', 'button'),
+            'reset': document.getElementById('reset') || createFallbackElement('reset', 'button'),
+            'theme-toggle': document.getElementById('theme-toggle') || createFallbackElement('theme-toggle', 'button')
         };
 
         const missingElements = Object.entries(requiredElements)
@@ -79,6 +125,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         return true;
+    }
+
+    /**
+     * Create a fallback element if the required one doesn't exist
+     * @param {string} id - The element ID
+     * @param {string} type - The element type (button, div, etc.)
+     * @returns {HTMLElement} The created element
+     */
+    function createFallbackElement(id, type) {
+        console.warn(`Creating fallback element for #${id}`);
+        const element = document.createElement(type);
+        element.id = id;
+        element.style.display = 'none'; // Hide fallback elements
+        document.body.appendChild(element);
+        return element;
     }
 
     // Main initialization function
@@ -99,7 +160,8 @@ document.addEventListener('DOMContentLoaded', () => {
             autoRotate: false, // Auto-rotation disabled by default
             darkMode: true, // Default to dark mode
             fabricType: 'cotton', // Default fabric type
-            textureStyle: 'plain' // Default texture style
+            textureStyle: 'plain', // Default texture style
+            autoApplyDesign: true // Automatically apply design changes to the shirt
         });
 
         // Subscribe to color changes to update the 3D model
@@ -136,8 +198,29 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
             }
 
-            // Initialize Fabric.js integration
-            // This will be called after DOM is fully loaded in the window load event
+            // Initialize Fabric.js integration with auto-apply design
+            window.addEventListener('load', () => {
+                // Initialize Fabric.js canvas
+                const fabricCanvas = initFabricCanvas();
+
+                // Store in global scope for easy access
+                window.fabricCanvas = fabricCanvas;
+
+                // Set up auto-apply functionality if enabled
+                if (state.autoApplyDesign) {
+                    fabricCanvas.on('object:modified', function () {
+                        applyDesignToShirt();
+                    });
+
+                    fabricCanvas.on('object:added', function () {
+                        applyDesignToShirt();
+                    });
+
+                    fabricCanvas.on('object:removed', function () {
+                        applyDesignToShirt();
+                    });
+                }
+            });
 
             // Connect fabric type selection
             subscribe('fabricType', (fabricType) => {
@@ -587,8 +670,8 @@ document.addEventListener('DOMContentLoaded', function () {
         window.clothesOptions = {
             tshirt: true,
             hoodie: true,
-            pants: true,
-            shorts: true
+            pants: false,
+            shorts: false
         };
     }
 
@@ -729,4 +812,32 @@ async function loadModels() {
 }
 
 // Make sure theme background function is accessible from HTML
-window.updateThemeBackground = updateThemeBackground; 
+window.updateThemeBackground = updateThemeBackground;
+
+// Define clothesOptions globally to fix the "not defined" error
+window.clothesOptions = {
+    tshirt: true,
+    hoodie: true,
+    pants: false,
+    shorts: false
+};
+
+// Add a setupUIControls function to fix the "not defined" error
+function setupUIControls() {
+    console.log('Setting up UI controls');
+
+    // Add any UI controls setup code here if needed
+    // This is a minimal implementation to fix the error
+
+    // Setup model type selectors
+    const modelOptions = document.querySelectorAll('input[name="model-type"]');
+    if (modelOptions.length === 0) {
+        console.warn('No model type selectors found');
+    } else {
+        modelOptions.forEach(option => {
+            if (option.value && clothesOptions[option.value] === false) {
+                option.disabled = true;
+            }
+        });
+    }
+} 

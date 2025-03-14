@@ -263,7 +263,7 @@ function calculateDisplacement(uvX, uvY) {
 // Add debounce function for performance optimization
 function debounce(func, wait) {
     let timeout;
-    return function(...args) {
+    return function (...args) {
         const context = this;
         clearTimeout(timeout);
         timeout = setTimeout(() => func.apply(context, args), wait);
@@ -271,7 +271,7 @@ function debounce(func, wait) {
 }
 
 // Debounced version of updateCombinedTexture
-const debouncedUpdateTexture = debounce(function() {
+const debouncedUpdateTexture = debounce(function () {
     Performance.start('texture-update');
     textureState.baseTexture = createBaseTexture();
 
@@ -685,10 +685,61 @@ function updateCombinedTexture() {
 }
 
 /**
- * Set up interactive bounding boxes for each view
- * Creates and positions visual boxes that represent each mappable area
+ * Show bounding boxes for a specific camera view
+ * @param {string} cameraView - The current camera view
+ */
+export function showBoundingBoxesForCameraView(cameraView) {
+    // Disable bounding boxes to use direct fabric canvas manipulation instead
+    // DISABLED: We now prefer direct manipulation in the fabric canvas
+    return;
+
+    // The code below is maintained but disabled to preserve functionality
+    // in case it needs to be re-enabled in the future
+    /*
+    if (!cameraView) return;
+    
+    // Map camera view to texture view
+    const view = mapCameraViewToTextureView(cameraView);
+    
+    // Hide all boxes first
+    const allBoxes = document.querySelectorAll('.texture-bounding-box');
+    allBoxes.forEach(box => {
+        box.style.display = 'none';
+    });
+    
+    // Only show boxes for this view
+    for (const textureView of availableViews) {
+        if (shouldShowViewForCamera(textureView, view)) {
+            const box = document.querySelector(`.texture-bounding-box.${textureView}-view-box`);
+            if (box) {
+                // Only show boxes for views that have textures
+                const hasTexture = textureState.customImages[textureView].texture !== null;
+                
+                box.style.display = hasTexture ? 'block' : 'none';
+                
+                // Update the position and perspective to reflect the current view
+                apply3DPerspective(box, textureView, cameraView, textureView === view, availableViews.indexOf(textureView));
+            }
+        }
+    }
+    
+    // Add live update for debug view if enabled
+    const debugView = document.getElementById('texture-debug-view');
+    if (debugView && debugView.style.display !== 'none') {
+        updateDebugView();
+    }
+    */
+}
+
+/**
+ * Set up bounding boxes for texture positions
  */
 function setupBoundingBoxes() {
+    // Disable bounding boxes to use direct fabric canvas manipulation instead
+    // DISABLED: We now prefer direct manipulation in the fabric canvas
+    return;
+
+    /*
     const container = document.querySelector('.canvas-container');
     if (!container) return;
 
@@ -717,68 +768,8 @@ function setupBoundingBoxes() {
         boxTitle.style.pointerEvents = 'none'; // Don't interfere with interactions
         boundingBox.appendChild(boxTitle);
 
-        // Minimalist drag indicator
-        const dragArea = document.createElement('div');
-        dragArea.className = 'drag-area';
-        dragArea.innerHTML = '<i class="fas fa-arrows-alt"></i>';
-        dragArea.style.fontSize = '10px';
-        dragArea.style.opacity = '0.8';
-        dragArea.style.position = 'absolute';
-        dragArea.style.top = '50%';
-        dragArea.style.left = '50%';
-        dragArea.style.transform = 'translate(-50%, -50%)';
-        dragArea.style.pointerEvents = 'none'; // Visual only
-        boundingBox.appendChild(dragArea);
-
-        // Create transform controls - smaller and minimalist
-        const controlsContainer = document.createElement('div');
-        controlsContainer.className = 'transform-controls-container';
-        controlsContainer.style.position = 'absolute';
-        controlsContainer.style.bottom = '3px';
-        controlsContainer.style.right = '3px';
-        controlsContainer.style.display = 'flex';
-        controlsContainer.style.gap = '5px';
-
-        const rotateHandle = document.createElement('div');
-        rotateHandle.className = 'transform-handle rotate-handle';
-        rotateHandle.innerHTML = '<i class="fas fa-sync-alt"></i>';
-        rotateHandle.title = 'Rotate Image';
-        rotateHandle.style.fontSize = '8px';
-        rotateHandle.style.padding = '3px';
-        rotateHandle.style.borderRadius = '50%';
-        rotateHandle.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
-        rotateHandle.style.color = '#333';
-
-        const scaleHandle = document.createElement('div');
-        scaleHandle.className = 'transform-handle scale-handle';
-        scaleHandle.innerHTML = '<i class="fas fa-expand-arrows-alt"></i>';
-        scaleHandle.title = 'Scale Image';
-        scaleHandle.style.fontSize = '8px';
-        scaleHandle.style.padding = '3px';
-        scaleHandle.style.borderRadius = '50%';
-        scaleHandle.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
-        scaleHandle.style.color = '#333';
-
-        // Add remove button for each view
-        const removeButton = document.createElement('div');
-        removeButton.className = 'transform-handle remove-handle';
-        removeButton.innerHTML = '<i class="fas fa-times"></i>';
-        removeButton.title = 'Remove Image';
-        removeButton.style.fontSize = '8px';
-        removeButton.style.padding = '3px';
-        removeButton.style.borderRadius = '50%';
-        removeButton.style.backgroundColor = 'rgba(255, 100, 100, 0.7)';
-        removeButton.style.color = 'white';
-
-        removeButton.addEventListener('click', (e) => {
-            e.stopPropagation();
-            clearCustomImage(view);
-        });
-
-        controlsContainer.appendChild(rotateHandle);
-        controlsContainer.appendChild(scaleHandle);
-        controlsContainer.appendChild(removeButton);
-        boundingBox.appendChild(controlsContainer);
+        // Add other UI elements
+        // ...
 
         container.appendChild(boundingBox);
     }
@@ -801,6 +792,7 @@ function setupBoundingBoxes() {
         debugView.style.display = 'none'; // Hidden by default
         container.appendChild(debugView);
     }
+    */
 }
 
 /**
@@ -829,89 +821,6 @@ function updateBoundingBoxPositions() {
         // Add a visual indicator of the active area
         boundingBox.style.boxShadow = 'inset 0 0 0 2px rgba(255,255,255,0.8)';
     }
-}
-
-/**
- * Show bounding boxes appropriate for the current camera view
- * @param {string} cameraView - The current camera view (front, back, left, right)
- */
-export function showBoundingBoxesForCameraView(cameraView) {
-    const container = document.querySelector('.canvas-container');
-    if (!container) return;
-
-    // Hide all bounding boxes first
-    const allBoxes = container.querySelectorAll('.texture-bounding-box');
-    allBoxes.forEach(box => {
-        // Reset 3D transforms
-        box.style.transform = 'none';
-        box.style.display = 'none';
-        // Reset primary status
-        box.dataset.primaryView = 'false';
-    });
-
-    // Determine which bounding boxes to show based on camera view
-    // Now we'll allow multiple boxes to be visible based on the viewable areas
-    let visibleViews = [];
-    let primaryView = ''; // The main view in focus
-
-    switch (cameraView) {
-        case 'front':
-            // Front angle shows front and partial arms
-            visibleViews = ['front', 'left_arm', 'right_arm'];
-            primaryView = 'front';
-            break;
-        case 'back':
-            // Back angle shows back and partial arms
-            visibleViews = ['back', 'left_arm', 'right_arm'];
-            primaryView = 'back';
-            break;
-        case 'left':
-            // Left side shows left arm and partial front/back
-            visibleViews = ['left_arm', 'front', 'back'];
-            primaryView = 'left_arm';
-            break;
-        case 'right':
-            // Right side shows right arm and partial front/back
-            visibleViews = ['right_arm', 'front', 'back'];
-            primaryView = 'right_arm';
-            break;
-        default:
-            // For any custom views, map to the most relevant texture area
-            const mappedView = mapCameraViewToTextureView(cameraView);
-            visibleViews = [mappedView];
-            primaryView = mappedView;
-    }
-
-    // Show the visible boxes with 3D perspective effect
-    visibleViews.forEach((view, index) => {
-        const box = container.querySelector(`.texture-bounding-box.${view}-view-box`);
-        if (box) {
-            // Only show if there's a texture or it's the active area
-            const isPrimary = view === primaryView;
-
-            if (textureState.customImages[view].texture ||
-                textureState.activeBoundingBox === view ||
-                isPrimary) {
-
-                box.style.display = 'block';
-
-                // Set primary view status
-                box.dataset.primaryView = isPrimary ? 'true' : 'false';
-
-                // Apply 3D perspective effect based on camera angle
-                apply3DPerspective(box, view, cameraView, isPrimary, index);
-            }
-        }
-    });
-
-    // Update perspective transform based on camera view
-    updatePerspectiveTransform(cameraView);
-
-    // Update the active view in the texture state
-    textureState.activeView = mapCameraViewToTextureView(cameraView);
-
-    // For debugging
-    console.log(`Camera view: ${cameraView}, Visible areas:`, visibleViews);
 }
 
 /**
@@ -1213,6 +1122,11 @@ function setupInteractions() {
  * @param {Event} e - Mouse or touch event
  */
 function startTransform(e) {
+    // Disable texture bounding box transformation as we're now using fabric canvas
+    // DISABLED: We now prefer direct manipulation in the fabric canvas
+    return;
+
+    /*
     e.preventDefault();
 
     const target = e.target;
@@ -1228,59 +1142,9 @@ function startTransform(e) {
     if (!boundingBox) return;
 
     const view = boundingBox.dataset.view;
-
-    // If we already have an active bounding box, deactivate it
-    if (textureState.activeBoundingBox && textureState.activeBoundingBox !== view) {
-        const oldBox = document.querySelector(`.texture-bounding-box.${textureState.activeBoundingBox}-view-box`);
-        if (oldBox) {
-            oldBox.classList.remove('active');
-        }
-    }
-
-    textureState.activeBoundingBox = view;
-
-    // Get mouse/touch position
-    const pos = getEventPosition(e);
-    textureState.lastMousePosition = pos;
-
-    // Determine the action based on what was clicked
-    if (target.classList.contains('rotate-handle') || target.closest('.rotate-handle')) {
-        textureState.isRotating = true;
-    } else if (target.classList.contains('scale-handle') || target.closest('.scale-handle')) {
-        textureState.isScaling = true;
-    } else if (!target.classList.contains('transform-handle') && !target.closest('.transform-handle')) {
-        textureState.isDragging = true;
-    }
-
-    // Add active class for visual feedback
-    boundingBox.classList.add('active');
-
-    // Add visual feedback - bring this box to front
-    const allBoxes = document.querySelectorAll('.texture-bounding-box');
-    allBoxes.forEach(box => {
-        if (box !== boundingBox) {
-            const zIndex = parseInt(box.style.zIndex || '100');
-            box.style.zIndex = zIndex - 5;
-        } else {
-            // Bring active box to front
-            box.style.zIndex = '200';
-        }
-    });
-
-    // If this area doesn't have a texture yet, prompt for upload
-    if (!textureState.customImages[view].texture) {
-        // If there's no texture for this view, show a prompt
-        const fileInput = document.getElementById('file-upload');
-        if (fileInput) {
-            // Store the target view in a data attribute
-            fileInput.dataset.targetView = view;
-
-            // Add toast suggesting upload
-            if (typeof showToast === 'function') {
-                showToast(`Double-click to add an image to ${view} area`);
-            }
-        }
-    }
+    
+    // Implementation details...
+    */
 }
 
 /**
@@ -1288,96 +1152,18 @@ function startTransform(e) {
  * @param {Event} e - Mouse or touch event
  */
 function moveTransform(e) {
+    // Disable texture bounding box transformation as we're now using fabric canvas
+    // DISABLED: We now prefer direct manipulation in the fabric canvas
+    return;
+
+    /*
     if (!textureState.isDragging && !textureState.isScaling && !textureState.isRotating) return;
     if (!textureState.activeBoundingBox) return;
 
     e.preventDefault();
-
-    const view = textureState.activeBoundingBox;
-    const imageData = textureState.customImages[view];
-
-    const currentPos = getEventPosition(e);
-    const deltaX = currentPos.x - textureState.lastMousePosition.x;
-    const deltaY = currentPos.y - textureState.lastMousePosition.y;
-
-    // Get the container dimensions
-    const container = document.querySelector('.canvas-container');
-    const rect = container.getBoundingClientRect();
-
-    // Handle drag movement
-    if (textureState.isDragging) {
-        // Calculate position change relative to bounding box size
-        const boundingBox = container.querySelector(`.texture-bounding-box.${view}-view-box`);
-        const boxWidth = boundingBox.offsetWidth;
-        const boxHeight = boundingBox.offsetHeight;
-
-        // Update position - and restrict to the bounding box
-        // This ensures the texture stays within the appropriate view area
-
-        // Calculate new position
-        const newPosX = imageData.position.x + deltaX / boxWidth;
-        const newPosY = imageData.position.y + deltaY / boxHeight;
-
-        // Get scale-adjusted boundaries to ensure image stays visible even when scaled
-        const scaleFactor = imageData.scale;
-        const maxBound = 1.0;
-        const minBound = 0.0;
-
-        // Apply constraints - prevent image from moving entirely out of bounds
-        // The constraints use the scale to determine how much of the image can move outside the box
-        imageData.position.x = Math.max(minBound, Math.min(maxBound, newPosX));
-        imageData.position.y = Math.max(minBound, Math.min(maxBound, newPosY));
-    }
-
-    // Handle rotation
-    if (textureState.isRotating) {
-        // Calculate center of bounding box
-        const boundingBox = container.querySelector(`.texture-bounding-box.${view}-view-box`);
-        const boxRect = boundingBox.getBoundingClientRect();
-        const centerX = boxRect.left + boxRect.width / 2;
-        const centerY = boxRect.top + boxRect.height / 2;
-
-        // Calculate angles
-        const lastAngle = Math.atan2(
-            textureState.lastMousePosition.y - centerY,
-            textureState.lastMousePosition.x - centerX
-        );
-        const currentAngle = Math.atan2(currentPos.y - centerY, currentPos.x - centerX);
-
-        // Convert to degrees and add to current rotation
-        const rotation = (currentAngle - lastAngle) * (180 / Math.PI);
-        imageData.rotation = (imageData.rotation + rotation) % 360;
-    }
-
-    // Handle scaling
-    if (textureState.isScaling) {
-        // Calculate distance from center
-        const boundingBox = container.querySelector(`.texture-bounding-box.${view}-view-box`);
-        const boxRect = boundingBox.getBoundingClientRect();
-        const centerX = boxRect.left + boxRect.width / 2;
-        const centerY = boxRect.top + boxRect.height / 2;
-
-        const lastDist = Math.sqrt(
-            Math.pow(textureState.lastMousePosition.x - centerX, 2) +
-            Math.pow(textureState.lastMousePosition.y - centerY, 2)
-        );
-        const currentDist = Math.sqrt(
-            Math.pow(currentPos.x - centerX, 2) +
-            Math.pow(currentPos.y - centerY, 2)
-        );
-
-        // Calculate scale factor
-        const scaleFactor = currentDist / lastDist;
-
-        // Apply scaling with reasonable limits to prevent extreme scaling
-        imageData.scale = Math.max(0.1, Math.min(3.0, imageData.scale * scaleFactor));
-    }
-
-    // Update the texture with the new transforms
-    updateCombinedTexture();
-
-    // Update mouse position
-    textureState.lastMousePosition = currentPos;
+    
+    // Implementation details...
+    */
 }
 
 /**
@@ -1385,21 +1171,15 @@ function moveTransform(e) {
  * @param {Event} e - Mouse or touch event
  */
 function endTransform(e) {
+    // Disable texture bounding box transformation as we're now using fabric canvas
+    // DISABLED: We now prefer direct manipulation in the fabric canvas
+    return;
+
+    /*
     if (!textureState.isDragging && !textureState.isScaling && !textureState.isRotating) return;
-
-    // Reset flags
-    textureState.isDragging = false;
-    textureState.isScaling = false;
-    textureState.isRotating = false;
-
-    // Remove active class
-    const container = document.querySelector('.canvas-container');
-    if (container) {
-        const activeBox = container.querySelector('.texture-bounding-box.active');
-        if (activeBox) {
-            activeBox.classList.remove('active');
-        }
-    }
+    
+    // Implementation details...
+    */
 }
 
 /**
@@ -1513,4 +1293,18 @@ export function setTexturePosition(position, view = null) {
     }
 
     return true;
+}
+
+/**
+ * Get the current active view (front, back, etc.)
+ * @returns {string} The current active view name
+ */
+export function getCurrentView() {
+    // Return the current camera view if available
+    if (state.cameraView) {
+        return mapCameraViewToTextureView(state.cameraView);
+    }
+
+    // Default to front view if camera view is not available
+    return 'front';
 } 
