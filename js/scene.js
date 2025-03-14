@@ -676,21 +676,23 @@ function createFallbackEnvironment() {
 function setupControls() {
     controls = new OrbitControls(camera, renderer.domElement);
 
-    // Improved camera controls for better user experience
+    // Improved camera controls for unrestricted movement
     controls.enableDamping = true;
-    controls.dampingFactor = 0.1;
-    controls.rotateSpeed = 0.8;
-    controls.zoomSpeed = 1.5;  // Increased zoom speed for better responsiveness
-    controls.panSpeed = 0.8;
-    controls.minDistance = 1;
-    controls.maxDistance = 5;
-    controls.maxPolarAngle = Math.PI / 1.6; // Prevent going below the model
-    controls.minPolarAngle = Math.PI / 6;   // Prevent viewing too far from above
-    controls.enablePan = true;              // Allow panning
-    controls.screenSpacePanning = true;     // Better panning behavior
+    controls.dampingFactor = 0.05;  // Smoother damping
+    controls.rotateSpeed = 1.0;     // Standard rotation speed
+    controls.zoomSpeed = 1.0;       // Standard zoom speed
+    controls.panSpeed = 1.0;        // Standard pan speed
+    controls.minDistance = 0.5;     // Allow closer zoom
+    controls.maxDistance = 10;      // Allow further zoom
+    controls.enablePan = true;      // Enable panning
+    controls.screenSpacePanning = true;  // Better panning behavior
     controls.target.set(0, 0, 0);
 
-    // Setup auto-rotation capability (but don't enable by default)
+    // Remove polar angle restrictions to allow full 360-degree rotation
+    controls.minPolarAngle = 0;     // Allow viewing from any angle
+    controls.maxPolarAngle = Math.PI;  // Allow full vertical rotation
+
+    // Disable auto-rotation
     controls.autoRotate = false;
     controls.autoRotateSpeed = 2.5;
 
@@ -700,27 +702,8 @@ function setupControls() {
         TWO: THREE.TOUCH.DOLLY_PAN
     };
 
-    // Ensure the dollyIn and dollyOut methods are available and working correctly
-    if (!controls.dollyIn || !controls.dollyOut) {
-        console.warn('OrbitControls missing dolly methods, implementing alternatives');
-
-        // Add backup implementations if they're not available
-        controls.dollyIn = function (dollyScale) {
-            const zoomScale = Math.pow(0.95, dollyScale);
-            controls.zoom *= zoomScale;
-            controls.update();
-        };
-
-        controls.dollyOut = function (dollyScale) {
-            const zoomScale = Math.pow(0.95, dollyScale);
-            controls.zoom /= zoomScale;
-            controls.update();
-        };
-    }
-
     // Add a listener for control changes to ensure smooth interaction
     controls.addEventListener('change', () => {
-        // When user manually controls the camera, ensure consistent behavior
         if (renderer && scene && camera) {
             renderer.render(scene, camera);
         }
@@ -1848,17 +1831,12 @@ function animate(currentTime) {
     // Start performance measurement
     Performance.start('render-frame');
 
-    // Smooth camera position movements
-    if (camera.position.distanceTo(targetCameraPosition) > 0.01 && !window.GLOBAL_ROTATION_ENABLED) {
-        camera.position.lerp(targetCameraPosition, 0.1);
-    }
-
-    // Check for rotation
+    // Only update camera position if auto-rotation is enabled
     if (window.GLOBAL_ROTATION_ENABLED === true && group) {
         group.rotateOnAxis(rotationAxis, rotationSpeed);
     }
 
-    // Update controls for damping even when not auto-rotating
+    // Update controls for damping
     if (controls && controls.enableDamping) {
         controls.update();
     }
