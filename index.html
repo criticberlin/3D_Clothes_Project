@@ -177,10 +177,6 @@
 								<i class="fas fa-palette"></i>
 								<span>Colors</span>
 							</button>
-							<button class="tab-btn" data-tab="file" aria-label="Upload Tab">
-								<i class="fas fa-image"></i>
-								<span>Upload</span>
-							</button>
 							<button class="tab-btn" data-tab="ai" aria-label="AI Design Tab">
 								<i class="fas fa-magic"></i>
 								<span>AI Design</span>
@@ -212,34 +208,14 @@
 								</div>
 							</div>
 
-							<!-- File Upload -->
-							<div id="file-picker" class="tab-panel">
-								<div class="section-title">
-									<h3>Upload Design</h3>
-									<p>Use your own images for the shirt</p>
-								</div>
-
-								<div class="file-upload-container">
-									<label for="file-upload" class="file-upload-label">
-										<i class="fas fa-cloud-upload-alt"></i>
-										<span>Choose a file</span>
-									</label>
-									<input
-										type="file"
-										accept="image/*"
-										id="file-upload"
-										aria-label="File Upload"
-									/>
-									<p class="file-info">Supports: JPG, PNG, SVG (Max 5MB)</p>
-								</div>
-
-								<div class="preview">
-									<div class="empty-state">
-										<i class="fas fa-image"></i>
-										<p>Preview will appear here</p>
-									</div>
-								</div>
-							</div>
+							<!-- Hidden file input to maintain upload functionality -->
+							<input
+								type="file"
+								accept="image/*"
+								id="file-upload"
+								aria-label="File Upload"
+								style="display: none"
+							/>
 
 							<!-- AI Generator -->
 							<div id="ai-picker" class="tab-panel">
@@ -266,6 +242,26 @@
 										<p>AI generated designs will appear here</p>
 									</div>
 								</div>
+							</div>
+						</div>
+
+						<div class="section-divider"></div>
+
+						<!-- Material Settings Section -->
+						<div class="section-header">
+							<i class="fas fa-tshirt"></i>
+							<h3>Material Settings</h3>
+						</div>
+
+						<div class="material-settings">
+							<div class="setting-group">
+								<label for="fabric-type-select">Fabric Type:</label>
+								<select id="fabric-type-select" class="material-select">
+									<option value="cotton">Cotton</option>
+									<option value="polyester">Polyester</option>
+									<option value="silk">Silk</option>
+									<option value="wool">Wool</option>
+								</select>
 							</div>
 						</div>
 

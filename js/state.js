@@ -18,7 +18,10 @@ export const state = {
     modelPaths: {
         tshirt: './models/tshirt.glb',
         hoodie: './models/hoodie.glb'
-    }
+    },
+
+    // Fabric properties
+    fabricType: 'cotton'      // Default fabric type (cotton, polyester, silk, wool)
 };
 
 // State change callbacks

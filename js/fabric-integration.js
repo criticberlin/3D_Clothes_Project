@@ -1,5 +1,4 @@
 import { updateShirtTexture } from './scene.js';
-import { transformFabricCanvasTo3D, calculateFabricColor, FABRIC_PROPERTIES } from './advanced-calculations.js';
 
 // Global variables
 let canvas;
@@ -8,21 +7,9 @@ let selectedColor = '#000000';
 let selectedFontFamily = 'Arial';
 let selectedFontSize = 30;
 let selectedLineWidth = 3;
-let selectedFabricType = 'cotton';
-let selectedTextureStyle = 'plain';
-let editorTools; // Add a variable to hold the editor tools container
-let lastUpdateTime = 0; // Timestamp of last texture update
-const UPDATE_THROTTLE = 300; // Minimum time between updates in ms
-let pendingUpdate = false; // Flag to track if an update is pending
+let editorTools; // Add this variable to store the editor tools container
 
-// Fabric texture patterns
-const FABRIC_PATTERNS = {
-    plain: null,
-    canvas: null,
-    twill: null,
-    herringbone: null,
-    satin: null
-};
+
 
 /**
  * Initialize the Fabric.js canvas
@@ -43,12 +30,14 @@ export function initFabricCanvas(width, height) {
 
     // Create canvas instance
     canvas = new fabric.Canvas('fabric-canvas', {
-        backgroundColor: 'rgba(255, 255, 255, 0.0)',
         preserveObjectStacking: true,
         width: canvasWidth,
         height: canvasHeight,
         selection: true
     });
+
+    // Store canvas in window for global access
+    window.fabricCanvas = canvas;
 
     // Set up initial canvas state
     canvas.freeDrawingBrush.width = selectedLineWidth;
@@ -60,21 +49,15 @@ export function initFabricCanvas(width, height) {
         top: 0,
         width: canvas.width,
         height: canvas.height,
-        fill: 'rgba(255, 255, 255, 1)',
+        fill: 'rgba(246, 246, 246, 0)',
         selectable: false,
         hoverCursor: 'default'
     });
     canvas.add(printArea);
     canvas.sendToBack(printArea);
 
-    // Initialize fabric texture patterns
-    initFabricPatterns();
-
     // Set up event listeners
     setupEventListeners();
-
-    // Set initial canvas background based on theme
-    updateCanvasBackgroundForTheme();
 
     // Update any container styling if needed
     if (container) {
@@ -182,145 +165,46 @@ function setupDragAndDrop(container) {
 }
 
 /**
- * Initialize predefined fabric texture patterns
- */
-function initFabricPatterns() {
-    const patternSize = 20;
-
-    // Plain weave pattern (basic over-under)
-    FABRIC_PATTERNS.plain = createFabricPattern('plain', patternSize);
-
-    // Canvas weave pattern (thicker threads, more textured)
-    FABRIC_PATTERNS.canvas = createFabricPattern('canvas', patternSize);
-
-    // Twill pattern (diagonal lines)
-    FABRIC_PATTERNS.twill = createFabricPattern('twill', patternSize);
-
-    // Herringbone pattern (zigzag twill)
-    FABRIC_PATTERNS.herringbone = createFabricPattern('herringbone', patternSize);
-
-    // Satin pattern (smooth with fewer intersections)
-    FABRIC_PATTERNS.satin = createFabricPattern('satin', patternSize);
-}
-
-/**
- * Create a fabric texture pattern
- * @param {string} type - Pattern type
- * @param {number} size - Pattern size in pixels
- * @returns {fabric.Pattern} Fabric.js pattern object
- */
-function createFabricPattern(type, size) {
-    // Create a temporary canvas to draw the pattern
-    const patternCanvas = document.createElement('canvas');
-    patternCanvas.width = size;
-    patternCanvas.height = size;
-    const ctx = patternCanvas.getContext('2d');
-
-    // Clear the canvas
-    ctx.clearRect(0, 0, size, size);
-
-    // Draw the pattern based on type
-    switch (type) {
-        case 'plain':
-            // Simple grid pattern
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
-            ctx.fillRect(0, 0, size / 2, size / 2);
-            ctx.fillRect(size / 2, size / 2, size / 2, size / 2);
-            break;
-
-        case 'canvas':
-            // Thicker grid pattern
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.04)';
-            ctx.fillRect(0, 0, size * 0.6, size * 0.6);
-            ctx.fillRect(size * 0.6, size * 0.6, size * 0.4, size * 0.4);
-            break;
-
-        case 'twill':
-            // Diagonal pattern
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
-            for (let i = 0; i < size; i += 2) {
-                ctx.fillRect(i, i, 1, 1);
-                ctx.fillRect(i + size / 2, i + size / 2, 1, 1);
-            }
-            break;
-
-        case 'herringbone':
-            // Zigzag pattern
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
-            const mid = size / 2;
-            for (let i = 0; i < mid; i++) {
-                // Top-right to bottom-left diagonal in top half
-                ctx.fillRect(mid + i, i, 1, 1);
-                // Bottom-right to top-left diagonal in bottom half
-                ctx.fillRect(i, mid + i, 1, 1);
-            }
-            break;
-
-        case 'satin':
-            // Smooth pattern with fewer intersections
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.02)';
-            for (let i = 0; i < size; i += 4) {
-                ctx.fillRect(i, 0, 1, size);
-            }
-            for (let i = 0; i < size; i += 4) {
-                ctx.fillRect(0, i, size, 1);
-            }
-            break;
-    }
-
-    // Create a pattern from the canvas
-    return new fabric.Pattern({
-        source: patternCanvas,
-        repeat: 'repeat'
-    });
-}
-
-/**
  * Set up event listeners for the Fabric.js canvas
  */
 function setupEventListeners() {
     if (!canvas) return;
 
-    // First, find or create the editor tools container
+    // Create a container for the editor tools if it doesn't exist
     editorTools = document.querySelector('.editor-tools');
     if (!editorTools) {
         editorTools = document.createElement('div');
         editorTools.className = 'editor-tools';
 
-        // Create a tools title
-        const toolsTitle = document.createElement('h3');
-        toolsTitle.className = 'editor-section-title';
-        toolsTitle.innerHTML = '<i class="fas fa-paint-brush"></i> Drawing Tools';
-
-        // Add to fabric controls
+        // Find the best container to append the editor tools to
         const fabricControls = document.querySelector('.fabric-controls');
         if (fabricControls) {
-            fabricControls.appendChild(toolsTitle);
-            fabricControls.appendChild(editorTools);
+            // Add a section title
+            const toolsTitle = document.createElement('h3');
+            toolsTitle.className = 'editor-section-title';
+            toolsTitle.innerHTML = '<i class="fas fa-paint-brush"></i> Drawing Tools';
+
+            fabricControls.insertBefore(toolsTitle, fabricControls.firstChild);
+            fabricControls.insertBefore(editorTools, fabricControls.children[1]);
         } else {
-            // If fabric-controls doesn't exist, create it
-            const fabricCanvasWrapper = document.querySelector('.fabric-canvas-wrapper');
-            if (fabricCanvasWrapper) {
-                const controls = document.createElement('div');
-                controls.className = 'fabric-controls';
-                controls.appendChild(toolsTitle);
-                controls.appendChild(editorTools);
-                fabricCanvasWrapper.parentNode.appendChild(controls);
+            // Fallback: append to the canvas container
+            const canvasContainer = document.querySelector('.canvas-container');
+            if (canvasContainer) {
+                canvasContainer.parentNode.insertBefore(editorTools, canvasContainer.nextSibling);
             } else {
                 // Last resort: append to body
                 document.body.appendChild(editorTools);
-                console.warn('Could not find proper parent for editor tools, appending to body');
             }
         }
     }
 
-    // Enable direct manipulation of objects with throttling
+    // Enable direct manipulation of objects
     canvas.on('object:modified', function (e) {
         // Update state whenever object properties change (position, scale, rotation)
         console.log('Object modified, applying to shirt texture');
 
-        // Apply changes to the shirt in real-time for better UX, but throttled
-        applyDesignToShirt(false); // Not forced, will be throttled
+        // Apply changes to the shirt in real-time for better UX
+        applyDesignToShirt();
     });
 
     // Also apply when new objects are added
@@ -398,9 +282,14 @@ function setupEventListeners() {
     if (!imageBtn) {
         imageBtn = document.createElement('button');
         imageBtn.id = 'add-image';
-        imageBtn.className = 'tool-btn';
-        imageBtn.innerHTML = '<i class="fas fa-image"></i> Image';
+        imageBtn.className = 'tool-btn primary';
+        imageBtn.innerHTML = '<i class="fas fa-image"></i> Add Image';
         imageBtn.title = 'Add image (Click to browse, drop to upload, or paste from clipboard)';
+        imageBtn.style.backgroundColor = 'var(--primary-color, #4a6cf7)';
+        imageBtn.style.color = 'white';
+        imageBtn.style.padding = '8px 12px';
+        imageBtn.style.borderRadius = '4px';
+        imageBtn.style.margin = '5px';
         editorTools.appendChild(imageBtn);
 
         // Add tooltip styles if they don't exist
@@ -555,28 +444,6 @@ function setupEventListeners() {
         canvas.isDrawingMode = false;
     });
 
-    // Create a fabric properties section title
-    const fabricTitle = document.createElement('h3');
-    fabricTitle.className = 'editor-section-title';
-    fabricTitle.innerHTML = '<i class="fas fa-tshirt"></i> Fabric Properties';
-
-    // Add fabric type and texture selectors in a new section
-    const fabricSection = document.createElement('div');
-    fabricSection.className = 'control-group fabric-properties';
-
-    // Add the fabric section after the tools
-    const fabricControls = document.querySelector('.fabric-controls');
-    if (fabricControls) {
-        fabricControls.appendChild(fabricTitle);
-        fabricControls.appendChild(fabricSection);
-    }
-
-    // Create and add fabric type selector
-    addFabricTypeSelector(fabricSection);
-
-    // Create and add texture style selector
-    addTextureStyleSelector(fabricSection);
-
     // Apply to shirt button - with proper styling
     let applyBtn = document.getElementById('apply-to-shirt');
     if (!applyBtn) {
@@ -587,7 +454,10 @@ function setupEventListeners() {
         applyBtn.style.width = '100%';
         applyBtn.style.padding = '10px';
         applyBtn.innerHTML = '<i class="fas fa-tshirt"></i> Apply to Shirt';
-        fabricControls.appendChild(applyBtn);
+        const fabricControls = document.querySelector('.fabric-controls');
+        if (fabricControls) {
+            fabricControls.appendChild(applyBtn);
+        }
     }
 
     applyBtn.addEventListener('click', () => {
@@ -640,89 +510,6 @@ function debounce(func, wait) {
 }
 
 /**
- * Add fabric type selector to the UI
- * @param {HTMLElement} container - The container to add the selector to
- */
-function addFabricTypeSelector(container = document.querySelector('.fabric-controls')) {
-    // Create the fabric type selector container
-    const fabricTypeContainer = document.createElement('div');
-    fabricTypeContainer.className = 'fabric-type-container';
-    fabricTypeContainer.innerHTML = `
-        <label for="fabric-type-select">Fabric Type:</label>
-        <select id="fabric-type-select" class="fabric-select">
-            <option value="cotton">Cotton</option>
-            <option value="polyester">Polyester</option>
-            <option value="silk">Silk</option>
-            <option value="wool">Wool</option>
-        </select>
-    `;
-
-    // Add to the specified container
-    container.appendChild(fabricTypeContainer);
-
-    // Add event listener for fabric type changes
-    document.getElementById('fabric-type-select').addEventListener('change', (e) => {
-        selectedFabricType = e.target.value;
-        applyFabricPattern();
-    });
-}
-
-/**
- * Add texture style selector to the UI
- * @param {HTMLElement} container - The container to add the selector to
- */
-function addTextureStyleSelector(container = document.querySelector('.fabric-controls')) {
-    // Create the texture style selector container
-    const textureStyleContainer = document.createElement('div');
-    textureStyleContainer.className = 'texture-style-container';
-    textureStyleContainer.innerHTML = `
-        <label for="texture-style-select">Weave Pattern:</label>
-        <select id="texture-style-select" class="fabric-select">
-            <option value="plain">Plain</option>
-            <option value="canvas">Canvas</option>
-            <option value="twill">Twill</option>
-            <option value="herringbone">Herringbone</option>
-            <option value="satin">Satin</option>
-        </select>
-    `;
-
-    // Add to the specified container
-    container.appendChild(textureStyleContainer);
-
-    // Add event listener for texture style changes
-    document.getElementById('texture-style-select').addEventListener('change', (e) => {
-        selectedTextureStyle = e.target.value;
-        applyFabricPattern();
-    });
-}
-
-/**
- * Apply the selected fabric pattern to the background
- */
-function applyFabricPattern() {
-    if (!canvas) return;
-
-    // Get the background rectangle (first object in canvas)
-    const background = canvas.getObjects()[0];
-    if (!background) return;
-
-    // Get the pattern for the selected texture style
-    const pattern = FABRIC_PATTERNS[selectedTextureStyle];
-
-    // Apply the pattern to the background
-    if (pattern) {
-        background.set('fill', pattern);
-    } else {
-        background.set('fill', 'rgba(255, 255, 255, 1)');
-    }
-
-    // Update the background color based on the selected color
-    // This is a simplified version; in a real implementation, you would
-    // blend the pattern with the color more seamlessly
-    canvas.renderAll();
-}
-
-/**
  * Set the current editing mode
  * @param {string} mode - The mode to set
  */
@@ -759,6 +546,7 @@ function setMode(mode) {
  * @param {string} text - The text to add
  */
 function addText(text) {
+    // Create a high-quality text object
     const textObj = new fabric.IText(text, {
         left: canvas.width / 2,
         top: canvas.height / 2,
@@ -767,11 +555,41 @@ function addText(text) {
         fill: selectedColor,
         originX: 'center',
         originY: 'center',
-        centeredRotation: true
+        centeredRotation: true,
+        textAlign: 'center',
+        stroke: '#00000010', // Very subtle stroke to improve edge quality
+        strokeWidth: 0.2,
+        charSpacing: 0, // Normal spacing
+        lineHeight: 1.2, // Improved line height for readability
+        paintFirst: 'fill', // Draw fill first, then stroke
+        splitByGrapheme: false, // Better text handling
+        underline: false,
+        fontStyle: 'normal',
+        fontWeight: 'normal',
+        shadow: new fabric.Shadow({
+            color: 'rgba(0,0,0,0.05)',
+            blur: 2,
+            offsetX: 1,
+            offsetY: 1,
+            affectStroke: false,
+            nonScaling: true
+        })
     });
 
+    // Apply anti-aliasing enhancement
+    textObj.set({
+        objectCaching: false, // Disable caching for better rendering
+        statefullCache: false,
+        dirty: true,
+        clipTo: null
+    });
+
+    // Add to canvas
     canvas.add(textObj);
     canvas.setActiveObject(textObj);
+
+    // Force high-quality rendering
+    canvas.renderAll();
 
     // Explicitly apply text to the shirt texture
     applyDesignToShirt();
@@ -830,80 +648,63 @@ function addShape(shapeType) {
 
 /**
  * Apply the current Fabric.js canvas design to the t-shirt using the texture mapper
- * @param {boolean} force - Force update even if throttled
  */
-export function applyDesignToShirt(force = false) {
+export function applyDesignToShirt() {
     try {
-        // Throttle updates to prevent performance issues
-        const now = Date.now();
-        if (!force && now - lastUpdateTime < UPDATE_THROTTLE) {
-            // If an update is already pending, don't schedule another one
-            if (!pendingUpdate) {
-                pendingUpdate = true;
-                setTimeout(() => {
-                    pendingUpdate = false;
-                    applyDesignToShirt(true); // Force update after delay
-                }, UPDATE_THROTTLE - (now - lastUpdateTime));
-            }
-            return;
-        }
-
-        lastUpdateTime = now;
-
         // Get the canvas element
-        const fabricCanvas = window.fabricCanvas || canvas;
-        if (!fabricCanvas) {
+        const canvas = window.fabricCanvas;
+        if (!canvas) {
             console.error("Fabric canvas not initialized");
-            return;
+            // Try to initialize it if not available
+            if (typeof initFabricCanvas === 'function') {
+                console.log("Attempting to initialize Fabric canvas");
+                window.fabricCanvas = initFabricCanvas();
+
+                // If still not available, exit gracefully
+                if (!window.fabricCanvas) {
+                    console.warn("Could not initialize Fabric canvas, operation aborted");
+                    return;
+                }
+            } else {
+                return;
+            }
         }
 
         // Add a visual indicator that updates are being applied
         showApplyingIndicator(true);
 
-        // Lower the output resolution when many objects are on the canvas
-        const objectCount = fabricCanvas.getObjects().length;
-        let targetResolution = 1024;
+        // Get the current canvas dimensions
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
 
-        // Scale down resolution for complex scenes
-        if (objectCount > 50) {
-            targetResolution = 512;
-        } else if (objectCount > 20) {
-            targetResolution = 768;
+        // Temporarily upscale canvas for higher quality export if needed
+        const scaleMultiplier = 2; // Upscale by 2x for better quality
+
+        // Only upscale if the canvas is below a certain size threshold
+        if (canvasWidth < 1024 || canvasHeight < 1024) {
+            // Store original dimensions and scaling
+            const originalWidth = canvas.width;
+            const originalHeight = canvas.height;
+            const originalScaleFactor = canvas.getZoom();
+
+            // Scale up canvas temporarily
+            canvas.setWidth(originalWidth * scaleMultiplier);
+            canvas.setHeight(originalHeight * scaleMultiplier);
+            canvas.setZoom(originalScaleFactor * scaleMultiplier);
+            canvas.renderAll();
+
+            // After export, we'll restore the original dimensions
         }
 
-        // Apply perspective transformation for more realistic mapping
-        const perspectiveOptions = {
-            perspectiveX: 0.05,  // Slight horizontal perspective for realism
-            perspectiveY: 0.1,   // Vertical perspective for chest curvature
-            rotation: 0,          // No rotation by default
-            stretchX: 1,         // No horizontal stretching
-            stretchY: 1,         // No vertical stretching
-            targetWidth: targetResolution,
-            targetHeight: targetResolution
-        };
+        // Convert the canvas to a high-quality data URL
+        const designImage = canvas.lowerCanvasEl.toDataURL('image/png', 1.0);
 
-        // Transform the fabric canvas to 3D with proper perspective
-        let transformedTexture;
-        try {
-            transformedTexture = transformFabricCanvasTo3D(
-                fabricCanvas.lowerCanvasEl,
-                perspectiveOptions
-            );
-        } catch (error) {
-            console.error("Error transforming canvas:", error);
-            // Fallback to using the canvas directly without transformation
-            transformedTexture = new THREE.CanvasTexture(fabricCanvas.lowerCanvasEl);
-            transformedTexture.needsUpdate = true;
-        }
-
-        // Convert the texture to a data URL
-        let designImage;
-        try {
-            designImage = transformedTexture.image.toDataURL('image/png');
-        } catch (error) {
-            console.error("Error converting texture to data URL:", error);
-            // Fallback to using the canvas directly
-            designImage = fabricCanvas.lowerCanvasEl.toDataURL('image/png');
+        // Restore canvas to original dimensions if we upscaled
+        if (canvasWidth < 1024 || canvasHeight < 1024) {
+            canvas.setWidth(canvasWidth);
+            canvas.setHeight(canvasHeight);
+            canvas.setZoom(canvas.getZoom() / scaleMultiplier);
+            canvas.renderAll();
         }
 
         // Import texture-mapper functions
@@ -912,19 +713,30 @@ export function applyDesignToShirt(force = false) {
                 textureMapper.getCurrentView() : 'front';
 
             // Apply design to the current view using the texture mapper
-            textureMapper.loadCustomImage(designImage, currentView);
-
-            console.log(`Applied design to ${currentView} view using texture mapper`);
-            showNotification('Design applied to ' + currentView + ' view', 'success');
-
-            // Hide the applying indicator
-            showApplyingIndicator(false);
+            textureMapper.loadCustomImage(designImage, currentView)
+                .then(() => {
+                    console.log(`Applied design to ${currentView} view using texture mapper`);
+                    showNotification('Design applied to ' + currentView + ' view', 'success');
+                })
+                .catch(error => {
+                    console.error("Error applying design to view:", error);
+                    showNotification('Failed to apply design to ' + currentView + ' view', 'error');
+                })
+                .finally(() => {
+                    // Hide the applying indicator
+                    showApplyingIndicator(false);
+                });
         }).catch(error => {
             console.error("Error importing texture mapper:", error);
 
             // Fallback to the old method if texture mapper import fails
-            updateShirtTexture(designImage, 'full');
-            showNotification('Design applied using fallback method', 'info');
+            if (typeof updateShirtTexture === 'function') {
+                updateShirtTexture(designImage, 'full');
+                showNotification('Design applied using fallback method', 'info');
+            } else {
+                console.error("updateShirtTexture function not available");
+                showNotification('Could not apply design - missing updateShirtTexture function', 'error');
+            }
 
             // Hide the applying indicator
             showApplyingIndicator(false);
@@ -1130,6 +942,12 @@ export function openImageInEditor(imageData, callback) {
         const fileTab = document.querySelector('.tab-btn[data-tab="file"]');
         if (fileTab) {
             fileTab.click();
+        } else {
+            // If file tab doesn't exist, activate the editor without switching tabs
+            const editorContainer = document.querySelector('.fabric-controls');
+            if (editorContainer) {
+                editorContainer.style.display = 'block';
+            }
         }
 
         // Add an editing title to the fabric controls
@@ -1353,25 +1171,6 @@ export function setColor(color) {
 }
 
 /**
- * Set fabric type
- * @param {string} fabricType - The fabric type to set
- */
-export function setFabricType(fabricType) {
-    if (FABRIC_PROPERTIES[fabricType]) {
-        selectedFabricType = fabricType;
-
-        // Update the UI selector
-        const selector = document.getElementById('fabric-type-select');
-        if (selector) {
-            selector.value = fabricType;
-        }
-
-        // Apply the fabric pattern
-        applyFabricPattern();
-    }
-}
-
-/**
  * Download the current design
  */
 export function downloadDesign() {
@@ -1386,6 +1185,17 @@ export function downloadDesign() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+}
+
+/**
+ * Set fabric type (placeholder function)
+ * @param {string} fabricType - The fabric type to set (ignored in this implementation)
+ */
+export function setFabricType(fabricType) {
+    // This is a placeholder function that does nothing
+    // We keep it to avoid breaking imports in other files
+    console.log('setFabricType called with:', fabricType);
+    // The actual fabric type functionality has been removed
 }
 
 /**
@@ -1432,39 +1242,83 @@ function addImageFromFile(file) {
     reader.onload = function (e) {
         const imgData = e.target.result;
 
-        fabric.Image.fromURL(imgData, function (img) {
-            // Calculate scaling to fit the canvas while maintaining aspect ratio
-            const scaleFactor = Math.min(
-                (canvas.width * 0.6) / img.width,
-                (canvas.height * 0.6) / img.height
-            );
+        // Pre-load image to get dimensions and apply advanced processing
+        const img = new Image();
+        img.onload = function () {
+            // Create a temporary canvas for image processing
+            const tempCanvas = document.createElement('canvas');
+            let tempWidth = img.width;
+            let tempHeight = img.height;
 
-            // Apply scaling
-            img.scale(scaleFactor);
+            // Limit maximum dimensions while preserving aspect ratio
+            const maxDimension = 2048; // Maximum size for high-quality images
 
-            // Center the image
-            img.set({
-                left: canvas.width / 2,
-                top: canvas.height / 2,
-                originX: 'center',
-                originY: 'center',
-                cornerSize: 8,
-                borderColor: 'rgba(0, 0, 0, 0.2)',
-                cornerColor: 'rgba(0, 0, 0, 0.2)',
-                transparentCorners: false
-            });
+            if (tempWidth > maxDimension || tempHeight > maxDimension) {
+                if (tempWidth > tempHeight) {
+                    tempHeight = (tempHeight / tempWidth) * maxDimension;
+                    tempWidth = maxDimension;
+                } else {
+                    tempWidth = (tempWidth / tempHeight) * maxDimension;
+                    tempHeight = maxDimension;
+                }
+            }
 
-            // Add to canvas
-            canvas.add(img);
-            canvas.setActiveObject(img);
-            canvas.renderAll();
+            // Set canvas size to the calculated dimensions
+            tempCanvas.width = tempWidth;
+            tempCanvas.height = tempHeight;
 
-            // Show success notification
-            showNotification('Image added to design', 'success');
+            // Enable high quality image processing
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.imageSmoothingEnabled = true;
+            tempCtx.imageSmoothingQuality = 'high';
 
-            // Apply to shirt
-            applyDesignToShirt();
-        });
+            // Draw the image with high quality
+            tempCtx.drawImage(img, 0, 0, tempWidth, tempHeight);
+
+            // Get processed image data
+            const processedImgData = tempCanvas.toDataURL('image/png', 1.0);
+
+            // Add the processed image to the fabric canvas
+            fabric.Image.fromURL(processedImgData, function (fabricImg) {
+                // Calculate scaling to fit the canvas while maintaining aspect ratio
+                const scaleFactor = Math.min(
+                    (canvas.width * 0.6) / fabricImg.width,
+                    (canvas.height * 0.6) / fabricImg.height
+                );
+
+                // Apply scaling
+                fabricImg.scale(scaleFactor);
+
+                // Center the image
+                fabricImg.set({
+                    left: canvas.width / 2,
+                    top: canvas.height / 2,
+                    originX: 'center',
+                    originY: 'center',
+                    cornerSize: 8,
+                    borderColor: 'rgba(0, 0, 0, 0.2)',
+                    cornerColor: 'rgba(0, 0, 0, 0.2)',
+                    transparentCorners: false,
+                    lockUniScaling: false, // Allow non-uniform scaling
+                    hasControls: true,
+                    hasBorders: true
+                });
+
+                // Add to canvas with improved anti-aliasing
+                canvas.add(fabricImg);
+                canvas.setActiveObject(fabricImg);
+                canvas.renderAll();
+
+                // Show success notification
+                showNotification('High-quality image added to design', 'success');
+
+                // Apply to shirt
+                applyDesignToShirt();
+            }, { crossOrigin: 'anonymous' });
+        };
+
+        // Load the image
+        img.src = imgData;
     };
 
     reader.readAsDataURL(file);
@@ -1514,11 +1368,14 @@ function setupClipboardPasteSupport() {
         const pasteHint = document.createElement('div');
         pasteHint.className = 'paste-hint';
         pasteHint.innerHTML = '<i class="fas fa-clipboard"></i> You can also paste images from clipboard (Ctrl+V)';
-        pasteHint.style.fontSize = '0.8rem';
-        pasteHint.style.color = 'var(--text-secondary, #777)';
-        pasteHint.style.padding = '5px 0';
+        pasteHint.style.fontSize = '0.9rem';
+        pasteHint.style.color = 'var(--text-primary, #333)';
+        pasteHint.style.padding = '10px';
+        pasteHint.style.margin = '10px 0';
         pasteHint.style.textAlign = 'center';
-        pasteHint.style.marginTop = '10px';
+        pasteHint.style.backgroundColor = 'var(--bg-light, #f5f5f5)';
+        pasteHint.style.borderRadius = '5px';
+        pasteHint.style.border = '1px dashed var(--border-color, #ddd)';
 
         fabricControls.appendChild(pasteHint);
     }
@@ -1526,10 +1383,63 @@ function setupClipboardPasteSupport() {
 
 // Initialize and set up window resize listener
 window.addEventListener('load', () => {
-    initFabricCanvas();
-    updateCanvasSize();
+    console.log('Window loaded - initializing Fabric canvas');
 
-    window.addEventListener('resize', () => {
+    // Check if the canvas element exists
+    const canvasElement = document.getElementById('fabric-canvas');
+    if (!canvasElement) {
+        console.error('Canvas element #fabric-canvas not found in DOM');
+
+        // Create the canvas element if it doesn't exist
+        const canvasWrapper = document.querySelector('.fabric-canvas-wrapper');
+        if (canvasWrapper) {
+            console.log('Creating canvas element within .fabric-canvas-wrapper');
+            const newCanvas = document.createElement('canvas');
+            newCanvas.id = 'fabric-canvas';
+            canvasWrapper.appendChild(newCanvas);
+        } else {
+            console.error('Canvas wrapper .fabric-canvas-wrapper not found');
+            // Try to create both elements
+            const mainContainer = document.querySelector('.main-container') || document.body;
+            const newWrapper = document.createElement('div');
+            newWrapper.className = 'fabric-canvas-wrapper';
+            newWrapper.style.width = '500px';
+            newWrapper.style.height = '500px';
+            newWrapper.style.margin = '0 auto';
+            newWrapper.style.position = 'relative';
+
+            const newCanvas = document.createElement('canvas');
+            newCanvas.id = 'fabric-canvas';
+            newWrapper.appendChild(newCanvas);
+            mainContainer.appendChild(newWrapper);
+            console.log('Created fabric-canvas-wrapper and canvas elements');
+        }
+    }
+
+    // Initialize the canvas
+    try {
+        const canvas = initFabricCanvas();
+        window.fabricCanvas = canvas; // Ensure global access
         updateCanvasSize();
+        console.log('Fabric canvas initialized successfully');
+    } catch (error) {
+        console.error('Error initializing Fabric canvas:', error);
+    }
+
+    // Set up resize listener
+    window.addEventListener('resize', () => {
+        try {
+            updateCanvasSize();
+        } catch (error) {
+            console.error('Error updating canvas size:', error);
+        }
     });
+
+    // Apply initial design if needed
+    if (window.initialDesign) {
+        console.log('Applying initial design');
+        setTimeout(() => {
+            applyDesignToShirt();
+        }, 500);
+    }
 }); 

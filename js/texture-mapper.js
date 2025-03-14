@@ -12,14 +12,14 @@ const modelConfig = {
     tshirt: {
         views: {
             front: {
-                bounds: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
-                defaultScale: 0.4,
+                bounds: { x: -50, y: -20, width: 10, height: 5 },
+                defaultScale: 1,
                 uvRect: { u1: 0.25, v1: 0.25, u2: 0.75, v2: 0.75 },
                 name: "Front Chest"
             },
             back: {
                 bounds: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
-                defaultScale: 0.4,
+                defaultScale: 1,
                 uvRect: { u1: 0.25, v1: 0.25, u2: 0.75, v2: 0.75 },
                 name: "Back"
             },
@@ -119,17 +119,17 @@ const availableViews = ['front', 'back', 'left_arm', 'right_arm'];
  * These represent common placement options for images on clothing
  */
 const predefinedPositions = {
-    center: { x: 0.5, y: 0.5, scale: 1.0, rotation: 0 },
-    top: { x: 0.5, y: 0.25, scale: 0.9, rotation: 0 },
-    bottom: { x: 0.5, y: 0.75, scale: 0.9, rotation: 0 },
-    left: { x: 0.25, y: 0.5, scale: 0.8, rotation: 0 },
-    right: { x: 0.75, y: 0.5, scale: 0.8, rotation: 0 },
-    top_left: { x: 0.25, y: 0.25, scale: 0.7, rotation: 0 },
-    top_right: { x: 0.75, y: 0.25, scale: 0.7, rotation: 0 },
-    bottom_left: { x: 0.25, y: 0.75, scale: 0.7, rotation: 0 },
-    bottom_right: { x: 0.75, y: 0.75, scale: 0.7, rotation: 0 },
-    pocket: { x: 0.35, y: 0.3, scale: 0.4, rotation: 0 },
-    sleeve: { x: 0.5, y: 0.5, scale: 0.6, rotation: 0 }
+    center: { x: 0.45, y: 0.43, scale: 1.0, rotation: 0 },
+    top: { x: 0.45, y: 0.18, scale: 0.9, rotation: 0 },
+    bottom: { x: 0.45, y: 0.68, scale: 0.9, rotation: 0 },
+    left: { x: 0.20, y: 0.43, scale: 0.8, rotation: 0 },
+    right: { x: 0.70, y: 0.43, scale: 0.8, rotation: 0 },
+    top_left: { x: 0.20, y: 0.18, scale: 0.7, rotation: 0 },
+    top_right: { x: 0.70, y: 0.18, scale: 0.7, rotation: 0 },
+    bottom_left: { x: 0.20, y: 0.68, scale: 0.7, rotation: 0 },
+    bottom_right: { x: 0.70, y: 0.68, scale: 0.7, rotation: 0 },
+    pocket: { x: 0.30, y: 0.23, scale: 0.4, rotation: 0 },
+    sleeve: { x: 0.45, y: 0.43, scale: 0.6, rotation: 0 }
 };
 
 // Add new advanced texture utilities - optimized for performance
@@ -312,20 +312,20 @@ export function initTextureMapper(fabricTextureUrl, bumpMapUrl, modelType = 'tsh
                 fabricCtx.fillStyle = state.color || '#FFFFFF';
                 fabricCtx.fillRect(0, 0, fabricCanvas.width, fabricCanvas.height);
 
-                // Add fabric pattern (subtle grid)
-                fabricCtx.strokeStyle = 'rgba(0,0,0,0.1)';
-                fabricCtx.lineWidth = 1;
+                // Add extremely subtle fabric pattern (nearly invisible grid)
+                fabricCtx.strokeStyle = 'rgba(0,0,0,0.02)'; // Reduced opacity to 2%
+                fabricCtx.lineWidth = 0.5; // Thinner lines
 
-                // Horizontal lines
-                for (let i = 0; i < fabricCanvas.height; i += 8) {
+                // Horizontal lines with increased spacing
+                for (let i = 0; i < fabricCanvas.height; i += 16) { // Doubled spacing
                     fabricCtx.beginPath();
                     fabricCtx.moveTo(0, i);
                     fabricCtx.lineTo(fabricCanvas.width, i);
                     fabricCtx.stroke();
                 }
 
-                // Vertical lines
-                for (let i = 0; i < fabricCanvas.width; i += 8) {
+                // Vertical lines with increased spacing
+                for (let i = 0; i < fabricCanvas.width; i += 16) { // Doubled spacing
                     fabricCtx.beginPath();
                     fabricCtx.moveTo(i, 0);
                     fabricCtx.lineTo(i, fabricCanvas.height);
@@ -392,33 +392,39 @@ export function initTextureMapper(fabricTextureUrl, bumpMapUrl, modelType = 'tsh
  * @returns {THREE.Texture} The combined texture
  */
 function createBaseTexture() {
-    // Create a canvas to draw the combined texture (reduced resolution for performance)
+    // Create a canvas to draw the combined texture (increased resolution for better quality)
     const canvas = document.createElement('canvas');
-    canvas.width = 1024; // Back to original resolution for better performance
-    canvas.height = 1024;
+    canvas.width = 2048; // Doubled resolution for higher quality textures
+    canvas.height = 2048;
     const ctx = canvas.getContext('2d');
+
+    // Configure canvas for high-quality rendering
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
     // Get material settings for current model
     const materialSettings = modelConfig[textureState.currentModel].materialSettings || {};
 
     // Create background with advanced fabric texture simulation (optimized)
     if (textureState.fabricTexture && textureState.fabricTexture.image) {
-        // Draw base fabric texture with advanced blending
-        ctx.globalAlpha = modelConfig[textureState.currentModel].fabricTextureStrength;
+        // Draw base fabric texture with reduced strength
+        ctx.globalAlpha = modelConfig[textureState.currentModel].fabricTextureStrength * 0.7; // Reduced by 30%
         ctx.drawImage(textureState.fabricTexture.image, 0, 0, canvas.width, canvas.height);
         ctx.globalAlpha = 1.0;
 
-        // Add fabric detail but with optimized approach
-        // Use downsampled processing for better performance
-        const downsampleFactor = 4; // Process fewer pixels
+        // Add fabric detail with improved approach
+        // Use less downsampling for better quality while maintaining performance
+        const downsampleFactor = 2; // Reduced from 4 to 2 for better quality
         const sampleWidth = canvas.width / downsampleFactor;
         const sampleHeight = canvas.height / downsampleFactor;
 
-        // Create a smaller temporary canvas for the effects
+        // Create a temporary canvas for the effects
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = sampleWidth;
         tempCanvas.height = sampleHeight;
         const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.imageSmoothingEnabled = true;
+        tempCtx.imageSmoothingQuality = 'high';
 
         // Draw the original image to the smaller canvas
         tempCtx.drawImage(canvas, 0, 0, canvas.width, canvas.height,
@@ -428,7 +434,7 @@ function createBaseTexture() {
         const pixelData = tempCtx.getImageData(0, 0, sampleWidth, sampleHeight);
         const data = pixelData.data;
 
-        // Process the downsampled image data
+        // Process the downsampled image data with reduced effect intensity
         for (let y = 0; y < sampleHeight; y++) {
             for (let x = 0; x < sampleWidth; x++) {
                 const i = (y * sampleWidth + x) * 4;
@@ -437,16 +443,16 @@ function createBaseTexture() {
                 const nx = x / sampleWidth;
                 const ny = y / sampleHeight;
 
-                // Simplified fabric effects with fewer calculations
-                const noise = fbm(nx * 10, ny * 10, 2, 2.0, 0.5) * 0.15;
+                // More subtle fabric effects with reduced noise
+                const noise = fbm(nx * 12, ny * 12, 3, 2.0, 0.5) * 0.08; // Reduced from 0.12 to 0.08
 
-                // Calculate ambient occlusion
-                const ao = calculateAO(x, y, sampleWidth, sampleHeight, tempCanvas, 0.3);
+                // Calculate ambient occlusion with less intensity
+                const ao = calculateAO(x, y, sampleWidth, sampleHeight, tempCanvas, 0.15); // Reduced from 0.25 to 0.15
 
-                // Simplified total effect
-                const totalEffect = 1.0 + noise;
+                // More subtle total effect
+                const totalEffect = 1.0 + noise * 0.7; // Reduced effect by 30%
 
-                // Apply to pixel data with simpler math
+                // Apply to pixel data with more subtle effect
                 data[i] = Math.min(255, Math.max(0, data[i] * totalEffect * ao));
                 data[i + 1] = Math.min(255, Math.max(0, data[i + 1] * totalEffect * ao));
                 data[i + 2] = Math.min(255, Math.max(0, data[i + 2] * totalEffect * ao));
@@ -456,7 +462,7 @@ function createBaseTexture() {
         // Put the processed image data back to the small canvas
         tempCtx.putImageData(pixelData, 0, 0);
 
-        // Draw the small canvas back to the main canvas
+        // Draw the small canvas back to the main canvas with high quality interpolation
         ctx.drawImage(tempCanvas, 0, 0, sampleWidth, sampleHeight,
             0, 0, canvas.width, canvas.height);
     } else {
@@ -464,12 +470,12 @@ function createBaseTexture() {
         ctx.fillStyle = state.color || '#FFFFFF';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Only apply a basic fabric texture
-        const patternSize = 12;
-        ctx.strokeStyle = 'rgba(0,0,0,0.05)';
-        ctx.lineWidth = 1;
+        // Apply an extremely subtle fabric texture
+        const patternSize = 24; // Doubled from 12 to 24 for wider spacing
+        ctx.strokeStyle = 'rgba(0,0,0,0.015)'; // Reduced opacity to 1.5%
+        ctx.lineWidth = 0.5; // Thinner lines
 
-        // Draw a simple grid pattern
+        // Draw a very subtle grid pattern
         for (let i = 0; i < canvas.height; i += patternSize) {
             ctx.beginPath();
             ctx.moveTo(0, i);
@@ -485,7 +491,7 @@ function createBaseTexture() {
         }
     }
 
-    // Composite custom images for each view with optimized blending
+    // Composite custom images for each view with improved blending
     for (const view of availableViews) {
         const imageData = textureState.customImages[view];
         if (imageData.texture && imageData.texture.image) {
@@ -505,42 +511,56 @@ function createBaseTexture() {
             const centerX = x + width / 2;
             const centerY = y + height / 2;
 
-            // Simplified UV analysis for better performance
-            const uvAnalysis = {
-                stretchFactorU: view.includes('arm') ? 1.1 : 1.0,
-                stretchFactorV: 1.0,
-                optimalCenterU: 0.5,
-                optimalCenterV: 0.5
-            };
+            // Enhanced UV analysis for better quality
+            const uvAnalysis = analyzeUVArea(uvRect, view, textureState.currentModel);
 
-            // Simplified optimization
+            // Enhanced optimization
             const position = imageData.position;
-            const blendFactor = 0.15;
-            const optimizedX = position.x * (1 - blendFactor) + 0.5 * blendFactor;
-            const optimizedY = position.y * (1 - blendFactor) + 0.5 * blendFactor;
+            const blendFactor = 0.12; // Reduced for more accurate positioning
+
+            // Apply subtle position adjustment - shift left and upwards
+            // Horizontal shift: move left by 5% of the width
+            // Vertical shift: move up by 7% of the height
+            const horizontalShift = -0.05; // negative value moves left
+            const verticalShift = -0.07;   // negative value moves up
+
+            const optimizedX = position.x * (1 - blendFactor) + 0.5 * blendFactor + horizontalShift;
+            const optimizedY = position.y * (1 - blendFactor) + 0.5 * blendFactor + verticalShift;
 
             // Position adjustment based on optimized image position
             const posX = centerX + (optimizedX - 0.5) * width;
             const posY = centerY + (optimizedY - 0.5) * height;
 
-            // Apply transformations with simpler calculations
+            // Apply transformations with improved precision
             ctx.translate(posX, posY);
             ctx.rotate(imageData.rotation * Math.PI / 180);
 
-            // Calculate non-uniform scale with simpler math
+            // Calculate non-uniform scale with enhanced precision
             const scaleX = imageData.scale / uvAnalysis.stretchFactorU;
             const scaleY = imageData.scale / uvAnalysis.stretchFactorV;
 
             // Apply vertical flip and scale
             ctx.scale(scaleX, -scaleY);
 
-            // Draw the image with simplified blending
+            // Draw the image with enhanced blending for realistic integration
             const imgWidth = imageData.texture.image.width;
             const imgHeight = imageData.texture.image.height;
 
-            // Apply simple blending for fabric integration
+            // Apply advanced blending for better fabric integration
+            // First draw with normal blending to preserve details
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.globalAlpha = 0.98; // Increased from 0.95 to 0.98 for higher opacity of original design
+            ctx.drawImage(
+                imageData.texture.image,
+                -imgWidth / 2,
+                -imgWidth / 2,
+                imgWidth,
+                imgHeight
+            );
+
+            // Then apply multiply blending at much lower opacity for subtle fabric integration
             ctx.globalCompositeOperation = 'multiply';
-            ctx.globalAlpha = 0.9;
+            ctx.globalAlpha = 0.15; // Reduced from 0.3 to 0.15 for more subtle fabric effect
             ctx.drawImage(
                 imageData.texture.image,
                 -imgWidth / 2,
@@ -558,9 +578,13 @@ function createBaseTexture() {
         }
     }
 
-    // Create a texture from the canvas
+    // Create a texture from the canvas with high-quality settings
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
+    texture.anisotropy = 16; // Maximum anisotropy for sharper textures at angles
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.encoding = THREE.sRGBEncoding;
 
     // Add texture to debug view if element exists
     const debugTextureView = document.getElementById('texture-debug-view');
@@ -641,7 +665,11 @@ export function loadCustomImage(imageUrl, view = 'front') {
                 textureState.customImages[mappedView].texture = texture;
 
                 // Reset position, rotation and set default scale
-                textureState.customImages[mappedView].position = { x: 0.5, y: 0.5 };
+                // Apply subtle position adjustment - shift left and upwards
+                textureState.customImages[mappedView].position = {
+                    x: 0.45, // Shifted left from 0.5 to 0.45
+                    y: 0.43  // Shifted up from 0.5 to 0.43
+                };
                 textureState.customImages[mappedView].rotation = 0;
                 textureState.customImages[mappedView].scale =
                     modelConfig[textureState.currentModel].views[mappedView].defaultScale;

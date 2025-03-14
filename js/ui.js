@@ -840,7 +840,7 @@ export function setupAIPicker() {
                                     if (resultImg) {
                                         resultImg.src = editedImageData;
                                     }
-                                    
+
                                     // Also update the image data for the apply and download buttons
                                     if (applyBtn) {
                                         applyBtn.onclick = () => {
@@ -849,7 +849,7 @@ export function setupAIPicker() {
                                             showToast('Applied edited design to shirt');
                                         };
                                     }
-                                    
+
                                     if (downloadBtn) {
                                         downloadBtn.onclick = () => {
                                             const link = document.createElement('a');
@@ -866,18 +866,23 @@ export function setupAIPicker() {
                                 // Fallback if openImageInEditor isn't available
                                 showToast('Editor functionality not available');
                                 console.error('openImageInEditor function not found in fabric-integration.js');
-                                
+
                                 // Switch to the file picker tab which has the fabric editor
                                 const fileTab = document.querySelector('.tab-btn[data-tab="file"]');
                                 if (fileTab) {
                                     fileTab.click();
-                                    
-                                    // Add a small delay to let the tab switch complete
-                                    setTimeout(() => {
-                                        // Try to access the initFabricCanvas function
-                                        module.initFabricCanvas && module.initFabricCanvas(imageData);
-                                        showToast('Please use the editor to customize your design');
-                                    }, 300);
+                                } else {
+                                    // If file tab is removed, activate the editor without tab switching
+                                    // Show the fabric canvas and editor controls directly
+                                    const fabricCanvas = document.querySelector('.fabric-canvas-wrapper');
+                                    if (fabricCanvas) {
+                                        fabricCanvas.style.display = 'block';
+                                    }
+
+                                    const fabricControls = document.querySelector('.fabric-controls');
+                                    if (fabricControls) {
+                                        fabricControls.style.display = 'block';
+                                    }
                                 }
                             }
                         }).catch(error => {
@@ -895,12 +900,12 @@ export function setupAIPicker() {
                         const link = document.createElement('a');
                         link.href = imageData;
                         link.download = `ai-design-${Date.now()}.png`;
-                        
+
                         // Append to the document, click it, and remove it
                         document.body.appendChild(link);
                         link.click();
                         document.body.removeChild(link);
-                        
+
                         showToast('Downloading AI design');
                     });
                 }

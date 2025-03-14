@@ -113,65 +113,119 @@ export function calculateFabricMaterialProperties(fabricType = 'cotton', color =
  */
 export function generateAdvancedFabricNormalMap(width, height, fabricType = 'cotton', seed = Math.random() * 1000) {
     const properties = FABRIC_PROPERTIES[fabricType] || FABRIC_PROPERTIES.cotton;
-    const size = width * height;
-    const data = new Uint8Array(4 * size);
 
-    // Calculate weave properties based on thread density and thickness
-    const threadSpacing = 1 / properties.threadDensity * 25; // Convert to texture space
-    const warpFrequency = 1 / threadSpacing; // Warp threads frequency
-    const weftFrequency = 1 / threadSpacing; // Weft threads frequency
+    // Use higher resolution for better quality
+    const textureWidth = Math.max(width, 2048);
+    const textureHeight = Math.max(height, 2048);
 
-    // Calculate amplitudes for different fabric weave patterns
-    const threadAmplitude = properties.threadThickness * 50;
+    // Create a canvas to draw the normal map
+    const canvas = document.createElement('canvas');
+    canvas.width = textureWidth;
+    canvas.height = textureHeight;
 
-    // Use Perlin-like noise for natural variation
-    const noiseScale = 0.1;
+    const ctx = canvas.getContext('2d');
 
-    for (let i = 0; i < size; i++) {
-        const stride = i * 4;
-        const x = i % width;
-        const y = Math.floor(i / width);
+    // Fill with neutral normal color (rgb: 128, 128, 255) - represents "flat" surface
+    ctx.fillStyle = 'rgb(128, 128, 255)';
+    ctx.fillRect(0, 0, textureWidth, textureHeight);
 
-        // Base normal pointing straight out (128, 128, 255)
-        let nx = 128;
-        let ny = 128;
-        const nz = 255;
+    // Random number generator with seed
+    const random = (i) => {
+        const x = Math.sin(i + seed) * 10000;
+        return x - Math.floor(x);
+    };
 
-        // Create multi-scale fabric weave pattern
-        // Primary weave pattern (plain, twill, or satin depending on fabric)
-        let weavePattern;
+    // Simulate thread pattern based on fabric type
+    const threadCount = properties.threadDensity;
+    const threadThickness = properties.threadThickness * 50; // Scale for visibility
+    const threadPattern = fabricType === 'silk' ? 'twill' :
+        fabricType === 'wool' ? 'loose' : 'plain';
 
-        if (fabricType === 'silk') {
-            // Satin weave pattern (smoother with fewer intersections)
-            weavePattern = Math.sin(x * warpFrequency * 0.2) * Math.sin(y * weftFrequency * 0.2 + 2) * threadAmplitude * 0.5;
-        } else if (fabricType === 'wool') {
-            // Twill weave pattern (diagonal lines)
-            weavePattern = Math.sin((x + y) * warpFrequency * 0.2) * threadAmplitude * 0.7;
-        } else {
-            // Plain weave pattern (standard basket weave)
-            weavePattern = Math.sin(x * warpFrequency) * Math.sin(y * weftFrequency) * threadAmplitude;
+    // Calculate the thread pattern scale based on fabric type
+    const threadScale = fabricType === 'silk' ? 0.7 :
+        fabricType === 'wool' ? 1.5 : 1.0;
+
+    // Draw base fabric weave pattern
+    const warpColor = 'rgb(170, 128, 255)'; // Slightly raised threads in one direction
+    const weftColor = 'rgb(90, 128, 255)';  // Slightly lowered threads in other direction
+
+    const gridSize = Math.floor(textureWidth / (threadCount * threadScale));
+
+    // Draw different weave patterns based on fabric type
+    if (threadPattern === 'twill') {
+        // Twill pattern (diagonal pattern like in denim)
+        ctx.fillStyle = warpColor;
+
+        for (let y = 0; y < textureHeight; y += gridSize) {
+            for (let x = 0; x < textureWidth; x += gridSize * 4) {
+                const offset = Math.floor(y / gridSize) % 4;
+                for (let i = 0; i < 2; i++) {
+                    const xPos = (x + (offset + i) * gridSize) % textureWidth;
+                    ctx.fillRect(xPos, y, gridSize, gridSize);
+                }
+            }
+        }
+    } else if (threadPattern === 'loose') {
+        // Loose pattern (for wool, more random)
+        for (let y = 0; y < textureHeight; y += gridSize) {
+            for (let x = 0; x < textureWidth; x += gridSize) {
+                // Random variation for wool texture
+                const randomValue = random(x * 0.1 + y * 0.1);
+                if (randomValue > 0.5) {
+                    ctx.fillStyle = warpColor;
+                } else {
+                    ctx.fillStyle = weftColor;
+                }
+
+                // Varying thread thickness for wool
+                const threadVariation = 0.8 + random(x + y) * 0.4;
+                ctx.fillRect(x, y, gridSize * threadVariation, gridSize * threadVariation);
+            }
         }
 
-        // Add micro texture for thread fibers using pseudo-random noise
-        const micro1 = Math.sin(x * 5.3 + seed) * Math.sin(y * 6.7 + seed) * threadAmplitude * 0.1;
-        const micro2 = Math.sin(x * 8.3 + y * 2.5 + seed) * Math.sin(y * 9.1 + x * 1.5 + seed) * threadAmplitude * 0.05;
+        // Add extra noise for wool's fuzzy appearance
+        for (let i = 0; i < textureWidth * 0.05; i++) {
+            const x = Math.floor(random(i * 2) * textureWidth);
+            const y = Math.floor(random(i * 2 + 1) * textureHeight);
+            const size = 1 + Math.floor(random(i * 3) * 3);
 
-        // Combined pattern for normal map
-        const combinedPattern = weavePattern + micro1 + micro2;
+            ctx.fillStyle = random(i) > 0.5 ? warpColor : weftColor;
+            ctx.fillRect(x, y, size, size);
+        }
+    } else {
+        // Plain weave (standard basket weave for cotton)
+        for (let y = 0; y < textureHeight; y += gridSize * 2) {
+            for (let x = 0; x < textureWidth; x += gridSize * 2) {
+                // First thread direction
+                ctx.fillStyle = warpColor;
+                ctx.fillRect(x, y, gridSize, gridSize);
+                ctx.fillRect(x + gridSize, y + gridSize, gridSize, gridSize);
 
-        // Calculate normal map values (offsets from middle gray)
-        nx = Math.min(255, Math.max(0, nx + combinedPattern * 0.7));
-        ny = Math.min(255, Math.max(0, ny + combinedPattern * 0.7));
-
-        // Store in texture data
-        data[stride] = nx;     // R channel
-        data[stride + 1] = ny; // G channel
-        data[stride + 2] = nz; // B channel
-        data[stride + 3] = 255; // Alpha
+                // Second thread direction
+                ctx.fillStyle = weftColor;
+                ctx.fillRect(x + gridSize, y, gridSize, gridSize);
+                ctx.fillRect(x, y + gridSize, gridSize, gridSize);
+            }
+        }
     }
 
-    // Create the texture
-    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+    // Add micro-variations to simulate fabric irregularities
+    const imageData = ctx.getImageData(0, 0, textureWidth, textureHeight);
+    const data = imageData.data;
+
+    for (let i = 0; i < data.length; i += 4) {
+        // Random micro-variation based on fabric type
+        const variation = (random(i / 1000) - 0.5) * (properties.wrinkleFactor * 30);
+
+        // Apply to normal map RGB (keep blue as is for normal maps)
+        data[i] = Math.max(0, Math.min(255, data[i] + variation));
+        data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + variation));
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+
+    // Create texture from canvas
+    const texture = new THREE.CanvasTexture(canvas);
 
     // Set proper texture parameters
     texture.wrapS = THREE.RepeatWrapping;

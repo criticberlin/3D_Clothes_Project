@@ -2484,3 +2484,47 @@ canvas {
 	max-width: 70%;
 	word-break: break-word;
 }
+
+/* Add CSS for Material Settings */
+.material-settings {
+	padding: 1rem;
+	background-color: var(--surface-color);
+	border-radius: 8px;
+	margin-bottom: 1rem;
+	box-shadow: var(--soft-shadow);
+}
+
+.setting-group {
+	margin-bottom: 0.75rem;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.setting-group label {
+	font-weight: 500;
+	color: var(--text-color);
+	margin-right: 1rem;
+}
+
+.material-select {
+	background-color: var(--input-bg);
+	color: var(--text-color);
+	border: 1px solid var(--border-color);
+	border-radius: 4px;
+	padding: 0.5rem;
+	font-family: 'Poppins', sans-serif;
+	cursor: pointer;
+	outline: none;
+	width: 150px;
+	transition: border-color 0.2s;
+}
+
+.material-select:hover {
+	border-color: var(--primary-color);
+}
+
+.material-select:focus {
+	border-color: var(--primary-color);
+	box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.25);
+}

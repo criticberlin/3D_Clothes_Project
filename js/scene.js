@@ -1112,48 +1112,56 @@ function processLoadedModel(gltf, settings, color) {
     // Add model to the group
     group.add(model);
 
-    // Find the shirt mesh
+    // Track all meshes in the model
+    const meshes = [];
+
+    // Find all meshes in the model
     model.traverse((obj) => {
-        if (obj.isMesh && !shirtMesh) {
-            shirtMesh = obj;
+        if (obj.isMesh) {
+            meshes.push(obj);
 
-            // Clone and store the original material
-            shirtMaterial = obj.material.clone();
-
-            // Get color from state or use default white
-            const currentColor = state.color || '#FFFFFF';
-            shirtMaterial.color.copy(new THREE.Color(currentColor));
-            console.log(`Applied color to shirt material: ${currentColor}`);
-
-            // Set material properties from settings if available
-            if (settings.materialSettings) {
-                for (const [property, value] of Object.entries(settings.materialSettings)) {
-                    if (property in shirtMaterial) {
-                        shirtMaterial[property] = value;
-                    }
-                }
-            } else {
-                // Fallback to basic properties
-                shirtMaterial.roughness = 0.65;
-                shirtMaterial.metalness = 0.02;
-            }
-
-            // Add fabric textures for realism
-            createAdvancedFabricTextures(shirtMaterial);
-
-            // Try to upgrade to physical material for better realism
-            tryUpgradeToPhysicalMaterial(shirtMaterial, color, settings.materialSettings);
-
-            // Apply the material
-            obj.material = shirtMaterial;
-            shirtMaterial.needsUpdate = true;
-
-            // Force a redraw
-            if (renderer) {
-                renderer.render(scene, camera);
+            // Set first mesh as our reference shirt mesh if not already set
+            if (!shirtMesh) {
+                shirtMesh = obj;
             }
         }
     });
+
+    if (shirtMesh) {
+        // Clone and store the original material
+        shirtMaterial = shirtMesh.material.clone();
+
+        // Get color from state or use default white
+        const currentColor = state.color || '#FFFFFF';
+        shirtMaterial.color.copy(new THREE.Color(currentColor));
+        console.log(`Applied color to shirt material: ${currentColor}`);
+
+        // Set material properties from settings if available
+        if (settings.materialSettings) {
+            for (const [property, value] of Object.entries(settings.materialSettings)) {
+                if (property in shirtMaterial) {
+                    shirtMaterial[property] = value;
+                }
+            }
+        } else {
+            // Fallback to basic properties
+            shirtMaterial.roughness = 0.65;
+            shirtMaterial.metalness = 0.02;
+        }
+
+        // Add fabric textures for realism
+        createAdvancedFabricTextures(shirtMaterial);
+
+        // Try to upgrade to physical material for better realism
+        tryUpgradeToPhysicalMaterial(shirtMaterial, color, settings.materialSettings);
+
+        // Apply the material to all meshes in the model
+        meshes.forEach(mesh => {
+            mesh.material = shirtMaterial;
+        });
+
+        shirtMaterial.needsUpdate = true;
+    }
 
     // Set up proper shadowing
     if (shirtMesh) {
@@ -1935,12 +1943,12 @@ export function updateThemeBackground(isDarkMode) {
         if (fabricInstance) {
             // If we have access to the Fabric.js instance, update its background
             fabricInstance.setBackgroundColor(
-                isDarkMode ? '#1e293b' : '#ffffff',
+                '#ffffff', // Always use white background regardless of theme
                 fabricInstance.renderAll.bind(fabricInstance)
             );
         } else {
             // Otherwise update the canvas element directly
-            fabricCanvas.style.backgroundColor = isDarkMode ? '#1e293b' : '#ffffff';
+            fabricCanvas.style.backgroundColor = '#ffffff'; // Always use white background
         }
     }
 
@@ -2451,7 +2459,9 @@ function tryUpgradeToPhysicalMaterial(standardMaterial, color, materialSettings)
                 ...physicsMaterialProperties,
                 ...materialSettings,
                 color: color,
-                side: THREE.DoubleSide
+                side: THREE.DoubleSide,
+                transparent: false,
+                opacity: 1.0
             };
 
             // Create physical material with advanced properties
@@ -2467,7 +2477,7 @@ function tryUpgradeToPhysicalMaterial(standardMaterial, color, materialSettings)
                 if (typeof generateAdvancedFabricNormalMap === 'function') {
                     const normalMap = generateAdvancedFabricNormalMap(2048, 2048, fabricType);
                     physicalMaterial.normalMap = normalMap;
-                    physicalMaterial.normalScale.set(0.8, 0.8);
+                    physicalMaterial.normalScale.set(0.9, 0.9); // Increased normal scale for more detail
                 } else {
                     // Fallback to more basic normal map with enhanced settings
                     const normalMap = createAdvancedNormalMap(1024, 1024);
@@ -2485,16 +2495,39 @@ function tryUpgradeToPhysicalMaterial(standardMaterial, color, materialSettings)
                 // Enhanced texture settings
                 physicalMaterial.roughnessMap.wrapS = THREE.RepeatWrapping;
                 physicalMaterial.roughnessMap.wrapT = THREE.RepeatWrapping;
-                physicalMaterial.roughnessMap.repeat.set(4, 4);  // Adjusted repeat
+                physicalMaterial.roughnessMap.repeat.set(5, 5);  // Increased repeats for more detailed texture
+            } else {
+                // Create a new roughness map if none exists
+                try {
+                    const roughnessMap = createAdvancedRoughnessMap(2048, 2048);
+                    physicalMaterial.roughnessMap = roughnessMap;
+                    physicalMaterial.roughnessMap.wrapS = THREE.RepeatWrapping;
+                    physicalMaterial.roughnessMap.wrapT = THREE.RepeatWrapping;
+                    physicalMaterial.roughnessMap.repeat.set(5, 5);
+                } catch (error) {
+                    console.error("Failed to create roughness map:", error);
+                }
             }
 
             if (standardMaterial.aoMap) {
                 physicalMaterial.aoMap = standardMaterial.aoMap;
-                physicalMaterial.aoMapIntensity = 0.7;  // Enhanced AO intensity
+                physicalMaterial.aoMapIntensity = 0.8;  // Enhanced AO intensity
                 // Enhanced texture settings
                 physicalMaterial.aoMap.wrapS = THREE.RepeatWrapping;
                 physicalMaterial.aoMap.wrapT = THREE.RepeatWrapping;
-                physicalMaterial.aoMap.repeat.set(4, 4);  // Matched with other textures
+                physicalMaterial.aoMap.repeat.set(5, 5);  // Matched with other textures
+            } else {
+                // Create a new AO map if none exists
+                try {
+                    const aoMap = createAmbientOcclusionMap(2048, 2048);
+                    physicalMaterial.aoMap = aoMap;
+                    physicalMaterial.aoMapIntensity = 0.8;
+                    physicalMaterial.aoMap.wrapS = THREE.RepeatWrapping;
+                    physicalMaterial.aoMap.wrapT = THREE.RepeatWrapping;
+                    physicalMaterial.aoMap.repeat.set(5, 5);
+                } catch (error) {
+                    console.error("Failed to create AO map:", error);
+                }
             }
 
             // Add subtle displacement map if available
@@ -2505,18 +2538,18 @@ function tryUpgradeToPhysicalMaterial(standardMaterial, color, materialSettings)
                 // Enhanced texture settings
                 physicalMaterial.displacementMap.wrapS = THREE.RepeatWrapping;
                 physicalMaterial.displacementMap.wrapT = THREE.RepeatWrapping;
-                physicalMaterial.displacementMap.repeat.set(4, 4);
+                physicalMaterial.displacementMap.repeat.set(5, 5);
             }
 
             // Add subtle bump map to enhance detail even without normal map
             try {
-                const bumpMap = createAdvancedRoughnessMap(1024, 1024);
+                const bumpMap = createAdvancedRoughnessMap(2048, 2048);
                 physicalMaterial.bumpMap = bumpMap;
-                physicalMaterial.bumpScale = 0.005;
+                physicalMaterial.bumpScale = 0.008; // Increased for better detail
                 // Enhanced texture settings
                 physicalMaterial.bumpMap.wrapS = THREE.RepeatWrapping;
                 physicalMaterial.bumpMap.wrapT = THREE.RepeatWrapping;
-                physicalMaterial.bumpMap.repeat.set(6, 6);  // Higher frequency for bump
+                physicalMaterial.bumpMap.repeat.set(8, 8);  // Higher frequency for bump
             } catch (error) {
                 console.error("Failed to create bump map:", error);
             }
@@ -2533,6 +2566,13 @@ function tryUpgradeToPhysicalMaterial(standardMaterial, color, materialSettings)
             shirtMaterial = physicalMaterial;
             if (shirtMesh) {
                 shirtMesh.material = shirtMaterial;
+
+                // Ensure proper material on all parts of the shirt (including inside)
+                shirtMesh.traverse(child => {
+                    if (child.isMesh) {
+                        child.material = shirtMaterial;
+                    }
+                });
             }
 
             console.log(`Advanced physical material applied with ${fabricType} properties`);
