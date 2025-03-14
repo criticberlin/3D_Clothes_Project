@@ -22,9 +22,13 @@ export function initFabricCanvas(width, height) {
     const container = document.querySelector('.fabric-canvas-wrapper');
 
     // Use consistent canvas size for all cases
-    const canvasWidth = 320;
-    const canvasHeight = 400;
+    // Determine canvas size
+    let canvasWidth = width || (container ? container.clientWidth : 500);
+    let canvasHeight = height || canvasWidth;
 
+    // Limit maximum size for performance
+    canvasWidth = Math.min(canvasWidth, 320);
+    canvasHeight = Math.min(canvasHeight, 400);
     // Create canvas instance
     canvas = new fabric.Canvas('fabric-canvas', {
         preserveObjectStacking: true,
@@ -875,8 +879,8 @@ export function openImageInEditor(imageData, callback) {
     const tempImg = new Image();
     tempImg.onload = function () {
         // Use consistent canvas size
-        const canvasWidth = 500;
-        const canvasHeight = 500;
+        const canvasWidth = 320;
+        const canvasHeight = 400;
 
         // Initialize the canvas with the fixed dimensions
         if (!canvas) {
