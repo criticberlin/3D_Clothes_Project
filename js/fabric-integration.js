@@ -1,4 +1,5 @@
 import { updateShirtTexture } from './scene.js';
+import { Performance, Logger, debounce } from './utils.js';
 
 // Global variables
 let canvas;
@@ -491,22 +492,6 @@ function updateObjectPropertiesUI(object) {
             fontSizeInput.value = object.fontSize;
         }
     }
-}
-
-/**
- * Utility function to delay execution
- * @param {Function} func - Function to debounce
- * @param {number} wait - Delay in milliseconds
- * @returns {Function} - Debounced function
- */
-function debounce(func, wait) {
-    let timeout;
-    return function () {
-        const context = this;
-        const args = arguments;
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(context, args), wait);
-    };
 }
 
 /**

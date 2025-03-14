@@ -1,6 +1,5 @@
 // Application state - maintain both original and new property names for compatibility
 export const state = {
-    intro: true,              // Original: whether we're in intro screen
     color: '#FFFFFF',         // Original: shirt color
     fullDecal: null,          // Removed ThreeJS texture
 

@@ -5,51 +5,72 @@
 
 import * as THREE from 'three';
 import { state, updateState } from './state.js';
-import { Logger, Performance } from './utils.js';
+import { Logger, Performance, debounce } from './utils.js';
+import { showToast } from './ui.js';
 
 // Configuration for different model types
 const modelConfig = {
-    tshirt: {
-        views: {
-            front: {
-                bounds: { x: -50, y: -20, width: 10, height: 5 },
-                defaultScale: 1,
-                uvRect: { u1: 0.25, v1: 0.25, u2: 0.75, v2: 0.75 },
-                name: "Front Chest"
+    "tshirt": {
+        "views": {
+            "front": {
+                "bounds": { "x": 0.15, "y": 0.4, "width": 0.50, "height": 0.50 },
+                "defaultScale": 1,
+                "uvRect": { "u1": 0.15, "v1": 0.5, "u2": 0.62, "v2": 0.95 },
+                "name": "Front",
+                "transformMatrix": {
+                    "scale": { "x": 1, "y": 1.0 },
+                    "rotation": 0,
+                    "offset": { "x": -0.07, "y": -0.10 }
+                }
             },
-            back: {
-                bounds: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
-                defaultScale: 1,
-                uvRect: { u1: 0.25, v1: 0.25, u2: 0.75, v2: 0.75 },
-                name: "Back"
+            "back": {
+                "bounds": { "x": 0.20, "y": 0.48, "width": 0.52, "height": 0.52 },
+                "defaultScale": 1,
+                "uvRect": { "u1": 0.18, "v1": 0.30, "u2": 0.68, "v2": 0.80 },
+                "name": "Back",
+                "transformMatrix": {
+                    "scale": { "x": 1.0, "y": 1.0 },
+                    "rotation": 0,
+                    "offset": { "x": -0.04, "y": -0.04 }
+                }
             },
-            left_arm: {
-                bounds: { x: 0.10, y: 0.30, width: 0.15, height: 0.25 },
-                defaultScale: 0.25,
-                uvRect: { u1: 0.10, v1: 0.30, u2: 0.25, v2: 0.55 },
-                name: "Left Sleeve"
+            "left_arm": {
+                "bounds": { "x": 0.14, "y": 0.33, "width": 0.17, "height": 0.26 },
+                "defaultScale": 0.27,
+                "uvRect": { "u1": 0.03, "v1": 0.21, "u2": 0.18, "v2": 0.46 },
+                "name": "Left Sleeve",
+                "transformMatrix": {
+                    "scale": { "x": 1.05, "y": 0.97 },
+                    "rotation": -6,
+                    "offset": { "x": 0.02, "y": -0.01 }
+                }
             },
-            right_arm: {
-                bounds: { x: 0.75, y: 0.30, width: 0.15, height: 0.25 },
-                defaultScale: 0.25,
-                uvRect: { u1: 0.75, v1: 0.30, u2: 0.90, v2: 0.55 },
-                name: "Right Sleeve"
+            "right_arm": {
+                "bounds": { "x": 0.74, "y": 0.33, "width": 0.17, "height": 0.26 },
+                "defaultScale": 0.27,
+                "uvRect": { "u1": 0.78, "v1": 0.21, "u2": 0.93, "v2": 0.46 },
+                "name": "Right Sleeve",
+                "transformMatrix": {
+                    "scale": { "x": 1.05, "y": 0.97 },
+                    "rotation": 6,
+                    "offset": { "x": -0.02, "y": -0.01 }
+                }
             }
         },
-        fabricTextureStrength: 0.8,
-        bumpMapStrength: 0.08,
-        materialSettings: {
-            roughness: 0.65,
-            metalness: 0.02,
-            clearcoat: 0.08,
-            clearcoatRoughness: 0.4,
-            transmission: 0.01,
-            thickness: 0.3,
-            envMapIntensity: 0.6,
-            anisotropy: 0.3,
-            normalScale: 0.7,
-            displacementScale: 0.02,
-            aoMapIntensity: 0.8
+        "fabricTextureStrength": 0.8,
+        "bumpMapStrength": 0.08,
+        "materialSettings": {
+            "roughness": 0.65,
+            "metalness": 0.02,
+            "clearcoat": 0.08,
+            "clearcoatRoughness": 0.4,
+            "transmission": 0.01,
+            "thickness": 0.3,
+            "envMapIntensity": 0.6,
+            "anisotropy": 0.3,
+            "normalScale": 0.7,
+            "displacementScale": 0.02,
+            "aoMapIntensity": 0.8
         }
     },
     hoodie: {
@@ -258,16 +279,6 @@ function calculateAO(x, y, width, height, canvas, strength = 0.5) {
 function calculateDisplacement(uvX, uvY) {
     // Simplified with fewer layers for better performance
     return fbm(uvX * 2, uvY * 2, 2, 2.0, 0.5) * 0.5;
-}
-
-// Add debounce function for performance optimization
-function debounce(func, wait) {
-    let timeout;
-    return function (...args) {
-        const context = this;
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(context, args), wait);
-    };
 }
 
 // Debounced version of updateCombinedTexture

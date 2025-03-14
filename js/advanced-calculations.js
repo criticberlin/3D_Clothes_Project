@@ -683,14 +683,7 @@ export function calculateSpectralDistribution(baseColor, fabricType = 'cotton') 
     };
 }
 
-/**
- * Helper function to calculate spectral response for a specific channel
- * 
- * @param {number} hue - The base color hue (0-1)
- * @param {Object} properties - Fabric properties
- * @param {number} channelHue - The hue position of this channel (0=red, 0.33=green, 0.66=blue)
- * @returns {number} Response value for this wavelength
- */
+// Private helper function
 function calculateChannelResponse(hue, properties, channelHue) {
     // Calculate distance to this channel's hue (in color wheel space)
     const hueDist = Math.min(

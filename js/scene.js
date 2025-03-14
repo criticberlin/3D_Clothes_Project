@@ -2162,19 +2162,6 @@ function resetCameraPosition() {
     }
 }
 
-// Add this function to create procedural textures after animate() function
-function createProceduralFabricTextures(material) {
-    // Create normal map
-    const normalMap = createNormalMap(512, 512);
-    material.normalMap = normalMap;
-
-    // Create roughness map
-    const roughnessMap = createRoughnessMap(512, 512);
-    material.roughnessMap = roughnessMap;
-
-    material.needsUpdate = true;
-}
-
 // New enhanced fabric textures function
 function createAdvancedFabricTextures(material) {
     // Generate realistic fabric textures
