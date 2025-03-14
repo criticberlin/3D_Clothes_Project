@@ -21,20 +21,17 @@ export function initFabricCanvas(width, height) {
     // Get the canvas container element
     const container = document.querySelector('.fabric-canvas-wrapper');
 
-    // Determine canvas size
-    let canvasWidth = width || (container ? container.clientWidth : 500);
-    let canvasHeight = height || canvasWidth;
-
-    // Limit maximum size for performance
-    canvasWidth = Math.min(canvasWidth, 800);
-    canvasHeight = Math.min(canvasHeight, 800);
+    // Use consistent canvas size for all cases
+    const canvasWidth = 320;
+    const canvasHeight = 400;
 
     // Create canvas instance
     canvas = new fabric.Canvas('fabric-canvas', {
         preserveObjectStacking: true,
         width: canvasWidth,
         height: canvasHeight,
-        selection: true
+        selection: true,
+        backgroundColor: 'transparent'  // Set transparent background
     });
 
     // Store canvas in window for global access
@@ -877,32 +874,11 @@ export function openImageInEditor(imageData, callback) {
     // Create temporary image to get dimensions
     const tempImg = new Image();
     tempImg.onload = function () {
-        // Calculate optimal canvas size based on image dimensions
-        const imgWidth = tempImg.width;
-        const imgHeight = tempImg.height;
+        // Use consistent canvas size
+        const canvasWidth = 500;
+        const canvasHeight = 500;
 
-        // Set a reasonable max size for the editor
-        const maxWidth = 650;
-        const maxHeight = 650;
-
-        // Calculate the optimal canvas size (maintain aspect ratio)
-        let canvasWidth, canvasHeight;
-
-        if (imgWidth > imgHeight) {
-            // Landscape image
-            canvasWidth = Math.min(imgWidth, maxWidth);
-            canvasHeight = Math.round((imgHeight / imgWidth) * canvasWidth);
-        } else {
-            // Portrait or square image
-            canvasHeight = Math.min(imgHeight, maxHeight);
-            canvasWidth = Math.round((imgWidth / imgHeight) * canvasHeight);
-        }
-
-        // Ensure minimum dimensions
-        canvasWidth = Math.max(canvasWidth, 400);
-        canvasHeight = Math.max(canvasHeight, 400);
-
-        // Initialize the canvas with the calculated dimensions
+        // Initialize the canvas with the fixed dimensions
         if (!canvas) {
             initFabricCanvas(canvasWidth, canvasHeight);
         } else {
@@ -932,68 +908,6 @@ export function openImageInEditor(imageData, callback) {
             const editorContainer = document.querySelector('.fabric-controls');
             if (editorContainer) {
                 editorContainer.style.display = 'block';
-            }
-        }
-
-        // Add an editing title to the fabric controls
-        const editorContainer = document.querySelector('.fabric-controls');
-        if (editorContainer) {
-            // Remove any existing title
-            const existingTitle = document.querySelector('.ai-edit-title');
-            if (existingTitle) {
-                existingTitle.remove();
-            }
-
-            // Add a prominent title for the AI editing mode
-            const aiEditTitle = document.createElement('div');
-            aiEditTitle.className = 'ai-edit-title';
-            aiEditTitle.innerHTML = `
-                <h2><i class="fas fa-magic"></i> Edit AI Generated Image</h2>
-                <p>Customize your AI design using the tools below.</p>
-            `;
-
-            // Insert at the beginning of the container
-            editorContainer.insertBefore(aiEditTitle, editorContainer.firstChild);
-
-            // Add styles for the title if not already in the document
-            if (!document.querySelector('style#ai-edit-styles')) {
-                const styleElement = document.createElement('style');
-                styleElement.id = 'ai-edit-styles';
-                styleElement.textContent = `
-                    .ai-edit-title {
-                        text-align: center;
-                        margin-bottom: 20px;
-                        padding-bottom: 15px;
-                        border-bottom: 2px solid var(--primary-color-light);
-                    }
-                    
-                    .ai-edit-title h2 {
-                        color: var(--primary-color);
-                        margin: 0 0 10px 0;
-                        font-size: 1.5rem;
-                    }
-                    
-                    .ai-edit-title p {
-                        color: var(--text-secondary);
-                        margin: 0;
-                        font-size: 0.95rem;
-                    }
-                    
-                    .ai-edit-actions {
-                        display: flex;
-                        justify-content: center;
-                        margin-top: 20px;
-                        padding-top: 20px;
-                        border-top: 2px solid var(--primary-color-light);
-                    }
-                `;
-                document.head.appendChild(styleElement);
-            }
-
-            // Remove any existing finish button
-            const existingFinishButton = document.getElementById('finish-ai-edit');
-            if (existingFinishButton) {
-                existingFinishButton.remove();
             }
         }
 

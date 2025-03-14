@@ -2581,7 +2581,7 @@ canvas {
 	border-radius: 0.5rem;
 	overflow: hidden;
 	box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-	background-color: white;
+	background-color: transparent;
 	margin-bottom: 0.5rem;
 }
 
@@ -2589,7 +2589,7 @@ canvas {
 	width: 100%;
 	height: auto;
 	border-radius: 0.25rem;
-	background-color: #ffffff;
+	background-color: transparent;
 	touch-action: none;
 }
 

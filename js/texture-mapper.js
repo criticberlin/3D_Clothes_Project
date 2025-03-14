@@ -1091,10 +1091,8 @@ function setupInteractions() {
 
         // Add visual feedback about the camera change
         const toastMessage = `Switched to ${view} view`;
-        if (typeof showToast === 'function') {
+        if (toastMessage) {
             showToast(toastMessage);
-        } else {
-            console.log(toastMessage);
         }
     });
 
@@ -1327,8 +1325,9 @@ export function setTexturePosition(position, view = null) {
     showBoundingBox(mappedView);
 
     // Provide feedback
-    if (typeof showToast === 'function') {
-        showToast(`Positioned image to ${position}`);
+    const toastMessage = `Positioned image to ${position}`;
+    if (toastMessage) {
+        showToast(toastMessage);
     }
 
     return true;

@@ -389,40 +389,6 @@ export function setupFilePicker() {
             showError('An unexpected error occurred. Please try again.');
         }
     }
-
-    function showError(message) {
-        if (!preview) return;
-
-        preview.innerHTML = `
-            <div class="error">
-                <i class="fas fa-exclamation-circle"></i>
-                <p>${message}</p>
-            </div>
-        `;
-    }
-
-    function showToast(message) {
-        // Remove any existing toasts
-        const existingToasts = document.querySelectorAll('.toast-message');
-        existingToasts.forEach(toast => toast.remove());
-
-        // Create toast element
-        const toast = document.createElement('div');
-        toast.className = 'toast-message';
-        toast.innerHTML = `<i class="fas fa-check-circle"></i> ${message}`;
-        document.body.appendChild(toast);
-
-        // Remove toast after a few seconds
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            setTimeout(() => toast.remove(), 500);
-        }, 3000);
-    }
-
-    function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
 }
 
 // Add texture info style
@@ -508,7 +474,7 @@ styleElement.textContent = `
     /* Fabric editor styling */
     .fabric-canvas-wrapper {
         width: 100%;
-        max-width: 650px;
+        max-width: 500px;
         margin: 0 auto 20px;
         border-radius: var(--border-radius-md);
         overflow: hidden;
@@ -525,7 +491,7 @@ styleElement.textContent = `
         background-color: var(--bg-secondary);
         border-radius: var(--border-radius-md);
         margin-bottom: 20px;
-        max-width: 650px;
+        max-width: 500px;
         margin-left: auto;
         margin-right: auto;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -829,66 +795,64 @@ export function setupAIPicker() {
                 // Add event listener to the edit button
                 const editBtn = preview.querySelector('.edit-ai-btn');
                 if (editBtn) {
-                    editBtn.addEventListener('click', () => {
-                        // Import the necessary function from fabric-integration.js
-                        import('./fabric-integration.js').then(module => {
+                    editBtn.addEventListener('click', async () => {
+                        try {
+                            // Import the necessary function from fabric-integration.js
+                            const { openImageInEditor } = await import('./fabric-integration.js');
+
                             // Open the image in the fabric canvas for editing
-                            if (typeof module.openImageInEditor === 'function') {
-                                module.openImageInEditor(imageData, editedImageData => {
-                                    // Update the preview with the edited image
-                                    const resultImg = preview.querySelector('.ai-result img');
-                                    if (resultImg) {
-                                        resultImg.src = editedImageData;
-                                    }
+                            openImageInEditor(imageData, editedImageData => {
+                                // Update the preview with the edited image
+                                const resultImg = preview.querySelector('.ai-result img');
+                                if (resultImg) {
+                                    resultImg.src = editedImageData;
+                                }
 
-                                    // Also update the image data for the apply and download buttons
-                                    if (applyBtn) {
-                                        applyBtn.onclick = () => {
-                                            updateShirtTexture(editedImageData, 'full');
-                                            updateState({ stylish: true });
-                                            showToast('Applied edited design to shirt');
-                                        };
-                                    }
+                                // Update the apply button to use the edited image
+                                const applyBtn = preview.querySelector('.apply-ai-btn');
+                                if (applyBtn) {
+                                    applyBtn.onclick = () => {
+                                        updateShirtTexture(editedImageData, 'full');
+                                        updateState({ stylish: true });
+                                        showToast('Applied edited design to shirt');
+                                    };
+                                }
 
-                                    if (downloadBtn) {
-                                        downloadBtn.onclick = () => {
-                                            const link = document.createElement('a');
-                                            link.href = editedImageData;
-                                            link.download = `ai-design-edited-${Date.now()}.png`;
-                                            document.body.appendChild(link);
-                                            link.click();
-                                            document.body.removeChild(link);
-                                            showToast('Downloading edited design');
-                                        };
-                                    }
-                                });
+                                // Update the download button to use the edited image
+                                const downloadBtn = preview.querySelector('.download-ai-btn');
+                                if (downloadBtn) {
+                                    downloadBtn.onclick = () => {
+                                        const link = document.createElement('a');
+                                        link.href = editedImageData;
+                                        link.download = `ai-design-edited-${Date.now()}.png`;
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                        showToast('Downloading edited design');
+                                    };
+                                }
+                            });
+                        } catch (error) {
+                            console.error('Error opening image editor:', error);
+                            showToast('Could not open editor. Please try again.');
+
+                            // Fallback: Switch to file picker tab which has the fabric editor
+                            const fileTab = document.querySelector('.tab-btn[data-tab="file"]');
+                            if (fileTab) {
+                                fileTab.click();
                             } else {
-                                // Fallback if openImageInEditor isn't available
-                                showToast('Editor functionality not available');
-                                console.error('openImageInEditor function not found in fabric-integration.js');
+                                // If file tab is removed, activate the editor without tab switching
+                                const fabricCanvas = document.querySelector('.fabric-canvas-wrapper');
+                                if (fabricCanvas) {
+                                    fabricCanvas.style.display = 'block';
+                                }
 
-                                // Switch to the file picker tab which has the fabric editor
-                                const fileTab = document.querySelector('.tab-btn[data-tab="file"]');
-                                if (fileTab) {
-                                    fileTab.click();
-                                } else {
-                                    // If file tab is removed, activate the editor without tab switching
-                                    // Show the fabric canvas and editor controls directly
-                                    const fabricCanvas = document.querySelector('.fabric-canvas-wrapper');
-                                    if (fabricCanvas) {
-                                        fabricCanvas.style.display = 'block';
-                                    }
-
-                                    const fabricControls = document.querySelector('.fabric-controls');
-                                    if (fabricControls) {
-                                        fabricControls.style.display = 'block';
-                                    }
+                                const fabricControls = document.querySelector('.fabric-controls');
+                                if (fabricControls) {
+                                    fabricControls.style.display = 'block';
                                 }
                             }
-                        }).catch(error => {
-                            console.error('Error importing fabric-integration.js:', error);
-                            showToast('Could not open editor');
-                        });
+                        }
                     });
                 }
 
@@ -921,25 +885,6 @@ export function setupAIPicker() {
             }
         });
     });
-
-    // Helper functions for UI feedback
-    function showToast(message) {
-        const toast = document.createElement('div');
-        toast.className = 'toast';
-        toast.textContent = message;
-        document.body.appendChild(toast);
-
-        setTimeout(() => {
-            toast.classList.add('show');
-        }, 10);
-
-        setTimeout(() => {
-            toast.classList.remove('show');
-            setTimeout(() => {
-                document.body.removeChild(toast);
-            }, 300);
-        }, 3000);
-    }
 }
 
 /**
@@ -1039,6 +984,36 @@ export function triggerFileUploadForView(view) {
         // Trigger the file input
         fileInput.click();
     }
+}
+
+// Export UI utility functions
+export function showError(message) {
+    if (!preview) return;
+
+    preview.innerHTML = `
+        <div class="error">
+            <i class="fas fa-exclamation-circle"></i>
+            <p>${message}</p>
+        </div>
+    `;
+}
+
+export function showToast(message) {
+    // Remove any existing toasts
+    const existingToasts = document.querySelectorAll('.toast-message');
+    existingToasts.forEach(toast => toast.remove());
+
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = 'toast-message';
+    toast.innerHTML = `<i class="fas fa-check-circle"></i> ${message}`;
+    document.body.appendChild(toast);
+
+    // Remove toast after a few seconds
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 500);
+    }, 3000);
 }
 
 // Initialize everything when the DOM is ready

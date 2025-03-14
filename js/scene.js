@@ -1948,14 +1948,14 @@ export function updateThemeBackground(isDarkMode) {
     if (fabricCanvas) {
         const fabricInstance = window.fabricCanvas; // Get the Fabric.js instance if available
         if (fabricInstance) {
-            // If we have access to the Fabric.js instance, update its background
+            // Set transparent background
             fabricInstance.setBackgroundColor(
-                '#ffffff', // Always use white background regardless of theme
+                'transparent',
                 fabricInstance.renderAll.bind(fabricInstance)
             );
         } else {
             // Otherwise update the canvas element directly
-            fabricCanvas.style.backgroundColor = '#ffffff'; // Always use white background
+            fabricCanvas.style.backgroundColor = 'transparent';
         }
     }
 
@@ -2642,42 +2642,42 @@ function zoomCamera(direction) {
 
     // Calculate the zoom factor based on direction
     const zoomFactor = direction === 'in' ? 0.8 : 1.25;
-    
+
     // Get the current camera position
     const currentPosition = camera.position.clone();
-    
+
     // Calculate target position (closer or farther in the same direction)
     const targetPosition = currentPosition.clone().multiplyScalar(zoomFactor);
-    
+
     // Store target for animation
     targetCameraPosition.copy(targetPosition);
-    
+
     // Setup animation parameters
     const startTime = performance.now();
     const duration = 600; // animation duration in milliseconds
     const startPosition = currentPosition.clone();
-    
+
     // Animate the zoom
     function animateZoom() {
         const elapsed = performance.now() - startTime;
         const progress = Math.min(elapsed / duration, 1);
-        
+
         // Use easing function for smooth animation
         const eased = easeOutCubic(progress);
-        
+
         // Interpolate between start and target positions
         const newPosition = startPosition.clone().lerp(targetPosition, eased);
         camera.position.copy(newPosition);
-        
+
         // Update camera and controls
         camera.updateProjectionMatrix();
         if (controls) controls.update();
-        
+
         // Render the scene
         if (renderer && scene) {
             renderer.render(scene, camera);
         }
-        
+
         // Continue animation if not finished
         if (progress < 1) {
             requestAnimationFrame(animateZoom);
@@ -2685,7 +2685,7 @@ function zoomCamera(direction) {
             console.log('Zoom animation complete');
         }
     }
-    
+
     // Start the animation
     animateZoom();
 }
