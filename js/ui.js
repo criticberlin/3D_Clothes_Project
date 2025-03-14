@@ -704,7 +704,7 @@ export function setupAIPicker() {
             serverIsOnline = await checkAIServerStatus();
 
             if (serverIsOnline) {
-                preview.innerHTML = '<p>Enter a prompt below to generate a design</p>';
+                preview.innerHTML = '<p>The design will be displayed here</p>';
                 generateBtn.disabled = false;
             } else {
                 preview.innerHTML = `

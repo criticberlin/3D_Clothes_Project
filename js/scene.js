@@ -41,6 +41,14 @@ let rotationEnabled = false;
 // Set a GLOBAL rotation variable on the window object to ensure it's accessible everywhere
 window.GLOBAL_ROTATION_ENABLED = false;
 
+// Add storage for original view positions at the top of the file
+const originalViewPositions = {
+    front: null,
+    back: null,
+    left: null,
+    right: null
+};
+
 // ============================================================================
 // Model Configuration
 // ============================================================================
@@ -158,53 +166,65 @@ export function setupScene() {
             };
 
             // Add direct toggle rotation function to window
-            window.directToggleRotation = function () {
-                console.log('=== ROTATION BUTTON CLICKED ===');
+            window.TOGGLE_ROTATION = function () {
+                // Toggle the global rotation flag
+                window.GLOBAL_ROTATION_ENABLED = !window.GLOBAL_ROTATION_ENABLED;
 
-                // Toggle the rotation state
-                rotationEnabled = !rotationEnabled;
-                console.log('Rotation is now:', rotationEnabled ? 'ENABLED' : 'DISABLED');
+                console.log("GLOBAL ROTATION TOGGLED TO:", window.GLOBAL_ROTATION_ENABLED ? "ON" : "OFF");
 
-                // Update the manualRotationActive flag to match
-                manualRotationActive = rotationEnabled;
-                isAutoRotating = rotationEnabled;
-
-                // Update button visual state
+                // Update the button appearance
                 const rotateButton = document.getElementById('rotate-view');
                 if (rotateButton) {
-                    if (rotationEnabled) {
+                    if (window.GLOBAL_ROTATION_ENABLED) {
                         rotateButton.classList.add('active');
                         rotateButton.title = 'Stop Rotation';
 
-                        // Change icon to stop when rotating
+                        // Change icon to stop
                         const icon = rotateButton.querySelector('i');
                         if (icon) {
                             icon.classList.remove('fa-redo');
                             icon.classList.add('fa-stop');
                         }
 
-                        // Set the appropriate rotation axis
+                        // Disable view buttons when rotation is active
+                        document.querySelectorAll('.camera-view-btn').forEach(btn => {
+                            btn.disabled = true;
+                            btn.style.opacity = '0.5';
+                            btn.style.cursor = 'not-allowed';
+                        });
+
+                        // Set rotation axis
                         updateRotationAxisForCurrentView();
                     } else {
                         rotateButton.classList.remove('active');
                         rotateButton.title = 'Start Rotation';
 
-                        // Change icon back to rotate when stopped
+                        // Change icon back to rotate
                         const icon = rotateButton.querySelector('i');
                         if (icon) {
                             icon.classList.remove('fa-stop');
                             icon.classList.add('fa-redo');
                         }
+
+                        // Re-enable view buttons when rotation is stopped
+                        document.querySelectorAll('.camera-view-btn').forEach(btn => {
+                            btn.disabled = false;
+                            btn.style.opacity = '1';
+                            btn.style.cursor = 'pointer';
+                        });
+
+                        // When stopping rotation, return to the last selected view
+                        const currentView = state.cameraView || 'front';
+                        changeCameraView(currentView);
                     }
                 }
 
-                // Make sure controls auto-rotation is off
-                if (controls) {
-                    controls.autoRotate = false;
-                    controls.update();
-                }
+                // Also update the other flags for consistency
+                rotationEnabled = window.GLOBAL_ROTATION_ENABLED;
+                manualRotationActive = window.GLOBAL_ROTATION_ENABLED;
+                isAutoRotating = window.GLOBAL_ROTATION_ENABLED;
 
-                // Force a render to show immediate feedback
+                // Force a render for immediate feedback
                 if (renderer && scene && camera) {
                     renderer.render(scene, camera);
                 }
@@ -723,11 +743,6 @@ function setupEventListeners() {
             console.log('Zoom out via keyboard');
             zoomCamera('out');
         }
-        // 'R' key to toggle rotation
-        else if (event.key === 'r' || event.key === 'R') {
-            console.log('Toggle rotation via keyboard');
-            window.TOGGLE_ROTATION(); // Use our global function
-        }
     });
 
     // Add click event listener for the canvas
@@ -848,6 +863,25 @@ function setupEventListeners() {
             }
             controls.update();
         }
+    });
+
+    // Camera view buttons
+    const viewButtons = document.querySelectorAll('.camera-view-btn');
+    viewButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            // Only handle click if rotation is not active
+            if (!window.GLOBAL_ROTATION_ENABLED) {
+                // Update active status
+                viewButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+
+                // Get the view and dispatch event
+                const view = button.dataset.view;
+                if (view) {
+                    window.dispatchEvent(new CustomEvent('camera-view-change', { detail: { view } }));
+                }
+            }
+        });
     });
 }
 
@@ -1158,6 +1192,17 @@ function processLoadedModel(gltf, settings, color) {
     }
 
     console.log('Model processed successfully with enhanced material');
+
+    // Store original camera positions for all views
+    if (settings && settings.cameraPositions) {
+        Object.keys(settings.cameraPositions).forEach(view => {
+            originalViewPositions[view] = {
+                position: settings.cameraPositions[view].position.clone(),
+                target: settings.cameraPositions[view].target ? settings.cameraPositions[view].target.clone() : new THREE.Vector3(0, 0, 0),
+                fov: settings.cameraPositions[view].fov
+            };
+        });
+    }
 }
 
 // Apply camera settings for the current model type
@@ -1493,8 +1538,12 @@ export function changeCameraView(view) {
         targetCameraPosition.copy(cameraSettings.position);
         const targetControlsTarget = cameraSettings.target || new THREE.Vector3(0, 0, 0);
 
+        // Reset group rotation when changing views
+        if (group) {
+            group.rotation.set(0, 0, 0);
+        }
+
         // Calculate a smooth path based on the current and target view
-        // We'll use this to create a nice arc during transition
         const animationDuration = 1.0; // seconds
         const startTime = Date.now();
 
@@ -1502,13 +1551,6 @@ export function changeCameraView(view) {
         isViewTransitioning = true;
         viewTransitionEndTime = startTime + (animationDuration * 1000);
 
-        // Store previous auto-rotate state and disable during transition
-        const wasAutoRotating = isAutoRotating;
-        if (isAutoRotating) {
-            isAutoRotating = false;
-        }
-
-        // Create animation function
         function animateViewTransition() {
             const elapsedTime = (Date.now() - startTime) / 1000;
             const progress = Math.min(elapsedTime / animationDuration, 1.0);
@@ -1520,7 +1562,7 @@ export function changeCameraView(view) {
             // Animate position with a slight arc for more visual interest
             const arcHeight = startPosition.distanceTo(targetCameraPosition) * 0.2;
             const arcOffset = new THREE.Vector3(0, arcHeight, 0).multiplyScalar(
-                Math.sin(easedProgress * Math.PI) // Peak at middle of animation
+                Math.sin(easedProgress * Math.PI)
             );
 
             // Apply the interpolated position with arc
@@ -1553,32 +1595,26 @@ export function changeCameraView(view) {
                 requestAnimationFrame(animateViewTransition);
             } else {
                 // Animation complete
-                // Clear transition state
                 isViewTransitioning = false;
-
-                // Update last rotation view to match the new view
                 lastRotationView = view;
 
-                // Restore auto-rotation if it was enabled
-                if (wasAutoRotating) {
-                    isAutoRotating = true;
+                // Update state to reflect current view
+                updateState({ cameraView: view });
 
-                    // Apply correct rotation for the new view
-                    adjustRotationForView(view);
-                }
+                // Update the active camera view button in the UI
+                document.querySelectorAll('.camera-view-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.dataset.view === view) {
+                        btn.classList.add('active');
+                    }
+                });
 
-                // Log completion
                 console.log(`Camera view transition to ${view} complete`);
             }
         }
 
         // Start the animation
         animateViewTransition();
-
-        // Log for debugging
-        console.log(`Starting camera view transition to ${view}:`, cameraSettings);
-    } else {
-        console.warn(`Camera view ${view} not found for model ${currentModelType}`);
     }
 }
 
@@ -1652,14 +1688,17 @@ function setupCameraControls() {
     const viewButtons = document.querySelectorAll('.camera-view-btn');
     viewButtons.forEach(button => {
         button.addEventListener('click', () => {
-            // Update active status
-            viewButtons.forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
+            // Only handle click if rotation is not active
+            if (!window.GLOBAL_ROTATION_ENABLED) {
+                // Update active status
+                viewButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
 
-            // Get the view and dispatch event
-            const view = button.dataset.view;
-            if (view) {
-                window.dispatchEvent(new CustomEvent('camera-view-change', { detail: { view } }));
+                // Get the view and dispatch event
+                const view = button.dataset.view;
+                if (view) {
+                    window.dispatchEvent(new CustomEvent('camera-view-change', { detail: { view } }));
+                }
             }
         });
     });
@@ -1810,7 +1849,7 @@ function animate(currentTime) {
     Performance.start('render-frame');
 
     // Smooth camera position movements
-    if (camera.position.distanceTo(targetCameraPosition) > 0.01) {
+    if (camera.position.distanceTo(targetCameraPosition) > 0.01 && !window.GLOBAL_ROTATION_ENABLED) {
         camera.position.lerp(targetCameraPosition, 0.1);
     }
 
@@ -2066,10 +2105,14 @@ function resetCameraPosition() {
     const settings = modelSettings[currentModelType] || modelSettings.tshirt;
     if (!settings || !settings.cameraPositions) return;
 
-    // Always reset to front view
     const cameraPosition = settings.cameraPositions['front'];
 
     if (cameraPosition) {
+        // Reset group rotation
+        if (group) {
+            group.rotation.set(0, 0, 0);
+        }
+
         // Cancel any ongoing view transitions
         isViewTransitioning = false;
 
@@ -2079,17 +2122,9 @@ function resetCameraPosition() {
         // Reset controls target immediately for responsiveness
         controls.target.copy(cameraPosition.target || new THREE.Vector3(0, 0, 0));
 
-        // Update camera FOV immediately
-        if (cameraPosition.fov && camera.fov !== cameraPosition.fov) {
-            camera.fov = cameraPosition.fov;
-            camera.updateProjectionMatrix();
-        }
-
-        // Reset camera position with a fast transition
-        // We'll use a shorter, more direct animation for reset
         const startPosition = camera.position.clone();
         const startTime = Date.now();
-        const resetDuration = 0.4; // Faster than view transitions
+        const resetDuration = 0.4;
 
         function animateReset() {
             const elapsedTime = (Date.now() - startTime) / 1000;
@@ -2114,30 +2149,23 @@ function resetCameraPosition() {
                 requestAnimationFrame(animateReset);
             } else {
                 console.log('Camera reset complete');
-
-                // Update the last rotation view
                 lastRotationView = 'front';
 
-                // If auto-rotating, apply front view rotation settings
-                if (isAutoRotating) {
-                    adjustRotationForView('front');
-                }
+                // Update the active camera view button in the UI
+                document.querySelectorAll('.camera-view-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.dataset.view === 'front') {
+                        btn.classList.add('active');
+                    }
+                });
+
+                // Update state to reflect front view
+                updateState({ cameraView: 'front' });
             }
         }
 
         // Start the reset animation
         animateReset();
-
-        // Update the active camera view button in the UI
-        document.querySelectorAll('.camera-view-btn').forEach(btn => {
-            btn.classList.remove('active');
-            if (btn.dataset.view === 'front') {
-                btn.classList.add('active');
-            }
-        });
-
-        // Update state to reflect front view
-        updateState({ cameraView: 'front' });
     }
 }
 
@@ -2869,6 +2897,13 @@ window.TOGGLE_ROTATION = function () {
                 icon.classList.add('fa-stop');
             }
 
+            // Disable view buttons when rotation is active
+            document.querySelectorAll('.camera-view-btn').forEach(btn => {
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+                btn.style.cursor = 'not-allowed';
+            });
+
             // Set rotation axis
             updateRotationAxisForCurrentView();
         } else {
@@ -2881,6 +2916,17 @@ window.TOGGLE_ROTATION = function () {
                 icon.classList.remove('fa-stop');
                 icon.classList.add('fa-redo');
             }
+
+            // Re-enable view buttons when rotation is stopped
+            document.querySelectorAll('.camera-view-btn').forEach(btn => {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+            });
+
+            // When stopping rotation, return to the last selected view
+            const currentView = state.cameraView || 'front';
+            changeCameraView(currentView);
         }
     }
 
