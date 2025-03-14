@@ -696,6 +696,13 @@ function setupControls() {
     controls.autoRotate = false;
     controls.autoRotateSpeed = 2.5;
 
+    // Configure mouse buttons - disable right mouse button panning
+    controls.mouseButtons = {
+        LEFT: THREE.MOUSE.ROTATE,
+        MIDDLE: THREE.MOUSE.DOLLY,
+        RIGHT: null // Disable right mouse button functionality
+    };
+
     // Enable touch controls for mobile devices
     controls.touches = {
         ONE: THREE.TOUCH.ROTATE,
@@ -2606,53 +2613,59 @@ function zoomCamera(direction) {
 
     console.log('Direct camera zoom:', direction);
 
-    // Update the cumulative zoom factor (smaller steps for more precision)
-    if (direction === 'in') {
-        cumulativeZoomFactor *= 0.9; // Zoom in (factor gets smaller)
-    } else {
-        cumulativeZoomFactor *= 1.1; // Zoom out (factor gets larger)
-    }
-
-    // Clamp the zoom factor to reasonable limits
-    cumulativeZoomFactor = Math.max(0.3, Math.min(cumulativeZoomFactor, 2.0));
-
-    console.log('Cumulative zoom factor:', cumulativeZoomFactor);
-
-    // Get the current view settings for the model type
-    const modelSettings = getModelSettingsForCurrentView();
-    if (!modelSettings) return;
-
-    // Get the base camera position for this view
-    const view = state.cameraView || 'front';
-    const viewSettings = modelSettings.cameraPositions[view];
-
-    if (viewSettings) {
-        // Calculate new camera position based on the base position and the zoom factor
-        const basePosition = viewSettings.position.clone();
-        const zoomDirection = basePosition.clone().normalize();
-
-        // Apply the cumulative zoom factor to the base position
-        const zoomedPosition = zoomDirection.multiplyScalar(basePosition.length() * cumulativeZoomFactor);
-
-        // Update target camera position (this will be applied smoothly in the animation loop)
-        targetCameraPosition.copy(zoomedPosition);
-
-        // Force immediate update for responsive feedback
-        camera.position.copy(zoomedPosition);
+    // Calculate the zoom factor based on direction
+    const zoomFactor = direction === 'in' ? 0.8 : 1.25;
+    
+    // Get the current camera position
+    const currentPosition = camera.position.clone();
+    
+    // Calculate target position (closer or farther in the same direction)
+    const targetPosition = currentPosition.clone().multiplyScalar(zoomFactor);
+    
+    // Store target for animation
+    targetCameraPosition.copy(targetPosition);
+    
+    // Setup animation parameters
+    const startTime = performance.now();
+    const duration = 600; // animation duration in milliseconds
+    const startPosition = currentPosition.clone();
+    
+    // Animate the zoom
+    function animateZoom() {
+        const elapsed = performance.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Use easing function for smooth animation
+        const eased = easeOutCubic(progress);
+        
+        // Interpolate between start and target positions
+        const newPosition = startPosition.clone().lerp(targetPosition, eased);
+        camera.position.copy(newPosition);
+        
+        // Update camera and controls
         camera.updateProjectionMatrix();
-
-        // Update controls if available
-        if (controls) {
-            controls.update();
-        }
-
-        // Force a render
+        if (controls) controls.update();
+        
+        // Render the scene
         if (renderer && scene) {
             renderer.render(scene, camera);
         }
-
-        console.log('Camera zoomed to position:', zoomedPosition.toArray());
+        
+        // Continue animation if not finished
+        if (progress < 1) {
+            requestAnimationFrame(animateZoom);
+        } else {
+            console.log('Zoom animation complete');
+        }
     }
+    
+    // Start the animation
+    animateZoom();
+}
+
+// Easing function for smooth animation
+function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
 }
 
 // Helper function to get the current model settings
