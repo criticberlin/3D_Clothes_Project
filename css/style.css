@@ -357,12 +357,14 @@ body {
 	width: 360px;
 	height: 100%;
 	background-color: var(--bg-secondary);
-	box-shadow: var(--shadow-md);
+	box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+	border-right: 1px solid var(--border-color);
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
 	z-index: 20;
 	transition: transform 0.3s ease;
+	order: -1;
 }
 
 .panel-header {
@@ -911,11 +913,11 @@ body {
 	.customization-panel {
 		position: fixed;
 		top: 0;
-		right: 0;
+		left: 0;
 		width: 85%;
 		max-width: 360px;
 		height: 100%;
-		transform: translateX(100%);
+		transform: translateX(-100%);
 		z-index: 1000;
 	}
 
@@ -985,19 +987,19 @@ body {
 
 /* Animations */
 @keyframes slideIn {
-	from {
-		transform: translateX(100%);
+	0% {
+		transform: translateX(-100%);
 	}
-	to {
+	100% {
 		transform: translateX(0);
 	}
 }
 
 @keyframes slideOut {
-	from {
+	0% {
 		transform: translateX(0);
 	}
-	to {
-		transform: translateX(100%);
+	100% {
+		transform: translateX(-100%);
 	}
 }

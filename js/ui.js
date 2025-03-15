@@ -940,7 +940,7 @@ export function setupMobileUI() {
     const mobileActionBar = document.querySelector('.mobile-action-bar');
     const mobileActionButtons = document.querySelectorAll('.mobile-action-bar .action-btn');
 
-    // Toggle panel on menu button click
+    // Toggle panel on menu button click - this works with left panel too
     if (menuToggle) {
         menuToggle.addEventListener('click', function () {
             console.log('Menu toggle clicked');
