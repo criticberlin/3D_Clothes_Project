@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+﻿import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { state, updateState } from './state.js';
@@ -10,6 +10,7 @@ import {
     enhanceFabricLightInteraction,
     calculateFabricColor
 } from './advanced-calculations.js';
+import { init3DEditor } from './3d-editor.js';
 
 // ============================================================================
 // Global Variables
@@ -48,6 +49,130 @@ const originalViewPositions = {
     left: null,
     right: null
 };
+
+// Add a new variable to track editor mode
+let editorMode = false;
+
+// Initialize with reduced quality for better performance
+let textureQuality = 'medium'; // 'high', 'medium', or 'low'
+
+// Function to reduce quality settings when performance issues are detected
+function reduceQualityForPerformance() {
+    // Check if we already detected performance issues during this session
+    if (sessionStorage.getItem('reducedQuality') === 'true') {
+        textureQuality = 'low';
+        return true;
+    }
+
+    // Initialize performance tracking if not already set
+    if (!window.performanceMetrics) {
+        window.performanceMetrics = {
+            frameRates: [],
+            slowFrames: 0,
+            lastReduction: Date.now()
+        };
+    }
+
+    // Add current frame rate to the tracking array
+    const now = Date.now();
+    const metrics = window.performanceMetrics;
+
+    // Only check every 5 seconds to avoid premature quality reduction
+    if (now - metrics.lastReduction < 5000) {
+        return false;
+    }
+
+    // Check for performance issues
+    const hasMemoryIssue = window.performance && window.performance.memory &&
+        window.performance.memory.jsHeapSizeLimit > 0 &&
+        window.performance.memory.usedJSHeapSize / window.performance.memory.jsHeapSizeLimit > 0.7;
+
+    const hasFrameRateIssue = metrics.slowFrames > 50; // If we've had 50+ slow frames, reduce quality
+
+    // Reset tracking after checking
+    metrics.slowFrames = 0;
+    metrics.lastReduction = now;
+
+    // If we detect issues, reduce quality
+    if (hasMemoryIssue || hasFrameRateIssue) {
+        textureQuality = 'low';
+        console.warn('Performance issues detected - reducing quality settings');
+        console.warn(`Memory issue: ${hasMemoryIssue}, Frame rate issue: ${hasFrameRateIssue}`);
+        sessionStorage.setItem('reducedQuality', 'true');
+
+        // Apply reduced quality settings
+        if (renderer) {
+            renderer.setPixelRatio(window.devicePixelRatio > 1 ? 1 : window.devicePixelRatio);
+            renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+
+            // Turn off some expensive features
+            renderer.shadowMap.enabled = false;
+        }
+
+        // Reduce target FPS further
+        targetFPS = 20;
+
+        // Force garbage collection if available
+        if (window.gc) {
+            try {
+                window.gc();
+            } catch (e) {
+                // Garbage collection not available
+            }
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+// Call this function periodically to check performance
+let performanceCheckCounter = 0;
+function checkPerformance() {
+    performanceCheckCounter++;
+
+    // Only check every 100 frames to reduce overhead
+    if (performanceCheckCounter % 100 === 0) {
+        // Check if we need to reduce quality
+        const qualityReduced = reduceQualityForPerformance();
+
+        // If we've already reduced quality, check if we need to optimize textures
+        if (qualityReduced && textureState && textureState.baseTexture) {
+            // Reduce texture resolution for better performance
+            optimizeTextures();
+        }
+    }
+}
+
+// Function to optimize textures for better performance
+function optimizeTextures() {
+    // Only run this once per session
+    if (sessionStorage.getItem('texturesOptimized') === 'true') {
+        return;
+    }
+
+    console.log('Optimizing textures for better performance');
+
+    // Mark as optimized to avoid repeated optimization
+    sessionStorage.setItem('texturesOptimized', 'true');
+
+    // Reduce anisotropy level
+    if (textureState && textureState.baseTexture) {
+        textureState.baseTexture.anisotropy = 1; // Minimum anisotropy
+        textureState.baseTexture.needsUpdate = true;
+    }
+
+    // Reduce mipmapping quality
+    if (renderer) {
+        renderer.setPixelRatio(Math.min(1.0, window.devicePixelRatio));
+    }
+
+    // Force a texture update with lower quality
+    if (typeof updateCombinedTexture === 'function') {
+        updateCombinedTexture();
+    }
+}
 
 // ============================================================================
 // Model Configuration
@@ -395,6 +520,19 @@ function initializeScene() {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+    // Apply saved theme preference if available
+    if (window.currentThemeIsDark !== undefined) {
+        const isDarkMode = window.currentThemeIsDark;
+        if (isDarkMode) {
+            renderer.setClearColor(0x111827); // Match CSS dark bg
+        } else {
+            renderer.setClearColor(0xf8fafc); // Match CSS light bg
+        }
+    } else {
+        // Default to dark theme
+        renderer.setClearColor(0x111827);
+    }
+
     // Fix deprecated properties warnings by using recommended new properties
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -717,7 +855,8 @@ function setupControls() {
     });
 }
 
-function setupEventListeners() {
+// Modify the function definition to export it
+export function setupEventListeners() {
     window.addEventListener('resize', onWindowResize);
     document.addEventListener('pointermove', onPointerMove);
 
@@ -847,9 +986,21 @@ function setupEventListeners() {
         event.preventDefault();
         if (controls) {
             if (event.deltaY < 0) {
-                controls.dollyIn(1.1);
+                // Use proper zoom in method for newer versions of OrbitControls
+                if (typeof controls.zoomIn === 'function') {
+                    controls.zoomIn(1.1);
+                } else {
+                    // Fallback to manually adjusting zoom
+                    zoomCamera('in');
+                }
             } else {
-                controls.dollyOut(1.1);
+                // Use proper zoom out method for newer versions of OrbitControls
+                if (typeof controls.zoomOut === 'function') {
+                    controls.zoomOut(1.1);
+                } else {
+                    // Fallback to manually adjusting zoom
+                    zoomCamera('out');
+                }
             }
             controls.update();
         }
@@ -872,6 +1023,19 @@ function setupEventListeners() {
                 }
             }
         });
+    });
+
+    // Add editor mode handling for event propagation
+    renderer.domElement.addEventListener('mousedown', function (event) {
+        // Only allow orbit controls when not in editor mode
+        if (editorMode) {
+            // Let the 3D editor handle the events
+            // No need to call preventDefault as the editor will manage interactions
+            return;
+        }
+
+        // Original event handling code for non-editor mode
+        // ... existing code ...
     });
 }
 
@@ -1138,10 +1302,17 @@ function processLoadedModel(gltf, settings, color) {
         // Clone and store the original material
         shirtMaterial = shirtMesh.material.clone();
 
-        // Get color from state or use default white
-        const currentColor = state.color || '#FFFFFF';
-        shirtMaterial.color.copy(new THREE.Color(currentColor));
-        console.log(`Applied color to shirt material: ${currentColor}`);
+        // Check if there's a pending color from earlier updateShirtColor calls
+        if (window.pendingShirtColor) {
+            console.log(`Applying pending shirt color: ${window.pendingShirtColor}`);
+            const pendingColor = new THREE.Color(window.pendingShirtColor);
+            shirtMaterial.color.copy(pendingColor);
+        } else {
+            // Otherwise, get color from state or use default white
+            const currentColor = state.color || '#FFFFFF';
+            shirtMaterial.color.copy(new THREE.Color(currentColor));
+            console.log(`Applied color to shirt material: ${currentColor}`);
+        }
 
         // Set material properties from settings if available
         if (settings.materialSettings) {
@@ -1200,6 +1371,13 @@ function processLoadedModel(gltf, settings, color) {
                 fov: settings.cameraPositions[view].fov
             };
         });
+    }
+
+    // Initialize the 3D editor with the shirt mesh
+    // Add after model is loaded and all mesh processing is complete
+    if (shirtMesh) {
+        init3DEditor(scene, camera, renderer, shirtMesh);
+        Logger.log('3D editor initialized with shirt mesh');
     }
 }
 
@@ -1265,35 +1443,35 @@ function createDecalFromTexture(texture, type) {
  * @param {string} color - Hex color code (e.g. '#FF0000')
  */
 export function updateShirtColor(color) {
+    console.log(`Attempting to update shirt color: ${color}`);
+
+    // Store the color for later use
+    window.pendingShirtColor = color;
+
     if (!shirtMaterial) {
-        console.warn('Cannot update shirt color: shirtMaterial not found');
+        console.log('Shirt material not ready yet, color will be applied when available');
         return;
     }
 
-    console.log(`Updating shirt color: ${color}`);
+    // Apply the color to the material
+    try {
+        const threeColor = new THREE.Color(color);
+        shirtMaterial.color.copy(threeColor);
 
-    // Create a Three.js color object from the hex string
-    const newColor = new THREE.Color(color);
+        // If we have advanced fabric properties, update them for the new color
+        if (typeof calculateFabricColor === 'function') {
+            const fabricType = state.fabricType || 'cotton';
+            const fabricColor = calculateFabricColor(color, fabricType);
 
-    // Apply the color directly to the shirt material
-    shirtMaterial.color.copy(newColor);
-
-    // Ensure the material updates visually
-    shirtMaterial.needsUpdate = true;
-
-    // Force a render update to ensure changes are visible
-    if (renderer && scene && camera) {
-        renderer.render(scene, camera);
-    }
-
-    // Make sure the color is visible if there's a fullDecal
-    if (fullDecal && fullDecal.visible) {
-        fullDecal.visible = false;
-
-        // Force another render
-        if (renderer && scene && camera) {
-            renderer.render(scene, camera);
+            if (fabricColor && fabricColor.emissive) {
+                shirtMaterial.emissive.copy(fabricColor.emissive);
+            }
         }
+
+        shirtMaterial.needsUpdate = true;
+        console.log(`Shirt color updated to: ${color}`);
+    } catch (error) {
+        console.error('Error updating shirt color:', error);
     }
 }
 
@@ -1828,12 +2006,17 @@ function ensureCameraControlsExist() {
 
 // Variables for FPS control
 let lastFrameTime = 0;
-const targetFPS = 60;
+const targetFPS = 30; // Reduced from 60 to 30 for better performance
 const frameInterval = 1000 / targetFPS;
+let animationFrameId = null; // Track the animation frame for possible cancellation
+let isRendering = true; // Flag to control rendering
 
-// Animation loop
+// Animation loop with optimizations
 function animate(currentTime) {
-    requestAnimationFrame(animate);
+    // Only request animation frame if rendering is active
+    if (isRendering) {
+        animationFrameId = requestAnimationFrame(animate);
+    }
 
     // Limit frame rate for better performance
     const elapsed = currentTime - lastFrameTime;
@@ -1843,27 +2026,85 @@ function animate(currentTime) {
     const actualFPS = 1000 / elapsed;
     lastFrameTime = currentTime - (elapsed % frameInterval);
 
+    // Track performance metrics
+    if (window.performanceMetrics) {
+        // Track slow frames (frames taking longer than 50ms, which is 20fps)
+        if (elapsed > 50) {
+            window.performanceMetrics.slowFrames++;
+        }
+
+        // Keep a rolling average of recent frame rates
+        window.performanceMetrics.frameRates.push(actualFPS);
+        if (window.performanceMetrics.frameRates.length > 60) {
+            window.performanceMetrics.frameRates.shift();
+        }
+    }
+
+    // Increment performance check counter
+    performanceCheckCounter++;
+
+    // Check for performance issues periodically
+    checkPerformance();
+
     // Start performance measurement
     Performance.start('render-frame');
 
-    // Only update camera position if auto-rotation is enabled
-    if (window.GLOBAL_ROTATION_ENABLED === true && group) {
-        group.rotateOnAxis(rotationAxis, rotationSpeed);
+    // Only update camera if needed (rotation active or during transitions)
+    const needsCameraUpdate = window.GLOBAL_ROTATION_ENABLED === true ||
+        isInViewTransition() ||
+        (controls && controls.autoRotate);
+
+    // Only update and render if something has changed
+    if (needsCameraUpdate && group) {
+        // Only update camera position if auto-rotation is enabled
+        if (window.GLOBAL_ROTATION_ENABLED === true && group) {
+            // Update rotation based on elapsed time (for smooth animation)
+            const rotationSpeed = 0.005 * (elapsed / 16); // Normalized for ~60fps
+            group.rotateOnWorldAxis(rotationAxis, rotationSpeed);
+        }
+
+        // Update controls
+        if (controls) {
+            controls.update();
+        }
     }
 
-    // Update controls for damping
-    if (controls && controls.enableDamping) {
-        controls.update();
-    }
-
-    // Render the scene
-    if (scene && camera) {
+    // Always render the scene if it exists
+    if (scene && camera && renderer) {
         renderer.render(scene, camera);
     }
 
     // End performance measurement
     Performance.end('render-frame');
+
+    // Force garbage collection on some browsers (Chrome)
+    if (performanceCheckCounter % 300 === 0 && window.gc) {
+        try {
+            window.gc();
+        } catch (e) {
+            // Garbage collection not available
+        }
+    }
 }
+
+// Add a page visibility listener to pause rendering when tab is not visible
+document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+        // Pause rendering when tab is not visible
+        isRendering = false;
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+        }
+    } else {
+        // Resume rendering when tab becomes visible
+        isRendering = true;
+        if (!animationFrameId) {
+            lastFrameTime = performance.now();
+            animationFrameId = requestAnimationFrame(animate);
+        }
+    }
+});
 
 // Helper to determine if we're currently in a view transition
 function isInViewTransition() {
@@ -1908,8 +2149,11 @@ function onPointerMove(event) {
 export function updateThemeBackground(isDarkMode) {
     console.log(`Updating theme background: ${isDarkMode ? 'dark' : 'light'} mode`);
 
+    // Store the current theme preference for later use
+    window.currentThemeIsDark = isDarkMode;
+
     if (!renderer) {
-        console.warn('Renderer not available for theme update');
+        console.log('Renderer not available yet, theme will be applied when renderer is initialized');
         return;
     }
 
@@ -1926,43 +2170,6 @@ export function updateThemeBackground(isDarkMode) {
     if (scene && camera) {
         renderer.render(scene, camera);
     }
-
-    // Update canvas container background to match renderer
-    const canvasContainer = document.querySelector('.canvas-container');
-    if (canvasContainer) {
-        if (isDarkMode) {
-            canvasContainer.style.backgroundColor = '#111827';
-            // Remove any light theme classes
-            canvasContainer.classList.remove('light-theme-canvas');
-            canvasContainer.classList.add('dark-theme-canvas');
-        } else {
-            canvasContainer.style.backgroundColor = '#f8fafc';
-            // Remove any dark theme classes
-            canvasContainer.classList.remove('dark-theme-canvas');
-            canvasContainer.classList.add('light-theme-canvas');
-        }
-    }
-
-    // Update fabric editor canvas if it exists
-    const fabricCanvas = document.getElementById('fabric-canvas');
-    if (fabricCanvas) {
-        const fabricInstance = window.fabricCanvas; // Get the Fabric.js instance if available
-        if (fabricInstance) {
-            // Set transparent background
-            fabricInstance.setBackgroundColor(
-                'transparent',
-                fabricInstance.renderAll.bind(fabricInstance)
-            );
-        } else {
-            // Otherwise update the canvas element directly
-            fabricCanvas.style.backgroundColor = 'transparent';
-        }
-    }
-
-    // Dispatch an event for theme change that other components can listen to
-    window.dispatchEvent(new CustomEvent('theme-changed', {
-        detail: { darkMode: isDarkMode }
-    }));
 }
 
 // Add the toggleAutoRotate function to toggle auto-rotation
@@ -3066,16 +3273,28 @@ function checkWebGLSupport() {
             return { supported: false, message: 'WebGL is not supported in your browser.' };
         }
 
-        // Check if we have enough memory (at least 128MB recommended for 3D models)
-        if (gl.getExtension('WEBGL_debug_renderer_info')) {
-            const renderer = gl.getParameter(gl.getExtension('WEBGL_debug_renderer_info').UNMASKED_RENDERER_WEBGL);
-            console.log('Graphics hardware:', renderer);
-
-            // Check for mobile/integrated GPU that might struggle with complex models
-            const isMobileGPU = /(mali|adreno|powervr|intel)/i.test(renderer);
-            if (isMobileGPU) {
-                console.warn('Mobile or integrated GPU detected, performance may be limited');
+        // Check renderer info using the recommended approach
+        let rendererInfo = 'Unknown';
+        try {
+            // Try to get renderer information in a future-proof way
+            if (gl.getExtension('WEBGL_debug_renderer_info')) {
+                // Use RENDERER for modern browsers
+                rendererInfo = gl.getParameter(gl.RENDERER) ||
+                    gl.getParameter(gl.getExtension('WEBGL_debug_renderer_info').UNMASKED_RENDERER_WEBGL);
+                console.log('Graphics hardware:', rendererInfo);
+            } else {
+                // Fallback to standard RENDERER
+                rendererInfo = gl.getParameter(gl.RENDERER);
+                console.log('Graphics hardware (standard):', rendererInfo);
             }
+        } catch (e) {
+            console.warn('Could not get renderer info:', e);
+        }
+
+        // Check for mobile/integrated GPU that might struggle with complex models
+        const isMobileGPU = /(mali|adreno|powervr|intel)/i.test(rendererInfo);
+        if (isMobileGPU) {
+            console.warn('Mobile or integrated GPU detected, performance may be limited');
         }
 
         // Check for necessary extensions
@@ -3102,3 +3321,22 @@ function checkWebGLSupport() {
 
 // Call this function before attempting to load any models
 window.checkWebGLSupport = checkWebGLSupport;
+
+/**
+ * Toggle 3D editor mode on/off
+ * @param {boolean} active - Whether editor mode should be active
+ */
+export function toggleEditorMode(active) {
+    editorMode = active;
+
+    // If editor mode is enabled, we need to disable orbit controls temporarily
+    if (controls) {
+        controls.enabled = !active;
+    }
+
+    // Notify the system of editor mode change
+    updateState({ editorMode: active });
+
+    // Use console.log directly to avoid potential Logger issues
+    console.log('Editor mode ' + (active ? 'enabled' : 'disabled'));
+}

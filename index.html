@@ -5,9 +5,10 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>3D Shirt Studio</title>
 		<link rel="stylesheet" href="css/style.css" />
+		<link rel="stylesheet" href="css/3d-editor.css" />
 		<link
 			rel="stylesheet"
-			href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+			href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
 		/>
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -98,241 +99,32 @@
 	</head>
 	<body>
 		<div class="app">
-			<!-- Main App Container -->
-			<div class="container">
-				<!-- Mobile Sidebar Toggle Button -->
-				<button class="sidebar-toggle" aria-label="Toggle Sidebar">
-					<i class="fas fa-bars"></i>
-				</button>
-
-				<!-- Mobile Backdrop -->
-				<div class="sidebar-backdrop"></div>
-
-				<!-- Sidebar -->
-				<div class="sidebar">
-					<!-- Logo -->
-					<div class="logo">
-						<h1>3D Shirt <span>Studio</span></h1>
-
-						<!-- Theme Toggle Button -->
-						<button
-							id="theme-toggle"
-							class="theme-toggle"
-							aria-label="Toggle Theme"
-							title="Toggle Light/Dark Theme"
-						>
-							<i class="fas fa-sun"></i>
-						</button>
-					</div>
-
-					<!-- Customization Tabs -->
-					<div class="customizer-tabs">
-						<h2>Customize Your Shirt</h2>
-
-						<!-- Model Selection Section -->
-						<div class="section-header">
-							<i class="fas fa-tshirt"></i>
-							<h3>Choose Model Type</h3>
-						</div>
-
-						<div class="model-selector">
-							<div class="model-options">
-								<label class="model-option">
-									<input
-										type="radio"
-										name="model-type"
-										value="tshirt"
-										checked
-									/>
-									<span class="model-thumbnail tshirt-thumb">
-										<i class="fas fa-tshirt"></i>
-										<span>T-Shirt</span>
-									</span>
-								</label>
-								<label class="model-option">
-									<input type="radio" name="model-type" value="hoodie" />
-									<span class="model-thumbnail hoodie-thumb">
-										<i class="fas fa-mitten"></i>
-										<span>Hoodie</span>
-									</span>
-								</label>
-							</div>
-						</div>
-
-						<div class="section-divider"></div>
-
-						<!-- Design Options Section -->
-						<div class="section-header">
-							<i class="fas fa-palette"></i>
-							<h3>Design Options</h3>
-						</div>
-
-						<!-- Tab Navigation -->
-						<div class="tab-navigation">
-							<button
-								class="tab-btn active"
-								data-tab="color"
-								aria-label="Color Tab"
-							>
-								<i class="fas fa-palette"></i>
-								<span>Colors</span>
-							</button>
-							<button class="tab-btn" data-tab="ai" aria-label="AI Design Tab">
-								<i class="fas fa-magic"></i>
-								<span>AI Design</span>
-							</button>
-						</div>
-
-						<!-- Tab Content -->
-						<div class="tab-content">
-							<!-- Color Picker -->
-							<div id="color-picker" class="tab-panel active">
-								<div class="section-title">
-									<h3>Choose a Color</h3>
-									<p>Select from the wheel or presets below</p>
-								</div>
-
-								<div class="color-wheel-container">
-									<div class="selected-color-display">
-										<div class="color-preview" id="color-preview"></div>
-										<div id="color-name" class="color-name-display"></div>
-										<span id="color-hex">#FFFFFF</span>
-									</div>
-								</div>
-
-								<div class="preset-colors">
-									<h4>Preset Colors</h4>
-									<div class="colors">
-										<!-- Colors will be added dynamically by JavaScript -->
-									</div>
-								</div>
-							</div>
-
-							<!-- Hidden file input to maintain upload functionality -->
-							<input
-								type="file"
-								accept="image/*"
-								id="file-upload"
-								aria-label="File Upload"
-								style="display: none"
-							/>
-
-							<!-- AI Generator -->
-							<div id="ai-picker" class="tab-panel">
-								<div class="section-title">
-									<h3>AI Design Generator</h3>
-									<p>Create unique designs with AI</p>
-								</div>
-
-								<div class="ai-input-container">
-									<textarea
-										id="ai-prompt"
-										placeholder="Describe your design idea... (e.g. 'A cosmic astronaut floating in space with stars and nebulae')"
-										aria-label="AI Prompt"
-									></textarea>
-									<button id="ai-generate" class="button primary">
-										<i class="fas fa-wand-magic-sparkles"></i>
-										Generate
-									</button>
-								</div>
-
-								<div class="ai-preview">
-									<div class="empty-state">
-										<i class="fas fa-robot"></i>
-										<p>AI generated designs will appear here</p>
-									</div>
-								</div>
-							</div>
-						</div>
-
-						<div class="section-divider"></div>
-
-						<!-- Material Settings Section -->
-						<div class="section-header">
-							<i class="fas fa-tshirt"></i>
-							<h3>Material Settings</h3>
-						</div>
-
-						<div class="material-settings">
-							<div class="setting-group">
-								<label for="fabric-type-select">Fabric Type:</label>
-								<select id="fabric-type-select" class="material-select">
-									<option value="cotton">Cotton</option>
-									<option value="polyester">Polyester</option>
-									<option value="silk">Silk</option>
-									<option value="wool">Wool</option>
-								</select>
-							</div>
-						</div>
-
-						<div class="section-divider"></div>
-
-						<!-- Fabric.js Design Editor Section -->
-						<div class="section-header">
-							<i class="fas fa-paint-brush"></i>
-							<h3>Design Editor</h3>
-						</div>
-
-						<div class="fabric-editor-container">
-							<div class="fabric-canvas-wrapper">
-								<canvas id="fabric-canvas" width="300" height="300"></canvas>
-							</div>
-							<div class="fabric-controls">
-								<div class="control-group">
-									<button id="add-text" class="tool-btn" aria-label="Add Text">
-										<i class="fas fa-font"></i>
-										<span>Text</span>
-									</button>
-									<button
-										id="add-shape"
-										class="tool-btn"
-										aria-label="Add Shape"
-									>
-										<i class="fas fa-shapes"></i>
-										<span>Shape</span>
-									</button>
-									<button
-										id="draw-free"
-										class="tool-btn"
-										aria-label="Free Draw"
-									>
-										<i class="fas fa-pen"></i>
-										<span>Draw</span>
-									</button>
-								</div>
-								<div class="control-group">
-									<button id="apply-to-shirt" class="button primary">
-										<i class="fas fa-tshirt"></i>
-										<span>Apply to Shirt</span>
-									</button>
-								</div>
-							</div>
-						</div>
-
-						<div class="section-divider"></div>
-
-						<!-- Action Buttons Section -->
-						<div class="section-header">
-							<i class="fas fa-cogs"></i>
-							<h3>Actions</h3>
-						</div>
-
-						<div class="action-buttons">
-							<button id="download" class="button primary">
-								<i class="fas fa-download"></i>
-								Download
-							</button>
-							<button id="reset" class="button secondary">
-								<i class="fas fa-undo"></i>
-								Reset
-							</button>
-						</div>
-					</div>
+			<!-- App Header - New mobile-friendly header -->
+			<header class="app-header">
+				<div class="header-logo">
+					<h1>3D Shirt <span>Studio</span></h1>
 				</div>
 
-				<!-- Canvas Container -->
+				<div class="header-controls">
+					<button
+						id="theme-toggle"
+						class="theme-toggle"
+						aria-label="Toggle Theme"
+						title="Toggle Light/Dark Theme"
+					>
+						<i class="fas fa-sun"></i>
+					</button>
+					<button class="menu-toggle" aria-label="Toggle Menu">
+						<i class="fas fa-sliders-h"></i>
+					</button>
+				</div>
+			</header>
+
+			<!-- Main Content Container -->
+			<div class="main-container">
+				<!-- 3D Canvas Container - Now primary focus on mobile -->
 				<div class="canvas-container">
-					<!-- Camera View Controls -->
+					<!-- Camera View Controls - Redesigned for touch -->
 					<div class="camera-view-controls">
 						<button
 							id="front-view"
@@ -372,7 +164,7 @@
 						</button>
 					</div>
 
-					<!-- Camera Controls -->
+					<!-- Camera Controls - Touch optimized -->
 					<div class="camera-controls">
 						<button
 							id="zoom-in"
@@ -418,6 +210,232 @@
 						<p>Loading 3D model...</p>
 					</div>
 				</div>
+
+				<!-- Customization Panel -->
+				<div class="customization-panel">
+					<!-- Panel Header with Close Button for Mobile -->
+					<div class="panel-header">
+						<h2>Customize Your Shirt</h2>
+						<button class="panel-close" aria-label="Close Panel">
+							<i class="fas fa-times"></i>
+						</button>
+					</div>
+
+					<!-- Panel Content -->
+					<div class="panel-content">
+						<!-- Model Selection Section -->
+						<div class="customization-section">
+							<div class="section-header">
+								<i class="fas fa-tshirt"></i>
+								<h3>Choose Model Type</h3>
+							</div>
+
+							<div class="model-selector">
+								<div class="model-options">
+									<label class="model-option">
+										<input
+											type="radio"
+											name="model-type"
+											value="tshirt"
+											checked
+										/>
+										<span class="model-thumbnail tshirt-thumb">
+											<i class="fas fa-tshirt"></i>
+											<span>T-Shirt</span>
+										</span>
+									</label>
+									<label class="model-option">
+										<input type="radio" name="model-type" value="hoodie" />
+										<span class="model-thumbnail hoodie-thumb">
+											<i class="fas fa-mitten"></i>
+											<span>Hoodie</span>
+										</span>
+									</label>
+								</div>
+							</div>
+						</div>
+
+						<div class="section-divider"></div>
+
+						<!-- Design Options Section -->
+						<div class="customization-section">
+							<div class="section-header">
+								<i class="fas fa-palette"></i>
+								<h3>Design Options</h3>
+							</div>
+
+							<!-- Tab Navigation -->
+							<div class="tab-navigation">
+								<button
+									class="tab-btn active"
+									data-tab="color"
+									aria-label="Color Tab"
+								>
+									<i class="fas fa-palette"></i>
+									<span>Colors</span>
+								</button>
+								<button
+									class="tab-btn"
+									data-tab="ai"
+									aria-label="AI Design Tab"
+								>
+									<i class="fas fa-magic"></i>
+									<span>AI Design</span>
+								</button>
+							</div>
+
+							<!-- Tab Content -->
+							<div class="tab-content">
+								<!-- Color Picker -->
+								<div id="color-picker" class="tab-panel active">
+									<div class="section-title">
+										<h3>Choose a Color</h3>
+										<p>Select from the wheel or presets below</p>
+									</div>
+
+									<div class="color-wheel-container">
+										<div class="selected-color-display">
+											<div class="color-preview" id="color-preview"></div>
+											<div id="color-name" class="color-name-display"></div>
+											<span id="color-hex">#FFFFFF</span>
+										</div>
+									</div>
+
+									<div class="preset-colors">
+										<h4>Preset Colors</h4>
+										<div class="colors">
+											<!-- Colors will be added dynamically by JavaScript -->
+										</div>
+									</div>
+								</div>
+
+								<!-- Hidden file input to maintain upload functionality -->
+								<input
+									type="file"
+									accept="image/*"
+									id="file-upload"
+									aria-label="File Upload"
+									style="display: none"
+								/>
+
+								<!-- AI Generator -->
+								<div id="ai-picker" class="tab-panel">
+									<div class="section-title">
+										<h3>AI Design Generator</h3>
+										<p>Create unique designs with AI</p>
+									</div>
+
+									<div class="ai-input-container">
+										<textarea
+											id="ai-prompt"
+											placeholder="Describe your design idea... (e.g. 'A cosmic astronaut floating in space with stars and nebulae')"
+											aria-label="AI Prompt"
+										></textarea>
+										<button id="ai-generate" class="button primary">
+											<i class="fas fa-wand-magic-sparkles"></i>
+											Generate
+										</button>
+									</div>
+
+									<div class="ai-preview">
+										<div class="empty-state">
+											<i class="fas fa-robot"></i>
+											<p>AI generated designs will appear here</p>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div class="section-divider"></div>
+
+						<!-- Material Settings Section -->
+						<div class="customization-section">
+							<div class="section-header">
+								<i class="fas fa-tshirt"></i>
+								<h3>Material Settings</h3>
+							</div>
+
+							<div class="material-settings">
+								<div class="setting-group">
+									<label for="fabric-type-select">Fabric Type:</label>
+									<select id="fabric-type-select" class="material-select">
+										<option value="cotton">Cotton</option>
+										<option value="polyester">Polyester</option>
+										<option value="silk">Silk</option>
+										<option value="wool">Wool</option>
+									</select>
+								</div>
+							</div>
+						</div>
+
+						<div class="section-divider"></div>
+
+						<!-- Fabric.js Design Editor Section -->
+						<div class="customization-section">
+							<div class="section-header">
+								<i class="fas fa-paint-brush"></i>
+								<h3>Design Editor</h3>
+							</div>
+
+							<div class="fabric-editor-container">
+								<div class="fabric-canvas-wrapper">
+									<canvas id="fabric-canvas" width="300" height="300"></canvas>
+								</div>
+								<div class="fabric-controls">
+									<div class="control-group"></div>
+									<div class="control-group">
+										<button id="apply-to-shirt" class="button primary">
+											<i class="fas fa-tshirt"></i>
+											<span>Apply to Shirt</span>
+										</button>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div class="section-divider"></div>
+
+						<!-- Action Buttons Section -->
+						<div class="customization-section">
+							<div class="section-header">
+								<i class="fas fa-cogs"></i>
+								<h3>Actions</h3>
+							</div>
+
+							<div class="action-buttons">
+								<button id="download" class="button primary">
+									<i class="fas fa-download"></i>
+									Download
+								</button>
+								<button id="reset" class="button secondary">
+									<i class="fas fa-undo"></i>
+									Reset
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- Bottom Action Bar for Mobile -->
+			<div class="mobile-action-bar">
+				<button id="mobile-color" class="action-btn active">
+					<i class="fas fa-palette"></i>
+					<span>Color</span>
+				</button>
+				<button id="mobile-ai" class="action-btn">
+					<i class="fas fa-magic"></i>
+					<span>AI Design</span>
+				</button>
+				<button id="mobile-edit" class="action-btn">
+					<i class="fas fa-paint-brush"></i>
+					<span>Edit</span>
+				</button>
+				<button id="mobile-download" class="action-btn">
+					<i class="fas fa-download"></i>
+					<span>Save</span>
+				</button>
 			</div>
 		</div>
 
@@ -495,27 +513,5 @@
 				}
 			}
 		</script>
-
-		<!-- Theme toggle button in the navbar -->
-		<li class="nav-item">
-			<button
-				id="themeToggle"
-				class="btn btn-link nav-link"
-				aria-label="Toggle theme"
-			>
-				<i id="themeIcon" class="bi bi-sun-fill"></i>
-				<span id="themeLabel" class="d-none d-md-inline-block ms-1"
-					>Light Mode</span
-				>
-			</button>
-		</li>
-
-		<!-- Add loading message container -->
-		<div
-			id="loading-message"
-			class="position-fixed top-50 start-50 translate-middle bg-white dark:bg-dark p-3 rounded shadow-sm"
-		>
-			Loading models...
-		</div>
 	</body>
 </html>

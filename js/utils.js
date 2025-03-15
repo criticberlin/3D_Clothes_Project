@@ -23,6 +23,10 @@ export const Logger = {
         if (this.level >= this.LEVELS.INFO) console.log(message, ...args);
     },
 
+    log(message, ...args) {
+        if (this.level >= this.LEVELS.INFO) console.log(message, ...args);
+    },
+
     debug(message, ...args) {
         if (this.level >= this.LEVELS.DEBUG) console.log(`[DEBUG] ${message}`, ...args);
     }

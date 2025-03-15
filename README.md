@@ -1,71 +1,78 @@
 # 3D Clothes Customizer
 
-A powerful 3D clothing customization application built with pure HTML, CSS, and JavaScript (no frameworks). Customize T-shirts and hoodies with your own designs or AI-generated textures.
+A powerful 3D clothing customization web application built with pure HTML, CSS, and JavaScript (no frameworks). This project allows users to customize T-shirts and hoodies with their own designs or AI-generated textures through an intuitive and interactive 3D interface.
 
-## Features
+## Project Overview
+
+This application provides an advanced 3D clothing customization platform where users can:
+
+- Visualize garments in real-time 3D with interactive viewing angles
+- Change the base color of garments
+- Upload custom designs to specific areas (front, back, sleeves)
+- Position, scale, and rotate designs with precision
+- Generate AI-powered design textures using DALL-E API
+- Download their custom creations
+
+The system uses sophisticated texture mapping algorithms to accurately display designs on 3D garment models with realistic fabric simulation and lighting effects.
+
+## Core Features
+
+### 3D Visualization
 
 - Interactive 3D models with multiple views (front, back, left, right)
 - Support for multiple garment types (T-shirt, hoodie)
-- Color picker for changing base color
-- Advanced texture mapping system with complex mathematical transformations
-- Physically-based fabric simulation with tension and elasticity calculations
-- Real-time UV coordinate transformation with bilinear interpolation
-- Predefined position presets for perfect image placement
+- Real-time fabric simulations with physically-based rendering
+- Realistic lighting and materials with bump mapping
+
+### Basic Customization
+
+- Color picker for changing base garment color
+- Multiple garment type selection
+- Image upload for custom designs
+- Zoom and rotate model controls
+
+### Advanced Texture Mapping
+
+- Multi-area customization (front, back, sleeves)
 - Drag, rotate, and scale controls for precise design positioning
-- AI-powered texture generation using DALL-E API
-- Image download functionality
-- Modern responsive UI with intuitive controls
-- Real-time fabric simulations with realistic lighting and materials
+- Position presets for perfect image placement
+- Real-time UV coordinate transformation with bilinear interpolation
+- Complex mathematical algorithms for accurate texture placement on curved surfaces
+- Perspective-correct texture mapping at all viewing angles
+- Camera-aware interface with quaternion-based transformations
 
-## Texture Mapper Features
+### AI-Powered Design Generation
 
-The enhanced texture mapper offers a sophisticated customization experience with advanced calculations:
+- Integration with OpenAI's DALL-E API
+- Custom design generation from text prompts
+- One-click application of AI-generated designs
+- Example prompts for optimal results
 
-- **Multi-Area Customization**: Apply different designs to specific areas (front, back, sleeves)
-- **Advanced UV Mapping**: Complex coordinate transformation algorithms for accurate texture placement
-- **Non-Uniform Rational B-Spline (NURBS) Surface Representation**: Precise surface parametrization
-- **Bilinear Interpolation**: Smooth texture transitions across curved surfaces
-- **Barycentric Coordinate System**: Accurate texture placement on triangulated meshes
-- **Perspective-Correct Texture Mapping**: Maintains visual integrity at all viewing angles
-- **3D Interactive Bounding Boxes**: Intuitive 3D interface that adjusts with your view
-- **Position Presets**: One-click positioning with mathematically optimized presets
-- **Smart Snap Points**: Intelligently calculated anchor points based on geometry analysis
-- **Tensor-Based Transformation**: Sophisticated matrix calculations for precise rotations
-- **Non-Linear Scaling Algorithms**: Preserve texture details when scaling across curved surfaces
-- **Camera-Aware Interface**: Boxes automatically adjust based on quaternion-based camera transformations
-- **Real-Time Normal Map Recalculation**: Ensures realistic lighting on customized areas
+### User Interface
 
-## Texture Calculation System
+- Modern, intuitive UI with responsive design
+- Light/dark theme support
+- Specialized control panels for different functions
+- Real-time preview of all customizations
 
-The application employs a sophisticated mathematical framework for texture manipulation:
+## Technical Implementation
 
-- **Matrix Transformation Pipeline**: Series of 4×4 matrices handling translation, rotation, and scaling
-- **Quaternion-Based Rotation**: Smooth, gimbal-lock free rotation of textures
-- **UV Distortion Correction**: Adjusts for fabric stretching using elasticity coefficients
-- **Homogeneous Coordinate System**: Enables perspective-correct texture mapping
-- **Texture Space Partitioning**: Optimized rendering through spatial subdivision
-- **Anti-Aliasing Algorithms**: Bicubic filtering for crisp texture edges
-- **Dynamic Level-of-Detail**: Adjusts texture resolution based on viewing distance
-- **Automatic Seam Handling**: Intelligently manages texture continuation across UV seams
+The application uses the following technologies and techniques:
 
-## Prerequisites
-
-- Modern web browser with WebGL support
-- Node.js (version 14 or higher) for AI features
-- OpenAI API key (for AI design generation)
+- **Three.js** for 3D rendering and WebGL integration
+- **Fabric.js** for 2D image manipulation
+- **Matrix Transformation Pipeline** for texture placement
+- **Quaternion-Based Rotation** for smooth, gimbal-lock free rotation
+- **UV Distortion Correction** using elasticity coefficients
+- **Advanced Barycentric Coordinate System** for precise texture mapping
+- **Node.js backend** for AI feature integration
+- **OpenAI API** for generating design textures
 
 ## Project Structure
 
 ```
 /
 ├── assets/                     # Images and static assets
-│   ├── swatch.png              # Color picker icon
-│   ├── logo-tshirt.png         # Logo design preset
-│   ├── stylish-tshirt.png      # Style design preset
-│   ├── ai.png                  # AI feature icon
-│   ├── download.png            # Download icon
-│   ├── file.png                # File upload icon
-│   └── threejs.png             # Logo image
 ├── css/                        # CSS stylesheets
 │   └── style.css               # Main stylesheet
 ├── models/                     # 3D model files
@@ -84,13 +91,18 @@ The application employs a sophisticated mathematical framework for texture manip
 ├── server/                     # Backend for AI features
 │   ├── index.js                # Express server setup
 │   └── package.json            # Node.js dependencies
-├── index.html                  # Main HTML file
-├── TEXTURE-MAPPER-IMPLEMENTATION.md # Implementation guide
-├── AI-FEATURE-SETUP.md         # AI setup instructions
-└── README.md                   # This file
+└── index.html                  # Main HTML file
 ```
 
 ## Getting Started
+
+### Prerequisites
+
+- Modern web browser with WebGL support
+- Node.js (version 14 or higher) for AI features
+- OpenAI API key (for AI design generation)
+
+### Basic Setup
 
 1. **Clone the repository**:
 
@@ -99,110 +111,74 @@ The application employs a sophisticated mathematical framework for texture manip
    cd 3D_Clothes_Project
    ```
 
-2. **Set up the project**:
-
-   Make sure all asset files are in place according to the project structure above.
-
-3. **Launch the application**:
-
+2. **Launch the application**:
    Open `index.html` in a modern web browser with WebGL support.
 
-4. **For AI features** (optional):
+### AI Feature Setup
 
-   a. Navigate to the server directory:
-
-   ```
-   cd server
-   ```
-
-   b. Install dependencies:
-
-   ```
-   npm install
-   ```
-
-   c. Create a `.env` file in the server directory with your OpenAI API key:
-
+1. Navigate to the server directory: `cd server`
+2. Install dependencies: `npm install`
+3. Create a `.env` file with your OpenAI API key:
    ```
    OPENAI_API_KEY=your_openai_api_key_here
    ```
-
-   d. Start the server:
-
-   ```
-   npm start
-   ```
+4. Start the server: `npm start`
 
 ## How to Use
 
-### Basic Controls
+### Viewing Controls
 
 - **Rotate the model**: Click and drag on the 3D view
 - **Zoom**: Use the mouse wheel or pinch gestures
+- **Switch views**: Use the view buttons (front, back, left, right)
+
+### Basic Customization
+
 - **Change color**: Use the color picker in the sidebar
 - **Switch models**: Select between T-shirt and hoodie in the sidebar
 
-### Adding Designs
+### Adding Custom Designs
 
-1. **Upload an image**:
+1. Click the "Upload" tab in the sidebar
+2. Select an image file from your device
+3. The image will appear on the current view of the model
+4. Use the bounding box controls to position, rotate, and scale your design
 
-   - Click the "Upload" tab in the sidebar
-   - Select an image file from your device
-   - The image will appear on the current view of the model
+### Using AI-Generated Designs
 
-2. **Generate AI designs** (requires server setup):
-   - Click the "AI Design" tab in the sidebar
-   - Enter a descriptive prompt (e.g., "Abstract watercolor pattern with blue tones")
-   - Click "Generate" and wait for the AI to create your design
-   - Click "Apply to Shirt" to use the generated image
+1. Click the "AI Design" tab in the sidebar
+2. Enter a descriptive prompt (e.g., "Abstract watercolor pattern with blue tones")
+3. Click "Generate" and wait for the AI to create your design
+4. Click "Apply to Shirt" to use the generated image
 
 ### Using the Texture Mapper
 
-1. **Positioning your design**:
+- **Move design**: Click and drag inside the bounding box
+- **Rotate design**: Use the rotate handle (top-right corner)
+- **Scale design**: Use the scale handle (bottom-right corner)
+- **Position presets**: Use the presets in the Position & Alignment panel
+- **Multi-area customization**: Add different designs to different areas
 
-   - Drag: Click and drag inside the bounding box
-   - Rotate: Use the rotate handle (top-right corner)
-   - Scale: Use the scale handle (bottom-right corner)
+### Saving Your Creation
 
-2. **Using position presets**:
+- Click the "Download" button to save your customized garment as an image
 
-   - Click the "Position & Alignment" panel
-   - Select preset positions (center, top, bottom, left, right, corners)
+## Troubleshooting
 
-3. **Managing multiple areas**:
+- **Performance issues**: Ensure your browser has WebGL enabled and updated graphics drivers
+- **AI generation errors**: Verify your OpenAI API key and server connection
+- **Image not appearing**: Try using a different image format or adjusting the size
+- **Controls not responding**: Check for console errors and refresh the page
 
-   - Double-click on any area to upload an image specifically to that area
-   - Each area can have its own unique image and positioning
+## Example AI Prompts
 
-4. **Removing designs**:
-   - Use the remove button in the bounding box
-   - Or use the "Remove Image" button in the Position panel
-
-### Downloading Your Creation
-
-- Click the "Download" button in the sidebar
-- The current view of your customized garment will be saved as an image
-
-## AI Design Examples
-
-Try these example prompts for great results:
+Try these prompts for great AI-generated designs:
 
 - "A watercolor painting of mountain landscapes"
 - "Minimalist line art of faces in a continuous line style"
 - "Japanese-inspired wave pattern with koi fish"
 - "Retro 80s geometric pattern with bright colors"
 - "Abstract color gradient with flowing shapes"
-
-## Troubleshooting
-
-- **Performance issues**: Lower the quality setting in the settings menu
-- **WebGL errors**: Make sure your browser supports WebGL and has it enabled
-- **AI generation errors**: Verify your OpenAI API key and server connection
-- **Texture mapping issues**: Check the console for debug information
-
-## Credits
-
-This project is a vanilla JavaScript implementation of a 3D clothes customization platform. It uses Three.js for 3D rendering and WebGL for realistic materials and lighting.
 
 ## License
 

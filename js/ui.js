@@ -1,7 +1,8 @@
 import { updateState, state } from './state.js';
-import { updateShirtColor, updateShirtTexture, toggleTexture, changeCameraView, updateThemeBackground } from './scene.js';
+import { updateShirtColor, updateShirtTexture, toggleTexture, changeCameraView, updateThemeBackground, setupEventListeners } from './scene.js';
 import { loadCustomImage, clearCustomImage, showBoundingBoxesForCameraView, setTexturePosition } from './texture-mapper.js';
 import { generateAIImage, checkAIServerStatus } from './ai-integration.js';
+import { addImage } from './3d-editor.js';
 
 // Define preset colors for t-shirts
 export const presetColors = {
@@ -296,98 +297,67 @@ export function setupFilePicker() {
 
     // Function to handle file upload with proper feedback
     function handleFileUpload(file) {
-        if (!file.type.startsWith('image/')) {
-            showError('Please select an image file.');
-            return;
-        }
+        if (!file) return;
 
-        // File size validation (5MB limit)
-        if (file.size > 5 * 1024 * 1024) {
-            showError('File is too large. Maximum allowed size is 5MB.');
-            return;
-        }
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            // Get the file upload preview element
+            const preview = document.querySelector('#file-picker .preview');
+            if (preview) {
+                // Clear out the previous preview
+                preview.innerHTML = '';
 
-        try {
-            // Clear empty state and show loading with better styling
-            preview.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Processing image...</p></div>';
-
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                // Create image for preview
+                // Create an image element to show the preview
                 const img = document.createElement('img');
                 img.src = event.target.result;
+                img.className = 'preview-image';
+                img.alt = 'Uploaded design';
 
-                // When image loads, show it in preview and update shirt
-                img.onload = () => {
-                    // Animate preview transition
-                    preview.style.opacity = '0';
-                    setTimeout(() => {
-                        preview.innerHTML = '';
-                        preview.appendChild(img);
-                        preview.style.opacity = '1';
-                    }, 300);
+                // Add the image to the preview
+                preview.appendChild(img);
 
-                    // Check if a specific target view was specified (from double-click or other means)
-                    const fileInput = document.getElementById('file-upload');
-                    let targetView = fileInput && fileInput.dataset.targetView;
+                // Add a processing state
+                preview.classList.add('processing');
 
-                    // If no target view was specified, use the current camera view
-                    if (!targetView) {
-                        targetView = state.cameraView || 'front';
+                // Get target view if specified
+                const fileInput = document.getElementById('file-upload');
+                let targetView = fileInput && fileInput.dataset.targetView;
+                if (!targetView) {
+                    // Default to current camera view if not specified
+                    targetView = state.cameraView || 'front';
+                }
+
+                // Use the new 3D editor's addImage function instead of loadCustomImage
+                addImage(event.target.result, {
+                    view: targetView,
+                    center: true, // Center the image in the view
+                }).then(() => {
+                    showToast(`Image added to ${targetView} view`);
+
+                    // Clear the target view data attribute
+                    if (fileInput) {
+                        delete fileInput.dataset.targetView;
                     }
 
-                    // Show texture application info
-                    const infoBox = document.createElement('div');
-                    infoBox.className = 'texture-info';
-                    infoBox.innerHTML = `
-                        <p><strong>Applied to:</strong> ${targetView} area</p>
-                        <p><small>Double-click areas to add more images</small></p>
-                    `;
-                    preview.appendChild(infoBox);
+                    // Remove processing state
+                    preview.classList.remove('processing');
 
-                    // Add a clear button to the preview
-                    const clearButton = document.createElement('button');
-                    clearButton.className = 'button secondary clear-texture-btn';
-                    clearButton.innerHTML = '<i class="fas fa-trash-alt"></i> Remove Image';
-                    clearButton.addEventListener('click', () => {
-                        if (typeof clearCustomImage === 'function') {
-                            clearCustomImage(targetView);
-                            showToast(`Removed image from ${targetView} area`);
-                            // Clear the preview
-                            preview.innerHTML = '<div class="empty-state"><i class="fas fa-upload"></i><p>Upload an image to customize</p></div>';
-                        }
-                    });
-                    preview.appendChild(clearButton);
+                    // Add success state briefly
+                    preview.classList.add('success');
+                    setTimeout(() => preview.classList.remove('success'), 1500);
 
-                    // Load the image into the texture mapper for the target view
-                    loadCustomImage(event.target.result, targetView)
-                        .then(() => {
-                            console.log(`Image applied to ${targetView} area`);
-
-                            // Show a success message
-                            showToast(`Image applied to ${targetView} area`);
-
-                            // Clear the target view from the file input
-                            if (fileInput) {
-                                delete fileInput.dataset.targetView;
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error applying image:', error);
-                            showError('Error applying image. Please try again.');
-                        });
-                };
-            };
-
-            reader.onerror = () => {
-                showError('Error reading file. Please try again.');
-            };
-
-            reader.readAsDataURL(file);
-        } catch (error) {
-            console.error('File upload error:', error);
-            showError('An unexpected error occurred. Please try again.');
-        }
+                    // Switch to the view where the image was placed if not already there
+                    changeCameraView(targetView);
+                }).catch(error => {
+                    console.error('Failed to add image:', error);
+                    showToast('Failed to add image: ' + error);
+                    preview.classList.remove('processing');
+                    preview.classList.add('error');
+                    setTimeout(() => preview.classList.remove('error'), 1500);
+                });
+            }
+        };
+        reader.readAsDataURL(file);
     }
 }
 
@@ -893,79 +863,165 @@ export function setupAIPicker() {
 export function setupThemeToggle() {
     console.log('Setting up theme toggle...');
 
-    // Get the theme toggle elements
-    const themeToggle = document.getElementById('themeToggle');
-    const themeIcon = document.getElementById('themeIcon');
+    // Get the theme toggle element
+    const themeToggle = document.getElementById('theme-toggle');
 
-    if (!themeToggle || !themeIcon) {
-        console.error('Theme toggle elements not found in the DOM');
+    if (!themeToggle) {
+        console.error('Theme toggle element not found in the DOM');
         return;
     }
 
-    // Determine initial theme from localStorage or default to light
+    // Get saved theme from localStorage or default to dark
     const savedTheme = localStorage.getItem('theme');
-    let currentTheme = savedTheme || 'light';
+    const isDarkMode = savedTheme ? savedTheme === 'dark' : true;
 
-    // Immediately apply the saved theme when the page loads
-    document.body.setAttribute('data-theme', currentTheme);
-    updateThemeUI(currentTheme);
+    // Apply the saved theme
+    document.documentElement.classList.toggle('light-theme', !isDarkMode);
 
-    // Update the background based on the current theme
-    if (typeof updateThemeBackground === 'function') {
-        updateThemeBackground(currentTheme);
-    } else {
-        console.warn('updateThemeBackground function not found');
-    }
+    // Update the icon
+    themeToggle.innerHTML = isDarkMode
+        ? '<i class="fas fa-sun"></i>'
+        : '<i class="fas fa-moon"></i>';
 
     // Add click event listener to toggle theme
     themeToggle.addEventListener('click', function () {
-        console.log('Theme toggle clicked, current theme:', currentTheme);
+        console.log('Theme toggle clicked');
 
-        // Toggle the theme
-        currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+        // Toggle theme state
+        const newIsDarkMode = !document.documentElement.classList.contains('light-theme');
 
-        // Update localStorage
-        localStorage.setItem('theme', currentTheme);
+        // Save preference
+        localStorage.setItem('theme', newIsDarkMode ? 'dark' : 'light');
 
-        // Update the body attribute
-        document.body.setAttribute('data-theme', currentTheme);
+        // Update UI with animation
+        themeToggle.classList.add('active');
+        setTimeout(() => themeToggle.classList.remove('active'), 300);
 
-        // Update the icon and UI
-        updateThemeUI(currentTheme);
+        document.documentElement.classList.toggle('light-theme', !newIsDarkMode);
+
+        // Update button icon with animation
+        themeToggle.style.transition = 'transform 0.3s ease, background-color 0.3s ease';
+        themeToggle.style.transform = 'rotate(180deg)';
+
+        setTimeout(() => {
+            themeToggle.innerHTML = newIsDarkMode
+                ? '<i class="fas fa-sun"></i>'
+                : '<i class="fas fa-moon"></i>';
+
+            themeToggle.style.transform = 'rotate(0deg)';
+        }, 150);
 
         // Update the background
         if (typeof updateThemeBackground === 'function') {
-            updateThemeBackground(currentTheme);
+            updateThemeBackground(newIsDarkMode);
         } else {
             console.warn('updateThemeBackground function not found when toggling');
         }
 
+        // Update state if available
+        if (typeof updateState === 'function') {
+            updateState({ darkMode: newIsDarkMode });
+        }
+
         // Log the change
-        console.log('Theme changed to:', currentTheme);
+        console.log('Theme changed to:', newIsDarkMode ? 'dark' : 'light');
     });
 
     console.log('Theme toggle setup completed');
 }
 
-// Function to update theme UI elements
-function updateThemeUI(theme) {
-    const themeIcon = document.getElementById('themeIcon');
-    if (!themeIcon) return;
+/**
+ * Setup mobile UI functions
+ */
+export function setupMobileUI() {
+    const menuToggle = document.querySelector('.menu-toggle');
+    const panelClose = document.querySelector('.panel-close');
+    const customizationPanel = document.querySelector('.customization-panel');
+    const mobileActionBar = document.querySelector('.mobile-action-bar');
+    const mobileActionButtons = document.querySelectorAll('.mobile-action-bar .action-btn');
 
-    // Update the icon
-    if (theme === 'dark') {
-        themeIcon.classList.remove('bi-sun-fill');
-        themeIcon.classList.add('bi-moon-fill');
+    // Toggle panel on menu button click
+    if (menuToggle) {
+        menuToggle.addEventListener('click', function () {
+            console.log('Menu toggle clicked');
+            customizationPanel.classList.toggle('panel-open');
+
+            // Add visual feedback for the button
+            this.classList.add('active');
+            setTimeout(() => this.classList.remove('active'), 300);
+        });
     } else {
-        themeIcon.classList.remove('bi-moon-fill');
-        themeIcon.classList.add('bi-sun-fill');
+        console.warn('Menu toggle button not found');
     }
 
-    // Update any other UI elements that depend on the theme
-    const themeLabel = document.getElementById('themeLabel');
-    if (themeLabel) {
-        themeLabel.textContent = theme === 'dark' ? 'Dark Mode' : 'Light Mode';
+    // Close panel on close button click
+    if (panelClose) {
+        panelClose.addEventListener('click', function () {
+            console.log('Panel close clicked');
+            customizationPanel.classList.remove('panel-open');
+        });
+    } else {
+        console.warn('Panel close button not found');
     }
+
+    // Mobile action buttons behavior
+    if (mobileActionButtons.length) {
+        mobileActionButtons.forEach(btn => {
+            btn.addEventListener('click', function () {
+                console.log('Mobile action button clicked:', this.id);
+
+                // Activate the clicked button
+                mobileActionButtons.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+
+                // Open the panel and select corresponding tab
+                customizationPanel.classList.add('panel-open');
+
+                // Switch to appropriate tab
+                const tabBtns = document.querySelectorAll('.tab-btn');
+                const tabPanels = document.querySelectorAll('.tab-panel');
+
+                if (this.id === 'mobile-color') {
+                    tabBtns.forEach(btn => {
+                        btn.classList.toggle('active', btn.dataset.tab === 'color');
+                    });
+                    tabPanels.forEach(panel => {
+                        panel.classList.toggle('active', panel.id === 'color-picker');
+                    });
+                } else if (this.id === 'mobile-ai') {
+                    tabBtns.forEach(btn => {
+                        btn.classList.toggle('active', btn.dataset.tab === 'ai');
+                    });
+                    tabPanels.forEach(panel => {
+                        panel.classList.toggle('active', panel.id === 'ai-picker');
+                    });
+                } else if (this.id === 'mobile-edit') {
+                    // Scroll to the Design Editor section
+                    const designEditor = document.querySelector('.fabric-editor-container');
+                    if (designEditor) {
+                        setTimeout(() => {
+                            designEditor.scrollIntoView({ behavior: 'smooth' });
+                        }, 300);
+                    }
+                } else if (this.id === 'mobile-download') {
+                    // Trigger download button
+                    const downloadBtn = document.getElementById('download');
+                    if (downloadBtn) {
+                        downloadBtn.click();
+                    }
+                }
+            });
+        });
+    } else {
+        console.warn('No mobile action buttons found');
+    }
+
+    // Handle window resize - automatically close panel on desktop
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 768 && customizationPanel && customizationPanel.classList.contains('panel-open')) {
+            customizationPanel.classList.remove('panel-open');
+        }
+    });
 }
 
 /**
@@ -973,15 +1029,20 @@ function updateThemeUI(theme) {
  * @param {string} view - The view to upload for (front, back, etc.)
  */
 export function triggerFileUploadForView(view) {
+    // Get the file input element
     const fileInput = document.getElementById('file-upload');
+
     if (fileInput) {
-        // Store the target view
+        // Set data attribute to indicate which view was clicked
         fileInput.dataset.targetView = view;
 
-        // Create and show a toast message
-        showToast(`Select an image for the ${view} area`);
+        // Update state camera view
+        updateState({ cameraView: view });
 
-        // Trigger the file input
+        // Create and display a toast message
+        showToast(`Select an image to add to the ${view} view`);
+
+        // Trigger the file input click to open the file dialog
         fileInput.click();
     }
 }
@@ -1024,6 +1085,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setupFilePicker();
         setupCameraViewButtons();
         setupThemeToggle();
+        setupMobileUI();
     } catch (error) {
         console.error('Error initializing UI components:', error);
     }

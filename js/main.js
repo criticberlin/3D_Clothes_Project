@@ -1,5 +1,6 @@
-import { setupScene, updateShirtColor, updateShirtTexture, toggleTexture, downloadCanvas, changeModel, updateThemeBackground, toggleAutoRotate, changeCameraView, setFabricType } from './scene.js';
-import { initializeTabs, setupFilePicker, setupAIPicker, setupCameraViewButtons, defaultColor, presetColors, setupThemeToggle } from './ui.js';
+import * as THREE from 'three';
+import { setupScene, updateShirtColor, updateShirtTexture, toggleTexture, downloadCanvas, changeModel, updateThemeBackground, toggleAutoRotate, changeCameraView, setFabricType, toggleEditorMode } from './scene.js';
+import { initializeTabs, setupFilePicker, setupAIPicker, setupCameraViewButtons, defaultColor, presetColors, setupThemeToggle, setupMobileUI } from './ui.js';
 import { state, updateState, subscribe } from './state.js';
 import { Logger, Performance } from './utils.js';
 import { initFabricCanvas, clearCanvas, downloadDesign, setFabricType as setFabricEditorType, applyDesignToShirt } from './fabric-integration.js';
@@ -161,7 +162,8 @@ document.addEventListener('DOMContentLoaded', () => {
             darkMode: true, // Default to dark mode
             fabricType: 'cotton', // Default fabric type
             textureStyle: 'plain', // Default texture style
-            autoApplyDesign: true // Automatically apply design changes to the shirt
+            autoApplyDesign: true, // Automatically apply design changes to the shirt
+            editorMode: true // Default to editor mode
         });
 
         // Subscribe to color changes to update the 3D model
@@ -172,6 +174,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Set up theme toggle directly here instead of relying on other functions
         setupDirectThemeToggle();
+
+        // Set up the 3D editor mode toggle
+        setupEditorModeToggle();
 
         // Initialize the 3D scene
         setupScene().then(() => {
@@ -413,6 +418,68 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Add a new function to set up the editor mode toggle
+    function setupEditorModeToggle() {
+        // Listen for state changes to editorMode
+        subscribe('editorMode', (isEditorMode) => {
+            // Update UI to reflect editor mode
+            const editorModeIndicator = document.getElementById('editor-mode-indicator');
+            if (editorModeIndicator) {
+                editorModeIndicator.textContent = isEditorMode ? '3D Edit Mode' : 'Standard Mode';
+                editorModeIndicator.classList.toggle('active', isEditorMode);
+            }
+
+            // Update controls visibility based on editor mode
+            const standardControls = document.querySelectorAll('.standard-controls');
+            const editorControls = document.querySelectorAll('.editor-controls');
+
+            standardControls.forEach(el => {
+                el.style.display = isEditorMode ? 'none' : 'flex';
+            });
+
+            editorControls.forEach(el => {
+                el.style.display = isEditorMode ? 'flex' : 'none';
+            });
+
+            // Toggle editor mode in scene.js
+            toggleEditorMode(isEditorMode);
+        });
+
+        // Add editor mode toggle button if it doesn't exist
+        if (!document.getElementById('editor-mode-toggle')) {
+            const controlsContainer = document.querySelector('.controls-container');
+
+            if (controlsContainer) {
+                // Create the toggle button
+                const editorModeToggle = document.createElement('button');
+                editorModeToggle.id = 'editor-mode-toggle';
+                editorModeToggle.className = 'control-btn';
+                editorModeToggle.innerHTML = '<i class="fas fa-edit"></i>';
+                editorModeToggle.title = 'Toggle 3D Editor Mode';
+
+                // Create the indicator
+                const editorModeIndicator = document.createElement('span');
+                editorModeIndicator.id = 'editor-mode-indicator';
+                editorModeIndicator.className = 'mode-indicator';
+                editorModeIndicator.textContent = 'Standard Mode';
+
+                // Add click event
+                editorModeToggle.addEventListener('click', () => {
+                    const newMode = !(state.editorMode || false);
+                    updateState({ editorMode: newMode });
+                    Logger.log(`Editor mode set to: ${newMode}`);
+                });
+
+                // Add to the DOM
+                controlsContainer.appendChild(editorModeToggle);
+                controlsContainer.appendChild(editorModeIndicator);
+            }
+        }
+
+        // Initialize with current state
+        updateState({ editorMode: state.editorMode || true });
+    }
+
     initializeApp();
 });
 
@@ -442,34 +509,8 @@ function animateWelcome() {
 
 // Setup mobile navigation
 function setupMobileNavigation() {
-    const sidebarToggle = document.querySelector('.sidebar-toggle');
-    const sidebar = document.querySelector('.sidebar');
-    const backdrop = document.querySelector('.sidebar-backdrop');
-
-    if (sidebarToggle && sidebar && backdrop) {
-        // Open sidebar
-        sidebarToggle.addEventListener('click', () => {
-            sidebar.classList.add('sidebar-open');
-            backdrop.classList.add('active');
-            document.body.style.overflow = 'hidden'; // Prevent scrolling
-        });
-
-        // Close when clicking backdrop
-        backdrop.addEventListener('click', () => {
-            sidebar.classList.remove('sidebar-open');
-            backdrop.classList.remove('active');
-            document.body.style.overflow = ''; // Restore scrolling
-        });
-
-        // Close on window resize if it transitions to desktop
-        window.addEventListener('resize', () => {
-            if (window.innerWidth > 768 && sidebar.classList.contains('sidebar-open')) {
-                sidebar.classList.remove('sidebar-open');
-                backdrop.classList.remove('active');
-                document.body.style.overflow = '';
-            }
-        });
-    }
+    // This function is now replaced by setupMobileUI in ui.js
+    setupMobileUI();
 }
 
 // Setup model selector
@@ -693,8 +734,11 @@ async function loadModels() {
     try {
         document.getElementById('loading-message').textContent = 'Loading models...';
 
+        // Import the GLTFLoader
+        const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+
         // Create a loader with specific timeout
-        const loader = new THREE.GLTFLoader();
+        const loader = new GLTFLoader();
 
         // Function to load a single model with timeout and retry
         const loadModelWithRetry = async (path, maxRetries = 2, timeout = 15000) => {
@@ -798,8 +842,7 @@ async function loadModels() {
             }
         });
 
-        // Update the scene with loaded models
-        updateScene();
+        // Models loaded successfully, no need for updateScene
         document.getElementById('loading-message').textContent = 'Models loaded successfully!';
         setTimeout(() => {
             document.getElementById('loading-message').style.display = 'none';
