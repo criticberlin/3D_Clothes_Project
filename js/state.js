@@ -1,6 +1,5 @@
 // Application state - maintain both original and new property names for compatibility
 export const state = {
-    color: '#FFFFFF',         // Original: shirt color
     fullDecal: null,          // Removed ThreeJS texture
 
     // New properties for toggle controls

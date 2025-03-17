@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { setupScene, updateShirtColor, updateShirtTexture, toggleTexture, downloadCanvas, changeModel, updateThemeBackground, toggleAutoRotate, changeCameraView, setFabricType, toggleEditorMode } from './scene.js';
-import { initializeTabs, setupFilePicker, setupAIPicker, setupCameraViewButtons, defaultColor, presetColors, setupThemeToggle, setupMobileUI } from './ui.js';
+import { setupScene, updateShirtTexture, toggleTexture, downloadCanvas, changeModel, updateThemeBackground, toggleAutoRotate, changeCameraView, setFabricType, toggleEditorMode } from './scene.js';
+import { initializeTabs, setupFilePicker, setupAIPicker, setupCameraViewButtons, setupThemeToggle, setupMobileUI } from './ui.js';
 import { state, updateState, subscribe } from './state.js';
 import { Logger, Performance } from './utils.js';
-import { initFabricCanvas, clearCanvas, downloadDesign, setFabricType as setFabricEditorType, applyDesignToShirt } from './fabric-integration.js';
+import { initFabricCanvas, applyDesignToShirt } from './fabric-integration.js';
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
@@ -56,91 +56,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
-    }, 1000); // Wait 1 second to ensure the scene is loaded
+    }, 500);
 
-    // Function to check if all required DOM elements are loaded
+    // Function to check if DOM elements are ready
     function checkDOMElements() {
-        // Create loadingOverlay if it doesn't exist
-        let loadingOverlay = document.querySelector('.loading-overlay');
-        if (!loadingOverlay) {
-            loadingOverlay = document.createElement('div');
-            loadingOverlay.className = 'loading-overlay';
-            loadingOverlay.innerHTML = `
-                <div class="loading-content">
-                    <div class="spinner"></div>
-                    <p>Loading, please wait...</p>
-                </div>
-            `;
-            loadingOverlay.style.position = 'fixed';
-            loadingOverlay.style.top = '0';
-            loadingOverlay.style.left = '0';
-            loadingOverlay.style.width = '100%';
-            loadingOverlay.style.height = '100%';
-            loadingOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-            loadingOverlay.style.display = 'flex';
-            loadingOverlay.style.justifyContent = 'center';
-            loadingOverlay.style.alignItems = 'center';
-            loadingOverlay.style.zIndex = '9999';
-            loadingOverlay.style.color = 'white';
-            document.body.appendChild(loadingOverlay);
+        // List essential elements
+        const essentialElements = [
+            document.querySelector('.app'),
+            document.querySelector('.canvas-container'),
+            document.querySelector('.customization-panel')
+        ];
 
-            // Add spinner styles
-            const style = document.createElement('style');
-            style.textContent = `
-                .spinner {
-                    width: 40px;
-                    height: 40px;
-                    border: 4px solid rgba(255, 255, 255, 0.3);
-                    border-radius: 50%;
-                    border-top-color: white;
-                    animation: spin 1s ease-in-out infinite;
-                    margin: 0 auto 20px auto;
-                }
-                @keyframes spin {
-                    to { transform: rotate(360deg); }
-                }
-                .loading-content {
-                    text-align: center;
-                }
-            `;
-            document.head.appendChild(style);
-        }
-
-        const requiredElements = {
-            'rotate-view': document.getElementById('rotate-view') || createFallbackElement('rotate-view', 'button'),
-            'loadingOverlay': loadingOverlay,
-            'download': document.getElementById('download') || createFallbackElement('download', 'button'),
-            'reset': document.getElementById('reset') || createFallbackElement('reset', 'button'),
-            'theme-toggle': document.getElementById('theme-toggle') || createFallbackElement('theme-toggle', 'button')
-        };
-
-        const missingElements = Object.entries(requiredElements)
-            .filter(([_, element]) => !element)
-            .map(([name]) => name);
-
-        if (missingElements.length > 0) {
-            Logger.warn(`Some DOM elements are not yet available: ${missingElements.join(', ')}`);
-            // Wait and try again if elements are missing
-            setTimeout(initializeApp, 100);
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Create a fallback element if the required one doesn't exist
-     * @param {string} id - The element ID
-     * @param {string} type - The element type (button, div, etc.)
-     * @returns {HTMLElement} The created element
-     */
-    function createFallbackElement(id, type) {
-        console.warn(`Creating fallback element for #${id}`);
-        const element = document.createElement(type);
-        element.id = id;
-        element.style.display = 'none'; // Hide fallback elements
-        document.body.appendChild(element);
-        return element;
+        // Check if all essential elements exist
+        return essentialElements.every(el => el !== null);
     }
 
     // Main initialization function
@@ -152,7 +80,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Set default state (match original project)
         updateState({
             intro: true,
-            color: defaultColor,
             isFullTexture: false,
             fullDecal: null,
             stylish: false, // For the toggle button
@@ -166,12 +93,6 @@ document.addEventListener('DOMContentLoaded', () => {
             editorMode: true // Default to editor mode
         });
 
-        // Subscribe to color changes to update the 3D model
-        subscribe('color', (color) => {
-            // Update the shirt color
-            updateShirtColor(color);
-        });
-
         // Set up theme toggle directly here instead of relying on other functions
         setupDirectThemeToggle();
 
@@ -181,15 +102,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Initialize the 3D scene
         setupScene().then(() => {
             Logger.info('Scene loaded successfully');
-
-            try {
-                // Set initial shirt color
-                const initialColor = state.color || defaultColor;
-                Logger.info(`Setting initial shirt color: ${initialColor}`);
-                updateShirtColor(initialColor);
-            } catch (error) {
-                Logger.error('Error setting initial color:', error);
-            }
 
             // Try to load the default model explicitly
             if (!window.shirtMesh) {
@@ -203,284 +115,74 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
             }
 
-            // Initialize Fabric.js integration with auto-apply design
+            // Initialize 3D editor (previously Fabric.js integration)
             window.addEventListener('load', () => {
-                // Initialize Fabric.js canvas
-                const fabricCanvas = initFabricCanvas();
+                // Initialize 3D editor
+                initFabricCanvas();
 
-                // Store in global scope for easy access
-                window.fabricCanvas = fabricCanvas;
-
-                // Set up auto-apply functionality if enabled
-                if (state.autoApplyDesign) {
-                    fabricCanvas.on('object:modified', function () {
-                        applyDesignToShirt();
-                    });
-
-                    fabricCanvas.on('object:added', function () {
-                        applyDesignToShirt();
-                    });
-
-                    fabricCanvas.on('object:removed', function () {
-                        applyDesignToShirt();
-                    });
-                }
+                Logger.log('3D editor initialized');
             });
 
             // Connect fabric type selection
             subscribe('fabricType', (fabricType) => {
-                // Update the Fabric.js editor with the new fabric type
-                setFabricEditorType(fabricType);
-
-                // Update the 3D model material
+                // Update the 3D model material only
                 setFabricType(fabricType);
             });
 
             // Set up fabric type selector
             setupFabricTypeSelector();
-
-            // Add a slight delay for a smoother transition
-            setTimeout(() => {
-                // Explicitly hide loading overlay with a fade effect
-                const loadingOverlay = document.querySelector('.loading-overlay');
-                if (loadingOverlay) {
-                    loadingOverlay.style.opacity = '0';
-                    setTimeout(() => {
-                        loadingOverlay.style.display = 'none';
-                        animateWelcome();
-                    }, 500);
-                } else {
-                    animateWelcome();
-                }
-            }, 300);
         }).catch(error => {
-            console.error('Failed to initialize scene:', error);
-            Logger.error('Failed to initialize scene:', error);
+            Logger.error('Error setting up scene:', error);
         });
 
-        // Initialize UI components
+        // Initialize tabs, file picker, and camera buttons
         initializeTabs();
         setupFilePicker();
-        setupAIPicker();
         setupCameraViewButtons();
-        setupModelSelector();
-        setupMobileNavigation();
+        setupAIPicker();
+        setupMobileUI();
 
-        // Setup download button
-        const downloadBtn = document.getElementById('download');
+        // Set up download button
+        const downloadBtn = document.getElementById('download-btn');
         if (downloadBtn) {
-            downloadBtn.addEventListener('click', () => {
-                Logger.info('Downloading design...');
-
-                // Add visual feedback
-                const originalText = downloadBtn.innerHTML;
-
-                downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Downloading...';
-                downloadBtn.disabled = true;
-
-                setTimeout(() => {
-                    downloadCanvas();
-
-                    // Restore button after download
-                    setTimeout(() => {
-                        downloadBtn.innerHTML = originalText;
-                        downloadBtn.disabled = false;
-                    }, 500);
-                }, 300);
-            });
-        } else {
-            Logger.warn("Download button not found in the DOM");
+            downloadBtn.addEventListener('click', downloadCanvas);
         }
 
-        // Setup reset button
-        const resetBtn = document.getElementById('reset');
-        if (resetBtn) {
-            resetBtn.addEventListener('click', () => {
-                Logger.info('Resetting design...');
-
-                // Visual feedback
-                const originalText = resetBtn.innerHTML;
-                resetBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Resetting...';
-                resetBtn.disabled = true;
-
-                // Reset to default state
-                updateState({
-                    isFullTexture: false,
-                    fullDecal: null,
-                    stylish: false
-                });
-
-                if (textureToggle) {
-                    textureToggle.checked = false;
-                }
-
-                // First disable textures
-                toggleTexture('full', false);
-
-                // Reset preview areas
-                resetPreviews();
-
-                // Restore button state after reset
-                setTimeout(() => {
-                    resetBtn.innerHTML = originalText;
-                    resetBtn.disabled = false;
-                }, 500);
+        // Set up auto-rotate toggle
+        const autoRotateToggle = document.getElementById('auto-rotate-toggle');
+        if (autoRotateToggle) {
+            autoRotateToggle.addEventListener('change', (e) => {
+                toggleAutoRotate(e.target.checked);
+                updateState({ autoRotate: e.target.checked });
             });
-        } else {
-            Logger.warn("Reset button not found in the DOM");
         }
 
-        // Setup auto-rotate button
-        const rotateViewBtn = document.getElementById('rotate-view');
-        if (rotateViewBtn) {
-            // Ensure initial state is off
-            toggleAutoRotate(false);
-
-            rotateViewBtn.addEventListener('click', () => {
-                const isCurrentlyActive = rotateViewBtn.classList.contains('active-toggle');
-                toggleAutoRotate(!isCurrentlyActive);
-            });
-        } else {
-            Logger.warn("Auto-rotate button not found in the DOM");
-        }
-
-        // Add welcome animation to tabs
-        animateWelcome();
-
-        Logger.info('Initialization complete!');
-    }
-
-    // Direct implementation of theme toggle without external dependencies
-    function setupDirectThemeToggle() {
-        const themeToggle = document.getElementById('theme-toggle');
-        if (!themeToggle) {
-            console.error("Theme toggle button not found in the DOM");
-            return;
-        }
-
-        console.log("Setting up direct theme toggle from main.js");
-
-        // Set initial theme
-        const isDarkMode = state.darkMode !== false;
-
-        // Apply theme to document
-        document.documentElement.classList.toggle('light-theme', !isDarkMode);
-
-        // Set correct icon
-        themeToggle.innerHTML = isDarkMode
-            ? '<i class="fas fa-sun"></i>' // Sun icon for dark mode (indicates switch to light)
-            : '<i class="fas fa-moon"></i>'; // Moon icon for light mode (indicates switch to dark)
-
-        // Apply theme to scene immediately
-        updateThemeBackground(isDarkMode);
-
-        // Remove any existing event listeners by cloning the button
-        const newThemeToggle = themeToggle.cloneNode(true);
-        if (themeToggle.parentNode) {
-            themeToggle.parentNode.replaceChild(newThemeToggle, themeToggle);
-        }
-
-        // Add click handler with visual feedback
-        newThemeToggle.addEventListener('click', () => {
-            console.log("Theme toggle clicked");
-
-            // Add clicking animation
-            newThemeToggle.classList.add('active');
-            setTimeout(() => newThemeToggle.classList.remove('active'), 300);
-
-            // Toggle theme state
-            const newDarkMode = !state.darkMode;
-            console.log(`Switching to ${newDarkMode ? 'dark' : 'light'} mode`);
-
-            // Update state
-            updateState({ darkMode: newDarkMode });
-
-            // Update UI with a smooth transition
-            document.documentElement.classList.toggle('light-theme', !newDarkMode);
-
-            // Update button icon with a smooth transition
-            newThemeToggle.style.transition = 'transform 0.3s ease, background-color 0.3s ease';
-            newThemeToggle.style.transform = 'rotate(180deg)';
-
-            setTimeout(() => {
-                newThemeToggle.innerHTML = newDarkMode
-                    ? '<i class="fas fa-sun"></i>'
-                    : '<i class="fas fa-moon"></i>';
-
-                newThemeToggle.style.transform = 'rotate(0deg)';
-            }, 150);
-
-            // Update 3D scene background
-            updateThemeBackground(newDarkMode);
-
-            // Save preference in localStorage
-            localStorage.setItem('theme', newDarkMode ? 'dark' : 'light');
-        });
-    }
-
-    // Add a new function to set up the editor mode toggle
-    function setupEditorModeToggle() {
-        // Listen for state changes to editorMode
-        subscribe('editorMode', (isEditorMode) => {
-            // Update UI to reflect editor mode
-            const editorModeIndicator = document.getElementById('editor-mode-indicator');
-            if (editorModeIndicator) {
-                editorModeIndicator.textContent = isEditorMode ? '3D Edit Mode' : 'Standard Mode';
-                editorModeIndicator.classList.toggle('active', isEditorMode);
-            }
-
-            // Update controls visibility based on editor mode
-            const standardControls = document.querySelectorAll('.standard-controls');
-            const editorControls = document.querySelectorAll('.editor-controls');
-
-            standardControls.forEach(el => {
-                el.style.display = isEditorMode ? 'none' : 'flex';
-            });
-
-            editorControls.forEach(el => {
-                el.style.display = isEditorMode ? 'flex' : 'none';
-            });
-
-            // Toggle editor mode in scene.js
-            toggleEditorMode(isEditorMode);
+        // Connect rotation control based on state
+        subscribe('autoRotate', (autoRotate) => {
+            toggleAutoRotate(autoRotate);
+            // Update checkbox if it exists
+            const checkbox = document.getElementById('auto-rotate-toggle');
+            if (checkbox) checkbox.checked = autoRotate;
         });
 
-        // Add editor mode toggle button if it doesn't exist
-        if (!document.getElementById('editor-mode-toggle')) {
-            const controlsContainer = document.querySelector('.controls-container');
+        // Set up model selector
+        setupModelSelector();
 
-            if (controlsContainer) {
-                // Create the toggle button
-                const editorModeToggle = document.createElement('button');
-                editorModeToggle.id = 'editor-mode-toggle';
-                editorModeToggle.className = 'control-btn';
-                editorModeToggle.innerHTML = '<i class="fas fa-edit"></i>';
-                editorModeToggle.title = 'Toggle 3D Editor Mode';
+        // Welcome animation
+        setTimeout(animateWelcome, 500);
 
-                // Create the indicator
-                const editorModeIndicator = document.createElement('span');
-                editorModeIndicator.id = 'editor-mode-indicator';
-                editorModeIndicator.className = 'mode-indicator';
-                editorModeIndicator.textContent = 'Standard Mode';
-
-                // Add click event
-                editorModeToggle.addEventListener('click', () => {
-                    const newMode = !(state.editorMode || false);
-                    updateState({ editorMode: newMode });
-                    Logger.log(`Editor mode set to: ${newMode}`);
-                });
-
-                // Add to the DOM
-                controlsContainer.appendChild(editorModeToggle);
-                controlsContainer.appendChild(editorModeIndicator);
-            }
-        }
-
-        // Initialize with current state
-        updateState({ editorMode: state.editorMode || true });
+        // End performance measurement
+        Performance.end('app-initialization');
+        console.log('Initialization time:', Performance.getTime('app-initialization') + 'ms');
     }
 
-    initializeApp();
+    // Try to initialize, or wait for DOM to be more ready
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        initializeApp();
+    } else {
+        // Fallback if DOMContentLoaded might have already fired
+        window.addEventListener('load', initializeApp);
+    }
 });
 
 // Welcome animation for tabs and sections
@@ -732,7 +434,11 @@ document.addEventListener('DOMContentLoaded', function () {
 // Improved model loading function with better error handling
 async function loadModels() {
     try {
-        document.getElementById('loading-message').textContent = 'Loading models...';
+        // Safely update loading message
+        const loadingMessage = document.getElementById('loading-message');
+        if (loadingMessage) {
+            loadingMessage.textContent = 'Loading models...';
+        }
 
         // Import the GLTFLoader
         const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
@@ -751,106 +457,82 @@ async function loadModels() {
                         setTimeout(() => reject(new Error(`Loading ${path} timed out after ${timeout}ms`)), timeout)
                     );
 
-                    // Create loading promise
-                    const loadingPromise = new Promise((resolve, reject) => {
-                        console.log(`Loading model: ${path} (attempt ${retries + 1})`);
-                        loader.load(
-                            path,
-                            (gltf) => resolve(gltf),
-                            (xhr) => {
-                                const percentComplete = (xhr.loaded / xhr.total) * 100;
-                                document.getElementById('loading-message').textContent =
-                                    `Loading ${path.split('/').pop()}: ${Math.round(percentComplete)}%`;
-                            },
-                            (error) => reject(new Error(`Error loading ${path}: ${error.message}`))
-                        );
-                    });
-
-                    // Race between loading and timeout
-                    return await Promise.race([loadingPromise, timeoutPromise]);
-                } catch (error) {
-                    retries++;
-                    console.warn(`Attempt ${retries} failed for ${path}: ${error.message}`);
-
-                    if (retries > maxRetries) {
-                        throw error;
+                    // Update loading message
+                    if (loadingMessage) {
+                        loadingMessage.textContent =
+                            `Loading model ${path}... (Attempt ${retries + 1}/${maxRetries + 1})`;
                     }
 
-                    // Wait before retry (exponential backoff)
-                    await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+                    // Race between the load and timeout
+                    const model = await Promise.race([
+                        new Promise((resolve, reject) => {
+                            loader.load(
+                                path,
+                                resolve,
+                                (xhr) => {
+                                    const percent = Math.round((xhr.loaded / xhr.total) * 100);
+                                    // Update loading message with progress
+                                    if (loadingMessage) {
+                                        loadingMessage.textContent =
+                                            `Loading model ${path}... ${percent}%`;
+                                    }
+                                },
+                                reject
+                            );
+                        }),
+                        timeoutPromise
+                    ]);
+
+                    return model;
+                } catch (error) {
+                    console.warn(`Attempt ${retries + 1} failed to load ${path}:`, error);
+                    retries++;
+
+                    if (retries > maxRetries) {
+                        throw new Error(`Failed to load ${path} after ${maxRetries + 1} attempts: ${error.message}`);
+                    }
                 }
             }
         };
 
-        // Check which models to load based on clothesOptions
-        const modelsToLoad = [];
+        // Import required scene components
+        const { setupScene, changeModel } = await import('./scene.js');
 
-        if (clothesOptions.tshirt) {
-            modelsToLoad.push({ type: 'tshirt', path: 'models/tshirt.glb' });
-        }
+        // Initialize 3D scene
+        await setupScene();
 
-        if (clothesOptions.hoodie) {
-            modelsToLoad.push({ type: 'hoodie', path: 'models/hoodie.glb' });
-        }
+        // Set final success message
+        if (loadingMessage) {
+            loadingMessage.textContent = 'Models loaded successfully!';
 
-        if (clothesOptions.pants) {
-            modelsToLoad.push({ type: 'pants', path: 'models/pants.glb' });
-        }
-
-        if (clothesOptions.shorts) {
-            modelsToLoad.push({ type: 'shorts', path: 'models/shorts.glb' });
-        }
-
-        // Load all models in parallel for efficiency
-        const results = await Promise.allSettled(
-            modelsToLoad.map(model => loadModelWithRetry(model.path)
-                .then(gltf => ({ type: model.type, gltf }))
-            )
-        );
-
-        // Process results
-        results.forEach((result, index) => {
-            if (result.status === 'fulfilled') {
-                const { type, gltf } = result.value;
-                console.log(`Successfully loaded ${type} model`);
-
-                // Store model and update UI
-                switch (type) {
-                    case 'tshirt':
-                        window.tshirtModel = gltf.scene;
-                        break;
-                    case 'hoodie':
-                        window.hoodieModel = gltf.scene;
-                        break;
-                    case 'pants':
-                        window.pantsModel = gltf.scene;
-                        break;
-                    case 'shorts':
-                        window.shortsModel = gltf.scene;
-                        break;
+            // Hide loading message after a brief delay
+            setTimeout(() => {
+                if (loadingMessage) {
+                    loadingMessage.style.display = 'none';
                 }
-            } else {
-                console.error(`Failed to load ${modelsToLoad[index].type} model:`, result.reason);
-                // Disable the option in UI if model failed to load
-                const checkbox = document.getElementById(modelsToLoad[index].type + 'Checkbox');
-                if (checkbox) {
-                    checkbox.disabled = true;
-                    checkbox.checked = false;
-                    checkbox.parentNode.classList.add('text-muted');
-                    checkbox.parentNode.title = `Could not load ${modelsToLoad[index].type} model`;
-                }
-            }
-        });
+            }, 1000);
+        }
 
-        // Models loaded successfully, no need for updateScene
-        document.getElementById('loading-message').textContent = 'Models loaded successfully!';
-        setTimeout(() => {
-            document.getElementById('loading-message').style.display = 'none';
-        }, 2000);
+        // Initialize animation for welcome message
+        animateWelcome();
 
     } catch (error) {
-        console.error('Error in loadModels:', error);
-        throw error;
+        console.error('Error loading models:', error);
+
+        // Show error message to user
+        const loadingMessage = document.getElementById('loading-message');
+        if (loadingMessage) {
+            loadingMessage.innerHTML = `
+                <div style="color: #e74c3c; font-weight: bold;">
+                    Error loading 3D models: ${error.message}
+                </div>
+                <div style="margin-top: 10px;">
+                    Please check your internet connection and refresh the page.
+                </div>
+            `;
+        }
+
+        throw error; // Re-throw to be caught by the caller
     }
 }
 
@@ -883,4 +565,134 @@ function setupUIControls() {
             }
         });
     }
+}
+
+// Direct implementation of theme toggle without external dependencies
+function setupDirectThemeToggle() {
+    const themeToggle = document.getElementById('theme-toggle');
+    if (!themeToggle) {
+        console.error("Theme toggle button not found in the DOM");
+        return;
+    }
+
+    console.log("Setting up direct theme toggle from main.js");
+
+    // Set initial theme
+    const isDarkMode = state.darkMode !== false;
+
+    // Apply theme to document
+    document.documentElement.classList.toggle('light-theme', !isDarkMode);
+
+    // Set correct icon
+    themeToggle.innerHTML = isDarkMode
+        ? '<i class="fas fa-sun"></i>' // Sun icon for dark mode (indicates switch to light)
+        : '<i class="fas fa-moon"></i>'; // Moon icon for light mode (indicates switch to dark)
+
+    // Apply theme to scene immediately
+    updateThemeBackground(isDarkMode);
+
+    // Remove any existing event listeners by cloning the button
+    const newThemeToggle = themeToggle.cloneNode(true);
+    if (themeToggle.parentNode) {
+        themeToggle.parentNode.replaceChild(newThemeToggle, themeToggle);
+    }
+
+    // Add click handler with visual feedback
+    newThemeToggle.addEventListener('click', () => {
+        console.log("Theme toggle clicked");
+
+        // Add clicking animation
+        newThemeToggle.classList.add('active');
+        setTimeout(() => newThemeToggle.classList.remove('active'), 300);
+
+        // Toggle theme state
+        const newDarkMode = !state.darkMode;
+        console.log(`Switching to ${newDarkMode ? 'dark' : 'light'} mode`);
+
+        // Update state
+        updateState({ darkMode: newDarkMode });
+
+        // Update UI with a smooth transition
+        document.documentElement.classList.toggle('light-theme', !newDarkMode);
+
+        // Update button icon with a smooth transition
+        newThemeToggle.style.transition = 'transform 0.3s ease, background-color 0.3s ease';
+        newThemeToggle.style.transform = 'rotate(180deg)';
+
+        setTimeout(() => {
+            newThemeToggle.innerHTML = newDarkMode
+                ? '<i class="fas fa-sun"></i>'
+                : '<i class="fas fa-moon"></i>';
+
+            newThemeToggle.style.transform = 'rotate(0deg)';
+        }, 150);
+
+        // Update 3D scene background
+        updateThemeBackground(newDarkMode);
+
+        // Save preference in localStorage
+        localStorage.setItem('theme', newDarkMode ? 'dark' : 'light');
+    });
+}
+
+// Add a new function to set up the editor mode toggle
+function setupEditorModeToggle() {
+    // Listen for state changes to editorMode
+    subscribe('editorMode', (isEditorMode) => {
+        // Update UI to reflect editor mode
+        const editorModeIndicator = document.getElementById('editor-mode-indicator');
+        if (editorModeIndicator) {
+            editorModeIndicator.textContent = isEditorMode ? '3D Edit Mode' : 'Standard Mode';
+            editorModeIndicator.classList.toggle('active', isEditorMode);
+        }
+
+        // Update controls visibility based on editor mode
+        const standardControls = document.querySelectorAll('.standard-controls');
+        const editorControls = document.querySelectorAll('.editor-controls');
+
+        standardControls.forEach(el => {
+            el.style.display = isEditorMode ? 'none' : 'flex';
+        });
+
+        editorControls.forEach(el => {
+            el.style.display = isEditorMode ? 'flex' : 'none';
+        });
+
+        // Toggle editor mode in scene.js
+        toggleEditorMode(isEditorMode);
+    });
+
+    // Add editor mode toggle button if it doesn't exist
+    if (!document.getElementById('editor-mode-toggle')) {
+        const controlsContainer = document.querySelector('.controls-container');
+
+        if (controlsContainer) {
+            // Create the toggle button
+            const editorModeToggle = document.createElement('button');
+            editorModeToggle.id = 'editor-mode-toggle';
+            editorModeToggle.className = 'control-btn';
+            editorModeToggle.innerHTML = '<i class="fas fa-edit"></i>';
+            editorModeToggle.title = 'Toggle 3D Editor Mode';
+
+            // Create the indicator
+            const editorModeIndicator = document.createElement('span');
+            editorModeIndicator.id = 'editor-mode-indicator';
+            editorModeIndicator.className = 'mode-indicator';
+            editorModeIndicator.textContent = 'Standard Mode';
+
+            // Add click event
+            editorModeToggle.addEventListener('click', () => {
+                const newMode = !(state.editorMode || false);
+                updateState({ editorMode: newMode });
+                Logger.log(`Editor mode set to: ${newMode}`);
+            });
+
+            // Add to the DOM
+            controlsContainer.appendChild(editorModeToggle);
+            controlsContainer.appendChild(editorModeIndicator);
+        }
+    }
+
+    // Initialize with current state
+    updateState({ editorMode: state.editorMode || true });
 } 

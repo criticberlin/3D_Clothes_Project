@@ -56,6 +56,13 @@ let editorMode = false;
 // Initialize with reduced quality for better performance
 let textureQuality = 'medium'; // 'high', 'medium', or 'low'
 
+// Texture state to track loaded textures
+let textureState = {
+    baseTexture: null,
+    normalMap: null,
+    roughnessMap: null
+};
+
 // Function to reduce quality settings when performance issues are detected
 function reduceQualityForPerformance() {
     // Check if we already detected performance issues during this session
@@ -1041,10 +1048,10 @@ export function setupEventListeners() {
 
 // Set initial defaults
 function initializeDefaultState() {
-    // Fixed white color - color changing has been disabled
+    // Fixed color for the shirt (white)
     const fixedColor = '#FFFFFF';
 
-    console.log(`Initializing shirt with fixed color: ${fixedColor}`);
+    console.log(`Initializing shirt with fixed color`);
 
     // Apply the color directly to the shirt
     if (shirtMaterial) {
@@ -1059,7 +1066,7 @@ function initializeDefaultState() {
             console.log(`Setting fullDecal visibility to: ${state.isFullTexture}`);
         }
 
-        console.log(`Initialized shirt with fixed white color`);
+        console.log(`Initialized shirt with fixed color`);
     } else {
         console.warn('Cannot initialize shirt color: shirtMaterial not found');
     }
@@ -1302,17 +1309,11 @@ function processLoadedModel(gltf, settings, color) {
         // Clone and store the original material
         shirtMaterial = shirtMesh.material.clone();
 
-        // Check if there's a pending color from earlier updateShirtColor calls
-        if (window.pendingShirtColor) {
-            console.log(`Applying pending shirt color: ${window.pendingShirtColor}`);
-            const pendingColor = new THREE.Color(window.pendingShirtColor);
-            shirtMaterial.color.copy(pendingColor);
-        } else {
-            // Otherwise, get color from state or use default white
-            const currentColor = state.color || '#FFFFFF';
-            shirtMaterial.color.copy(new THREE.Color(currentColor));
-            console.log(`Applied color to shirt material: ${currentColor}`);
-        }
+        // Set fixed white color
+        const fixedColor = '#FFFFFF';
+        const threeColor = new THREE.Color(fixedColor);
+        shirtMaterial.color.copy(threeColor);
+        console.log(`Applied fixed white color to shirt material`);
 
         // Set material properties from settings if available
         if (settings.materialSettings) {
@@ -1331,7 +1332,7 @@ function processLoadedModel(gltf, settings, color) {
         createAdvancedFabricTextures(shirtMaterial);
 
         // Try to upgrade to physical material for better realism
-        tryUpgradeToPhysicalMaterial(shirtMaterial, color, settings.materialSettings);
+        tryUpgradeToPhysicalMaterial(shirtMaterial, fixedColor, settings.materialSettings);
 
         // Apply the material to all meshes in the model
         meshes.forEach(mesh => {
@@ -1458,17 +1459,47 @@ export function updateShirtColor(color) {
         const threeColor = new THREE.Color(color);
         shirtMaterial.color.copy(threeColor);
 
+        // Make sure the color is visible by updating the base material
+        shirtMaterial.needsUpdate = true;
+
+        // Special handling for dark colors, especially black
+        if (threeColor.r < 0.1 && threeColor.g < 0.1 && threeColor.b < 0.1) {
+            // For very dark colors like black, ensure we use proper rendering settings
+            shirtMaterial.colorWrite = true;
+            shirtMaterial.blending = THREE.NormalBlending;
+
+            // Adjust material properties to ensure black appears correctly
+            shirtMaterial.roughness = 0.8;  // Higher roughness for dark fabrics
+            shirtMaterial.metalness = 0.02; // Keep low metalness for fabric look
+
+            console.log('Applied special rendering for dark color:', color);
+        }
+
+        // Update state to remember the color
+        updateState({ color: color });
+
+        // If we have a fullDecal showing, make it preserve the shirt's base color
+        if (fullDecal && fullDecal.material) {
+            // Set the fullDecal to blend with the base shirt color
+            fullDecal.material.color.copy(threeColor);
+            fullDecal.material.needsUpdate = true;
+        }
+
         // If we have advanced fabric properties, update them for the new color
         if (typeof calculateFabricColor === 'function') {
             const fabricType = state.fabricType || 'cotton';
-            const fabricColor = calculateFabricColor(color, fabricType);
+            const fabricColor = calculateFabricColor(threeColor, fabricType);
 
             if (fabricColor && fabricColor.emissive) {
                 shirtMaterial.emissive.copy(fabricColor.emissive);
             }
         }
 
-        shirtMaterial.needsUpdate = true;
+        // Force a render update to show the new color
+        if (renderer && scene && camera) {
+            renderer.render(scene, camera);
+        }
+
         console.log(`Shirt color updated to: ${color}`);
     } catch (error) {
         console.error('Error updating shirt color:', error);
@@ -1511,13 +1542,17 @@ export function updateShirtTexture(imageUrl, type) {
                 fullDecal.geometry.dispose();
             }
 
+            // Get current shirt color to apply to the texture
+            const shirtColor = shirtMaterial ? shirtMaterial.color.clone() : new THREE.Color('#FFFFFF');
+
             // Create material with the texture
             const material = new THREE.MeshStandardMaterial({
                 map: texture,
                 roughness: 0.8,
                 metalness: 0.0,
                 side: THREE.DoubleSide,
-                envMapIntensity: 0.5
+                envMapIntensity: 0.5,
+                color: shirtColor // Apply the shirt color to the texture
             });
 
             // Clone the shirt geometry for our full texture overlay
@@ -1540,6 +1575,9 @@ export function updateShirtTexture(imageUrl, type) {
                 fullDecal.visible = false;
                 console.log("Added full texture decal to shirt, but keeping it hidden (isFullTexture=false)");
             }
+
+            // Update state to track the full decal
+            updateState({ fullDecal: imageUrl });
         }
     });
 }
@@ -1556,9 +1594,23 @@ export function toggleTexture(type, active) {
 
             // When disabling the texture, make sure the shirt color is visible
             if (!active && shirtMaterial) {
+                // Ensure the shirt's color is restored when hiding the texture
+                const currentColor = state.color || '#FFFFFF';
+                shirtMaterial.color.copy(new THREE.Color(currentColor));
+
                 // Force a material update to ensure color is refreshed
                 shirtMaterial.needsUpdate = true;
                 console.log("Texture disabled, showing base shirt color:", shirtMaterial.color);
+
+                // Force a render update
+                if (renderer && scene && camera) {
+                    renderer.render(scene, camera);
+                }
+            } else if (active && shirtMaterial && fullDecal.material) {
+                // When showing the texture, make sure the fullDecal adopts the shirt's color
+                fullDecal.material.color.copy(shirtMaterial.color);
+                fullDecal.material.needsUpdate = true;
+                console.log("Texture enabled, applied shirt color to texture:", shirtMaterial.color);
 
                 // Force a render update
                 if (renderer && scene && camera) {
@@ -2049,15 +2101,20 @@ function animate(currentTime) {
     // Start performance measurement
     Performance.start('render-frame');
 
+    // Check if we're in editing mode (use editorMode flag directly)
+    const isInEditingMode = editorMode;
+
     // Only update camera if needed (rotation active or during transitions)
-    const needsCameraUpdate = window.GLOBAL_ROTATION_ENABLED === true ||
+    // AND not in editing mode (unless it's a view transition)
+    const needsCameraUpdate = (window.GLOBAL_ROTATION_ENABLED === true ||
         isInViewTransition() ||
-        (controls && controls.autoRotate);
+        (controls && controls.autoRotate)) &&
+        (!isInEditingMode || isInViewTransition());
 
     // Only update and render if something has changed
     if (needsCameraUpdate && group) {
         // Only update camera position if auto-rotation is enabled
-        if (window.GLOBAL_ROTATION_ENABLED === true && group) {
+        if (window.GLOBAL_ROTATION_ENABLED === true && group && !isInEditingMode) {
             // Update rotation based on elapsed time (for smooth animation)
             const rotationSpeed = 0.005 * (elapsed / 16); // Normalized for ~60fps
             group.rotateOnWorldAxis(rotationAxis, rotationSpeed);
@@ -2432,6 +2489,7 @@ function createAdvancedNormalMap(width, height) {
     }
 
     const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+    texture.colorSpace = THREE.SRGBColorSpace; // Use colorSpace instead of encoding
     texture.needsUpdate = true;
     return texture;
 }
@@ -2508,6 +2566,7 @@ function createAdvancedRoughnessMap(width, height) {
     }
 
     const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+    texture.colorSpace = THREE.SRGBColorSpace; // Use colorSpace instead of encoding
     texture.needsUpdate = true;
     return texture;
 }
@@ -2528,6 +2587,7 @@ function createAmbientOcclusionMap(width, height) {
     }
 
     const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+    texture.colorSpace = THREE.SRGBColorSpace; // Use colorSpace instead of encoding
     texture.needsUpdate = true;
     return texture;
 }
@@ -2548,6 +2608,7 @@ function createDisplacementMap(width, height) {
     }
 
     const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+    texture.colorSpace = THREE.SRGBColorSpace; // Use colorSpace instead of encoding
     texture.needsUpdate = true;
     return texture;
 }
@@ -2583,6 +2644,7 @@ function createNormalMap(width, height) {
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(5, 5); // Repeat texture
+    texture.colorSpace = THREE.SRGBColorSpace; // Use colorSpace instead of encoding
     texture.needsUpdate = true;
 
     return texture;
@@ -2621,6 +2683,7 @@ function createRoughnessMap(width, height) {
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(5, 5); // Repeat texture
+    texture.colorSpace = THREE.SRGBColorSpace; // Use colorSpace instead of encoding
     texture.needsUpdate = true;
 
     return texture;
@@ -2634,24 +2697,30 @@ function tryUpgradeToPhysicalMaterial(standardMaterial, color, materialSettings)
             // Get current fabric type from state or default to cotton
             const fabricType = state.fabricType || 'cotton';
 
+            // Create a Three.js color from the input
+            const threeColor = new THREE.Color(color);
+
+            // Determine if this is a very dark color (like black)
+            const isDarkColor = threeColor.r < 0.1 && threeColor.g < 0.1 && threeColor.b < 0.1;
+
             // Calculate physically-based material properties with error handling
             let physicsMaterialProperties;
             try {
                 physicsMaterialProperties = calculateFabricMaterialProperties(
                     fabricType,
-                    new THREE.Color(color)
+                    threeColor
                 );
             } catch (error) {
                 console.error("Failed to calculate fabric properties:", error);
                 // Use enhanced default properties for realism
                 physicsMaterialProperties = {
-                    roughness: 0.65,
-                    metalness: 0.05,
-                    clearcoat: 0.15,
+                    roughness: isDarkColor ? 0.8 : 0.65,
+                    metalness: isDarkColor ? 0.01 : 0.05,
+                    clearcoat: isDarkColor ? 0.1 : 0.15,
                     clearcoatRoughness: 0.4,
-                    sheen: 0.25,
+                    sheen: isDarkColor ? 0.1 : 0.25,
                     sheenRoughness: 0.8,
-                    sheenColor: new THREE.Color(color).offsetHSL(0, 0, 0.1)
+                    sheenColor: new THREE.Color(color).offsetHSL(0, 0, isDarkColor ? 0.05 : 0.1)
                 };
             }
 
@@ -3276,17 +3345,9 @@ function checkWebGLSupport() {
         // Check renderer info using the recommended approach
         let rendererInfo = 'Unknown';
         try {
-            // Try to get renderer information in a future-proof way
-            if (gl.getExtension('WEBGL_debug_renderer_info')) {
-                // Use RENDERER for modern browsers
-                rendererInfo = gl.getParameter(gl.RENDERER) ||
-                    gl.getParameter(gl.getExtension('WEBGL_debug_renderer_info').UNMASKED_RENDERER_WEBGL);
-                console.log('Graphics hardware:', rendererInfo);
-            } else {
-                // Fallback to standard RENDERER
-                rendererInfo = gl.getParameter(gl.RENDERER);
-                console.log('Graphics hardware (standard):', rendererInfo);
-            }
+            // Use the standard RENDERER property which is now properly exposed
+            rendererInfo = gl.getParameter(gl.RENDERER);
+            console.log('Graphics hardware:', rendererInfo);
         } catch (e) {
             console.warn('Could not get renderer info:', e);
         }
@@ -3326,8 +3387,20 @@ window.checkWebGLSupport = checkWebGLSupport;
  * Toggle 3D editor mode on/off
  * @param {boolean} active - Whether editor mode should be active
  */
-export function toggleEditorMode(active) {
+export function toggleEditorMode(active, view = null) {
+    const currentView = view || state.cameraView || 'front';
     editorMode = active;
+
+    // If we have the 3d-editor module available, use its enhanced edit mode
+    import('./3d-editor.js').then(editor3D => {
+        if (editor3D && editor3D.toggleEditMode) {
+            // Convert camera view to edit area view name (convert 'front' format to 'front')
+            const editAreaName = currentView.replace('-', '_');
+            editor3D.toggleEditMode(editAreaName, active);
+        }
+    }).catch(err => {
+        console.warn('Could not load 3D editor module:', err);
+    });
 
     // If editor mode is enabled, we need to disable orbit controls temporarily
     if (controls) {
@@ -3337,6 +3410,131 @@ export function toggleEditorMode(active) {
     // Notify the system of editor mode change
     updateState({ editorMode: active });
 
-    // Use console.log directly to avoid potential Logger issues
-    console.log('Editor mode ' + (active ? 'enabled' : 'disabled'));
+    // Additional UI feedback
+    const viewArea = document.querySelector(`.camera-view-btn[data-view="${currentView}"]`);
+    if (viewArea) {
+        if (active) {
+            viewArea.classList.add('editing');
+        } else {
+            viewArea.classList.remove('editing');
+        }
+    }
+
+    // Dispatch event for UI components to respond to editor mode change
+    window.dispatchEvent(new CustomEvent('editor-mode-changed', {
+        detail: { active, view: currentView }
+    }));
+
+    // Use global console to log (to avoid any issues with intermediates)
+    try {
+        window.console.log('Editor mode ' + (active ? 'enabled' : 'disabled') + ' for view: ' + currentView);
+    } catch (e) {
+        // Silently fail if logging doesn't work
+    }
+}
+
+/**
+ * Lock camera to a specific view and disable controls
+ * @param {string} view - The view to lock to (front, back, left, right)
+ * @param {boolean} lock - Whether to lock (true) or unlock (false)
+ */
+export function lockCameraToView(view, lock = true) {
+    if (!controls || !camera || !initialized) {
+        console.warn('Cannot lock camera: scene not fully initialized');
+        return false;
+    }
+
+    // First change to the desired view
+    changeCameraView(view);
+
+    // Wait for any view transition to complete
+    const checkTransition = () => {
+        if (isViewTransitioning) {
+            // If still in transition, wait a bit and check again
+            setTimeout(checkTransition, 100);
+            return;
+        }
+
+        // Apply lock after transition is complete
+        if (lock) {
+            // Save current control settings
+            if (!controlsStateBackup) {
+                controlsStateBackup = {
+                    enableRotate: controls.enableRotate,
+                    enableZoom: controls.enableZoom,
+                    enablePan: controls.enablePan,
+                    autoRotate: controls.autoRotate
+                };
+            }
+
+            // Disable controls
+            controls.enableRotate = false;
+            controls.enableZoom = false;
+            controls.enablePan = false;
+
+            // Ensure auto-rotate is off
+            if (controls.autoRotate) {
+                controls.autoRotate = false;
+            }
+
+            // Update state
+            cameraLocked = true;
+            lockedCameraView = view;
+
+            console.log(`Camera locked to ${view} view`);
+        } else {
+            // Unlock - restore previous settings
+            if (controlsStateBackup) {
+                controls.enableRotate = controlsStateBackup.enableRotate;
+                controls.enableZoom = controlsStateBackup.enableZoom;
+                controls.enablePan = controlsStateBackup.enablePan;
+                controls.autoRotate = controlsStateBackup.autoRotate;
+
+                // Clear backup
+                controlsStateBackup = null;
+            } else {
+                // If no backup, use defaults
+                controls.enableRotate = true;
+                controls.enableZoom = true;
+                controls.enablePan = true;
+            }
+
+            // Update state
+            cameraLocked = false;
+            lockedCameraView = null;
+
+            console.log('Camera unlocked');
+        }
+
+        // Force a render update
+        if (renderer && scene && camera) {
+            renderer.render(scene, camera);
+        }
+    };
+
+    // Start the transition check
+    checkTransition();
+
+    return true;
+}
+
+// Add state variables to track camera lock
+let cameraLocked = false;
+let lockedCameraView = null;
+let controlsStateBackup = null;
+
+/**
+ * Check if camera is currently locked
+ * @returns {boolean} True if camera is locked
+ */
+export function isCameraLocked() {
+    return cameraLocked;
+}
+
+/**
+ * Get the currently locked view (if any)
+ * @returns {string|null} The locked view or null if not locked
+ */
+export function getLockedCameraView() {
+    return lockedCameraView;
 }

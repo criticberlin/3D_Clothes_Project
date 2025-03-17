@@ -1,110 +1,8 @@
 import { updateState, state } from './state.js';
-import { updateShirtColor, updateShirtTexture, toggleTexture, changeCameraView, updateThemeBackground, setupEventListeners } from './scene.js';
+import { updateShirtTexture, toggleTexture, changeCameraView, updateThemeBackground, setupEventListeners } from './scene.js';
 import { loadCustomImage, clearCustomImage, showBoundingBoxesForCameraView, setTexturePosition } from './texture-mapper.js';
 import { generateAIImage, checkAIServerStatus } from './ai-integration.js';
 import { addImage } from './3d-editor.js';
-
-// Define preset colors for t-shirts
-export const presetColors = {
-    'White': '#FFFFFF',
-    'Black': '#000000',
-    'Gray': '#808080',
-    'Navy Blue': '#000080',
-    'Beige': '#F5F5DC',
-    'Olive Green': '#556B2F',
-    'Brown': '#8B4513',
-    'Burgundy': '#800020'
-};
-
-// The default color
-export const defaultColor = '#FFFFFF';
-
-/**
- * Initialize color picker and preset colors
- */
-export function initializeColorPicker() {
-    const colorPreview = document.getElementById('color-preview');
-    const colorName = document.getElementById('color-name');
-    const colorHex = document.getElementById('color-hex');
-    const presetsContainer = document.querySelector('.preset-colors .colors');
-
-    if (!colorPreview || !colorName || !colorHex || !presetsContainer) {
-        console.warn('Color picker elements not found');
-        return;
-    }
-
-    // Set up color preview as a color picker
-    colorPreview.addEventListener('click', () => {
-        // Create a color input element
-        const colorInput = document.createElement('input');
-        colorInput.type = 'color';
-        colorInput.value = colorHex.textContent || defaultColor;
-
-        // Trigger click on the input to open color picker
-        colorInput.addEventListener('input', (e) => {
-            const newColor = e.target.value;
-            updateColorUI(newColor, 'Custom');
-            updateShirtColor(newColor);
-            updateState({ color: newColor });
-        });
-
-        colorInput.addEventListener('change', (e) => {
-            const newColor = e.target.value;
-            updateColorUI(newColor, 'Custom');
-            updateShirtColor(newColor);
-            updateState({ color: newColor });
-        });
-
-        colorInput.click();
-    });
-
-    // Add preset colors to the container
-    presetsContainer.innerHTML = '';
-    Object.entries(presetColors).forEach(([name, hex]) => {
-        const colorBtn = document.createElement('button');
-        colorBtn.className = 'color-btn';
-        colorBtn.style.backgroundColor = hex;
-        colorBtn.setAttribute('data-color', hex);
-        colorBtn.setAttribute('data-name', name);
-        colorBtn.title = name;
-
-        // Add name label that appears on hover
-        const nameLabel = document.createElement('span');
-        nameLabel.className = 'color-name-label';
-        nameLabel.textContent = name;
-        colorBtn.appendChild(nameLabel);
-
-        colorBtn.addEventListener('click', () => {
-            updateColorUI(hex, name);
-            updateShirtColor(hex);
-            updateState({ color: hex });
-
-            // Update active state
-            document.querySelectorAll('.color-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            colorBtn.classList.add('active');
-        });
-
-        presetsContainer.appendChild(colorBtn);
-    });
-
-    // Initialize with default color
-    updateColorUI(defaultColor, 'White');
-}
-
-/**
- * Update the color UI with the given color and name
- */
-function updateColorUI(hexColor, colorNameText) {
-    const colorPreview = document.getElementById('color-preview');
-    const colorName = document.getElementById('color-name');
-    const colorHex = document.getElementById('color-hex');
-
-    if (colorPreview) colorPreview.style.backgroundColor = hexColor;
-    if (colorName) colorName.textContent = colorNameText;
-    if (colorHex) colorHex.textContent = hexColor;
-}
 
 /**
  * Initialize the tabs navigation
@@ -146,9 +44,6 @@ export function initializeTabs() {
 
     // Set up theme toggle
     setupThemeToggle();
-
-    // Initialize color picker
-    initializeColorPicker();
 }
 
 // Setup camera view buttons to show appropriate bounding boxes
@@ -181,6 +76,70 @@ export function setupCameraViewButtons() {
                 this.classList.add('active');
             }
         };
+
+        // Add double-click handler to toggle edit mode
+        button.addEventListener('dblclick', function (e) {
+            e.preventDefault();
+            const view = this.dataset.view;
+            if (!view) return;
+
+            const isCurrentlyEditing = this.classList.contains('editing');
+
+            // Toggle edit mode for this view
+            import('./scene.js').then(scene => {
+                scene.toggleEditorMode(!isCurrentlyEditing, view);
+
+                // If entering edit mode, make sure this view is selected first
+                if (!isCurrentlyEditing) {
+                    // Update active state on buttons
+                    viewButtons.forEach(btn => btn.classList.remove('active'));
+                    this.classList.add('active');
+
+                    // Change to this camera view
+                    scene.changeCameraView(view);
+
+                    // Show a helpful tooltip
+                    showToast(`Double-click again to exit editing ${view} area`);
+                }
+            });
+        });
+
+        // Add edit button to each view button
+        const editButton = document.createElement('button');
+        editButton.className = 'edit-toggle-btn';
+        editButton.innerHTML = '<i class="fas fa-edit"></i>';
+        editButton.title = `Edit ${button.dataset.view || ''} area`;
+        editButton.setAttribute('aria-label', `Edit ${button.dataset.view || ''} area`);
+
+        // Add the edit button next to the view button
+        button.parentNode.insertBefore(editButton, button.nextSibling);
+
+        // Add click handler for the edit button
+        editButton.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const viewButton = this.previousElementSibling;
+            const view = viewButton.dataset.view;
+            if (!view) return;
+
+            const isCurrentlyEditing = viewButton.classList.contains('editing');
+
+            // Toggle edit mode
+            import('./scene.js').then(scene => {
+                scene.toggleEditorMode(!isCurrentlyEditing, view);
+
+                // If entering edit mode, make sure this view is selected first
+                if (!isCurrentlyEditing) {
+                    // Update active state on buttons
+                    viewButtons.forEach(btn => btn.classList.remove('active'));
+                    viewButton.classList.add('active');
+
+                    // Change to this camera view
+                    scene.changeCameraView(view);
+                }
+            });
+        });
     });
 }
 
@@ -770,7 +729,7 @@ export function setupAIPicker() {
                             // Import the necessary function from fabric-integration.js
                             const { openImageInEditor } = await import('./fabric-integration.js');
 
-                            // Open the image in the fabric canvas for editing
+                            // Open the image directly in the 3D editor
                             openImageInEditor(imageData, editedImageData => {
                                 // Update the preview with the edited image
                                 const resultImg = preview.querySelector('.ai-result img');
@@ -787,41 +746,10 @@ export function setupAIPicker() {
                                         showToast('Applied edited design to shirt');
                                     };
                                 }
-
-                                // Update the download button to use the edited image
-                                const downloadBtn = preview.querySelector('.download-ai-btn');
-                                if (downloadBtn) {
-                                    downloadBtn.onclick = () => {
-                                        const link = document.createElement('a');
-                                        link.href = editedImageData;
-                                        link.download = `ai-design-edited-${Date.now()}.png`;
-                                        document.body.appendChild(link);
-                                        link.click();
-                                        document.body.removeChild(link);
-                                        showToast('Downloading edited design');
-                                    };
-                                }
                             });
                         } catch (error) {
-                            console.error('Error opening image editor:', error);
+                            console.error('Error opening image in 3D editor:', error);
                             showToast('Could not open editor. Please try again.');
-
-                            // Fallback: Switch to file picker tab which has the fabric editor
-                            const fileTab = document.querySelector('.tab-btn[data-tab="file"]');
-                            if (fileTab) {
-                                fileTab.click();
-                            } else {
-                                // If file tab is removed, activate the editor without tab switching
-                                const fabricCanvas = document.querySelector('.fabric-canvas-wrapper');
-                                if (fabricCanvas) {
-                                    fabricCanvas.style.display = 'block';
-                                }
-
-                                const fabricControls = document.querySelector('.fabric-controls');
-                                if (fabricControls) {
-                                    fabricControls.style.display = 'block';
-                                }
-                            }
                         }
                     });
                 }
@@ -995,14 +923,6 @@ export function setupMobileUI() {
                     tabPanels.forEach(panel => {
                         panel.classList.toggle('active', panel.id === 'ai-picker');
                     });
-                } else if (this.id === 'mobile-edit') {
-                    // Scroll to the Design Editor section
-                    const designEditor = document.querySelector('.fabric-editor-container');
-                    if (designEditor) {
-                        setTimeout(() => {
-                            designEditor.scrollIntoView({ behavior: 'smooth' });
-                        }, 300);
-                    }
                 } else if (this.id === 'mobile-download') {
                     // Trigger download button
                     const downloadBtn = document.getElementById('download');
@@ -1077,6 +997,280 @@ export function showToast(message) {
     }, 3000);
 }
 
+/**
+ * Setup the editor controls for advanced texture editing
+ */
+export function setupEditControls() {
+    const editControlsContainer = document.getElementById('edit-controls');
+    if (!editControlsContainer) {
+        console.warn('Edit controls container not found');
+        return;
+    }
+
+    // Clear existing controls
+    editControlsContainer.innerHTML = '';
+
+    // Create advanced editor controls container
+    const advancedControlsContainer = document.createElement('div');
+    advancedControlsContainer.className = 'editor-controls advanced-controls';
+    advancedControlsContainer.innerHTML = `
+        <div class="control-section">
+            <h4>Transform</h4>
+            <div class="buttons">
+                <button class="control-button" data-mode="move">
+                    <i class="fas fa-arrows-alt"></i> Move
+                </button>
+                <button class="control-button" data-mode="rotate">
+                    <i class="fas fa-sync"></i> Rotate
+                </button>
+                <button class="control-button" data-mode="scale">
+                    <i class="fas fa-expand-arrows-alt"></i> Scale
+                </button>
+            </div>
+        </div>
+        
+        <div class="control-section">
+            <h4>Smart Features</h4>
+            <div class="buttons">
+                <button class="control-button toggle-button active" data-feature="dragdrop">
+                    <i class="fas fa-hand-pointer"></i> Drag & Drop
+                </button>
+                <button class="control-button toggle-button active" data-feature="smartplacement">
+                    <i class="fas fa-magic"></i> Smart Placement
+                </button>
+                <button class="control-button toggle-button active" data-feature="autoadjust">
+                    <i class="fas fa-sliders-h"></i> Auto Adjust
+                </button>
+            </div>
+        </div>
+        
+        <div class="control-section">
+            <h4>Quick Actions</h4>
+            <div class="buttons">
+                <button class="control-button" data-action="copy">
+                    <i class="fas fa-copy"></i> Copy
+                </button>
+                <button class="control-button" data-action="paste">
+                    <i class="fas fa-paste"></i> Paste
+                </button>
+                <button class="control-button" data-action="delete">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+                <button class="control-button" data-action="duplicate">
+                    <i class="fas fa-clone"></i> Duplicate
+                </button>
+            </div>
+        </div>
+    `;
+
+    // Add to container
+    editControlsContainer.appendChild(advancedControlsContainer);
+
+    // Add help tooltip for advanced features
+    const helpTip = document.createElement('div');
+    helpTip.className = 'help-tip';
+    helpTip.innerHTML = `
+        <i class="fas fa-info-circle"></i>
+        <div class="tip-content">
+            <h4>Quick Tips</h4>
+            <ul>
+                <li><strong>Drag & Drop:</strong> Drag images directly onto the 3D model</li>
+                <li><strong>Smart Placement:</strong> Automatically positions images within view boundaries</li>
+                <li><strong>Auto Adjust:</strong> Optimizes image size and appearance</li>
+                <li><strong>Keyboard Shortcuts:</strong> 
+                    <ul>
+                        <li>Delete: Del</li>
+                        <li>Copy: Ctrl+C</li>
+                        <li>Paste: Ctrl+V</li>
+                        <li>Duplicate: Ctrl+D</li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    `;
+    editControlsContainer.appendChild(helpTip);
+
+    // Add view quick-access buttons
+    setupViewQuickAccess(editControlsContainer);
+
+    // Setup event handlers for the transform buttons
+    const transformButtons = advancedControlsContainer.querySelectorAll('[data-mode]');
+    transformButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const mode = button.getAttribute('data-mode');
+            activateTransformMode(mode);
+            setActiveEditButton(button);
+        });
+    });
+
+    // Setup event handlers for toggle buttons
+    const toggleButtons = advancedControlsContainer.querySelectorAll('.toggle-button');
+    toggleButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const feature = button.getAttribute('data-feature');
+            button.classList.toggle('active');
+            const isActive = button.classList.contains('active');
+
+            // Call the appropriate toggle function based on the feature
+            switch (feature) {
+                case 'dragdrop':
+                    toggleDragAndDrop(isActive);
+                    showToast(`Drag & Drop ${isActive ? 'enabled' : 'disabled'}`);
+                    break;
+                case 'smartplacement':
+                    toggleSmartPlacement(isActive);
+                    showToast(`Smart Placement ${isActive ? 'enabled' : 'disabled'}`);
+                    break;
+                case 'autoadjust':
+                    toggleAutoAdjustment(isActive);
+                    showToast(`Auto Adjust ${isActive ? 'enabled' : 'disabled'}`);
+                    break;
+            }
+        });
+    });
+
+    // Setup event handlers for quick action buttons
+    const actionButtons = advancedControlsContainer.querySelectorAll('[data-action]');
+    actionButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const action = button.getAttribute('data-action');
+
+            // Handle each action
+            switch (action) {
+                case 'copy':
+                    copySelectedObject();
+                    showToast('Object copied');
+                    break;
+                case 'paste':
+                    pasteObject();
+                    showToast('Object pasted');
+                    break;
+                case 'delete':
+                    deleteSelectedObject();
+                    showToast('Object deleted');
+                    break;
+                case 'duplicate':
+                    duplicateSelectedObject();
+                    showToast('Object duplicated');
+                    break;
+            }
+        });
+    });
+
+    // Set default active button
+    setActiveEditButton(advancedControlsContainer.querySelector('[data-mode="move"]'));
+}
+
+/**
+ * Setup view quick access buttons for easy navigation
+ * @param {HTMLElement} container - The container to add the buttons to
+ */
+function setupViewQuickAccess(container) {
+    // Create view quick access section
+    const viewQuickAccess = document.createElement('div');
+    viewQuickAccess.className = 'control-section view-quick-access';
+    viewQuickAccess.innerHTML = `
+        <h4>Quick View Access</h4>
+        <div class="view-buttons">
+            <!-- View buttons will be added dynamically -->
+        </div>
+    `;
+
+    container.appendChild(viewQuickAccess);
+
+    // Dynamically add view buttons based on the current model configuration
+    const buttonContainer = viewQuickAccess.querySelector('.view-buttons');
+
+    // Get all views for the current model
+    import('./texture-mapper.js').then(textureMapper => {
+        const views = textureMapper.getAllViews();
+
+        views.forEach(view => {
+            // Get view config to get the display name
+            const viewConfig = textureMapper.getViewConfig(view);
+            const displayName = viewConfig.name || view.replace('_', ' ');
+
+            const button = document.createElement('button');
+            button.className = 'view-button';
+            button.setAttribute('data-view', view);
+            button.innerHTML = `
+                <i class="fas fa-angle-right"></i>
+                ${displayName}
+            `;
+
+            // Add click handler
+            button.addEventListener('click', () => {
+                // Switch to this view
+                textureMapper.quickJumpToView(view);
+
+                // Update active state
+                document.querySelectorAll('.view-button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                button.classList.add('active');
+            });
+
+            buttonContainer.appendChild(button);
+        });
+
+        // Set initial active button based on current view
+        const currentView = textureMapper.getCurrentView();
+        const activeButton = buttonContainer.querySelector(`[data-view="${currentView}"]`);
+        if (activeButton) {
+            activeButton.classList.add('active');
+        }
+    });
+}
+
+/**
+ * Set the active edit button
+ * @param {HTMLElement} activeButton - The button to set as active
+ */
+function setActiveEditButton(activeButton) {
+    // Remove active class from all transform buttons
+    const allButtons = document.querySelectorAll('[data-mode]');
+    allButtons.forEach(button => button.classList.remove('active'));
+
+    // Add active class to the clicked button
+    activeButton.classList.add('active');
+}
+
+/**
+ * Activate a specific transform mode in the 3D editor
+ * @param {string} mode - The transform mode to activate (move, rotate, scale)
+ */
+function activateTransformMode(mode) {
+    // Import the 3D editor dynamically to avoid circular dependencies
+    import('./3d-editor.js').then(editor => {
+        editor.setTransformMode(mode);
+    });
+}
+
+// Helper functions for quick actions
+function copySelectedObject() {
+    import('./3d-editor.js').then(editor => {
+        editor.copySelectedObject();
+    });
+}
+
+function pasteObject() {
+    import('./3d-editor.js').then(editor => {
+        editor.pasteObject();
+    });
+}
+
+function deleteSelectedObject() {
+    import('./3d-editor.js').then(editor => {
+        editor.deleteSelectedObject();
+    });
+}
+
+function duplicateSelectedObject() {
+    import('./3d-editor.js').then(editor => {
+        editor.duplicateSelectedObject();
+    });
+}
+
 // Initialize everything when the DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     try {
@@ -1086,6 +1280,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setupCameraViewButtons();
         setupThemeToggle();
         setupMobileUI();
+        setupEditControls();
     } catch (error) {
         console.error('Error initializing UI components:', error);
     }

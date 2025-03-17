@@ -72,24 +72,44 @@ export function calculateFabricMaterialProperties(fabricType = 'cotton', color =
     const hsl = {};
     color.getHSL(hsl);
 
-    // Adjust roughness based on color brightness (lighter colors appear slightly smoother)
-    const brightnessAdjustedRoughness = properties.roughness * (1 - hsl.l * 0.2);
+    // Determine if this is a very dark color (like black)
+    const isDarkColor = hsl.l < 0.15;
+
+    // Adjust roughness based on color brightness (darker colors need different handling)
+    let brightnessAdjustedRoughness;
+    if (isDarkColor) {
+        // For very dark colors like black, we need higher roughness to render correctly
+        brightnessAdjustedRoughness = Math.max(properties.roughness, 0.75);
+    } else {
+        // For normal colors, adjust based on lightness
+        brightnessAdjustedRoughness = properties.roughness * (1 - hsl.l * 0.2);
+    }
 
     // Calculate anisotropy direction based on thread pattern (simulating fabric weave direction)
     const anisotropyRotation = Math.PI / 4; // 45 degrees by default
 
     // Calculate sheen intensity based on fabric type and color saturation
-    const sheenIntensity = properties.reflectivity * (1 + hsl.s * 0.5);
+    // Dark colors should have less sheen to appear more realistic
+    const sheenIntensity = isDarkColor
+        ? properties.reflectivity * 0.3
+        : properties.reflectivity * (1 + hsl.s * 0.5);
 
     // Calculate sheen color (typically slightly shifted towards the color's complementary)
-    const sheenColor = new THREE.Color(color).offsetHSL(0.5, 0, 0.1);
+    // For dark colors, we need a subtle sheen that's visible but not overpowering
+    const sheenColor = new THREE.Color(color);
+    if (isDarkColor) {
+        // For dark colors, add just a hint of lightness to the sheen
+        sheenColor.offsetHSL(0, 0, 0.05);
+    } else {
+        sheenColor.offsetHSL(0.5, 0, 0.1);
+    }
 
     // Result properties for Three.js MeshPhysicalMaterial
     return {
         color: color,
         roughness: brightnessAdjustedRoughness,
-        metalness: properties.reflectivity * 0.05, // Most fabrics aren't metallic
-        clearcoat: properties.reflectivity * 0.5,
+        metalness: isDarkColor ? 0.01 : properties.reflectivity * 0.05, // Less metalness for dark fabrics
+        clearcoat: isDarkColor ? 0.1 : properties.reflectivity * 0.5,  // Less clearcoat for dark fabrics
         clearcoatRoughness: properties.roughness * 0.8,
         sheen: sheenIntensity,
         sheenRoughness: 1 - properties.reflectivity,

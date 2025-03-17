@@ -243,6 +243,8 @@ body {
 	box-shadow: var(--shadow-md);
 	overflow: hidden;
 	z-index: 10;
+	padding: 5px;
+	gap: 10px;
 }
 
 .camera-view-btn {
@@ -256,6 +258,7 @@ body {
 	color: var(--text-secondary);
 	cursor: pointer;
 	transition: var(--transition-fast);
+	position: relative;
 }
 
 .camera-view-btn i {
@@ -1001,5 +1004,320 @@ body {
 	}
 	100% {
 		transform: translateX(-100%);
+	}
+}
+
+/* Editing Mode Styles */
+.camera-view-btn.editing {
+	background-color: #ff9800 !important;
+	color: white !important;
+	position: relative;
+	animation: pulse-editing 2s infinite;
+}
+
+.camera-view-btn.editing::after {
+	content: 'Editing';
+	position: absolute;
+	bottom: -20px;
+	left: 50%;
+	transform: translateX(-50%);
+	background-color: #ff9800;
+	color: white;
+	padding: 3px 8px;
+	border-radius: var(--border-radius-sm);
+	font-size: 0.7rem;
+	white-space: nowrap;
+	box-shadow: var(--shadow-sm);
+	z-index: 10;
+}
+
+@keyframes pulse-editing {
+	0% {
+		box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.7);
+	}
+	70% {
+		box-shadow: 0 0 0 10px rgba(255, 152, 0, 0);
+	}
+	100% {
+		box-shadow: 0 0 0 0 rgba(255, 152, 0, 0);
+	}
+}
+
+/* Edit mode cursor */
+.edit-mode-cursor {
+	cursor: crosshair !important;
+}
+
+/* Extra visible transform handles */
+.transform-handle {
+	background-color: white;
+	border: 2px solid #2196f3;
+	width: 12px;
+	height: 12px;
+	position: absolute;
+	z-index: 100;
+}
+
+.transform-handle.rotation {
+	background-color: #4caf50;
+	border-radius: 50%;
+}
+
+.transform-handle.scale {
+	cursor: nwse-resize;
+}
+
+.transform-handle.move {
+	cursor: move;
+}
+
+/* Edit controls panel */
+.edit-controls {
+	position: absolute;
+	bottom: 20px;
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	background-color: var(--bg-secondary);
+	border-radius: var(--border-radius);
+	padding: 10px;
+	box-shadow: var(--shadow-md);
+	z-index: 30;
+	opacity: 0;
+	visibility: hidden;
+	transition: opacity 0.3s, visibility 0.3s;
+}
+
+.edit-controls.visible {
+	opacity: 1;
+	visibility: visible;
+}
+
+.edit-controls button {
+	padding: 8px 12px;
+	margin: 0 5px;
+	border: none;
+	background-color: var(--bg-tertiary);
+	color: var(--text-primary);
+	border-radius: var(--border-radius-sm);
+	cursor: pointer;
+	transition: var(--transition-fast);
+	display: flex;
+	align-items: center;
+}
+
+.edit-controls button i {
+	margin-right: 5px;
+}
+
+.edit-controls button:hover {
+	background-color: var(--primary-color);
+	color: white;
+}
+
+.edit-controls button.confirm {
+	background-color: var(--success-color);
+	color: white;
+}
+
+.edit-controls button.cancel {
+	background-color: var(--danger-color);
+	color: white;
+}
+
+/* Edit toggle button */
+.edit-toggle-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
+	background-color: var(--bg-tertiary);
+	border: none;
+	color: var(--text-primary);
+	cursor: pointer;
+	transition: var(--transition-fast);
+	position: absolute;
+	top: -8px;
+	right: -8px;
+	font-size: 0.8rem;
+	box-shadow: var(--shadow-sm);
+	z-index: 5;
+}
+
+.edit-toggle-btn:hover {
+	background-color: #ff9800;
+	color: white;
+	transform: scale(1.1);
+}
+
+.camera-view-btn {
+	position: relative; /* Ensure this is set for absolute positioning of the edit button */
+}
+
+/* Improve camera view controls spacing to accommodate edit buttons */
+.camera-view-controls {
+	padding: 5px;
+	gap: 10px;
+}
+
+.camera-view-btn.editing + .edit-toggle-btn {
+	background-color: #ff9800;
+	color: white;
+	animation: pulse-editing 2s infinite;
+}
+
+/* 3D Editor Drag and Drop Styles */
+.drag-highlight {
+	box-shadow: 0 0 0 3px var(--primary-color, #4a90e2) inset;
+	cursor: copy !important;
+}
+
+#drop-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: rgba(0, 0, 0, 0.5);
+	z-index: 1000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 0.3s ease;
+}
+
+#drop-overlay.active {
+	opacity: 1;
+}
+
+#drop-overlay .drop-message {
+	background: white;
+	border-radius: 8px;
+	padding: 20px;
+	text-align: center;
+	max-width: 300px;
+	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+#drop-overlay .drop-message i {
+	font-size: 32px;
+	color: var(--primary-color, #4a90e2);
+	margin-bottom: 10px;
+	animation: bounce 1s infinite alternate;
+}
+
+#drop-overlay .drop-message p {
+	font-size: 18px;
+	margin: 10px 0;
+	font-weight: bold;
+}
+
+#drop-overlay .drop-message small {
+	display: block;
+	font-size: 14px;
+	color: #666;
+}
+
+#drop-overlay .view-indicators {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+
+.view-indicator {
+	position: absolute;
+	border: 2px dashed rgba(255, 255, 255, 0.7);
+	border-radius: 4px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: background-color 0.2s ease;
+}
+
+.view-indicator:hover {
+	background-color: rgba(74, 144, 226, 0.3);
+}
+
+.view-indicator span {
+	background: rgba(0, 0, 0, 0.6);
+	color: white;
+	padding: 4px 8px;
+	border-radius: 4px;
+	font-size: 14px;
+	font-weight: bold;
+	text-transform: capitalize;
+}
+
+@keyframes bounce {
+	from {
+		transform: translateY(0px);
+	}
+	to {
+		transform: translateY(-10px);
+	}
+}
+
+/* Advanced Editor Controls */
+.editor-controls {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 15px;
+}
+
+.editor-controls .control-button {
+	background: white;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	padding: 8px 12px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 13px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.editor-controls .control-button:hover {
+	border-color: var(--primary-color, #4a90e2);
+	background-color: #f7f9ff;
+}
+
+.editor-controls .control-button.active {
+	background-color: var(--primary-color, #4a90e2);
+	color: white;
+	border-color: var(--primary-color, #4a90e2);
+}
+
+.editor-controls .control-button i {
+	font-size: 16px;
+}
+
+/* Smart Placement Indicator */
+.smart-placement-indicator {
+	position: absolute;
+	border: 2px solid var(--primary-color, #4a90e2);
+	border-radius: 4px;
+	pointer-events: none;
+	z-index: 100;
+	animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+	0% {
+		box-shadow: 0 0 0 0 rgba(74, 144, 226, 0.4);
+	}
+	70% {
+		box-shadow: 0 0 0 10px rgba(74, 144, 226, 0);
+	}
+	100% {
+		box-shadow: 0 0 0 0 rgba(74, 144, 226, 0);
 	}
 }

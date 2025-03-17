@@ -14,85 +14,23 @@ let editorTools; // Add this variable to store the editor tools container
 let use3DEditor = true; // Flag to determine if we should use the 3D editor
 
 /**
- * Initialize the Fabric.js canvas
- * @param {number} width - Optional canvas width (defaults to container width or 500)
- * @param {number} height - Optional canvas height (defaults to width for square canvas)
+ * Initialize the 3D editor mode (no longer initializes a Fabric.js canvas)
+ * Kept for backward compatibility
  */
 export function initFabricCanvas(width, height) {
-    // Get the canvas container element
-    const container = document.querySelector('.fabric-canvas-wrapper');
+    // Always use 3D editor
+    use3DEditor = true;
 
-    // If we're using the 3D editor, we don't need to initialize the fabric canvas
-    if (use3DEditor) {
-        // We still need to set up some UI elements
-        setupEditorTools();
+    // Log that we're not using Fabric.js anymore
+    Logger.log('2D Fabric.js editor has been removed. Using 3D editor only.');
 
-        // Hide the fabric canvas container if it exists
-        if (container) {
-            container.style.display = 'none';
-        }
+    // Setup editor tools for 3D editor only
+    setupEditorTools();
 
-        // Enable 3D editor mode in scene.js
-        updateState({ editorMode: true });
+    // Enable 3D editor mode in scene.js
+    updateState({ editorMode: true });
 
-        Logger.log('Using 3D editor instead of Fabric canvas');
-        return null;
-    }
-
-    // Use consistent canvas size for all cases
-    // Determine canvas size
-    let canvasWidth = width || (container ? container.clientWidth : 500);
-    let canvasHeight = height || canvasWidth;
-
-    // Limit maximum size for performance
-    canvasWidth = Math.min(canvasWidth, 320);
-    canvasHeight = Math.min(canvasHeight, 400);
-    // Create canvas instance
-    canvas = new fabric.Canvas('fabric-canvas', {
-        preserveObjectStacking: true,
-        width: canvasWidth,
-        height: canvasHeight,
-        selection: true,
-        backgroundColor: 'transparent'  // Set transparent background
-    });
-
-    // Store canvas in window for global access
-    window.fabricCanvas = canvas;
-
-    // Set up initial canvas state
-    canvas.freeDrawingBrush.width = selectedLineWidth;
-    canvas.freeDrawingBrush.color = selectedColor;
-
-    // Add a background rectangle that represents the printable area
-    const printArea = new fabric.Rect({
-        left: 0,
-        top: 0,
-        width: canvas.width,
-        height: canvas.height,
-        fill: 'rgba(246, 246, 246, 0)',
-        selectable: false,
-        hoverCursor: 'default'
-    });
-    canvas.add(printArea);
-    canvas.sendToBack(printArea);
-
-    // Set up event listeners
-    setupEventListeners();
-
-    // Update any container styling if needed
-    if (container) {
-        container.style.height = canvasHeight + 'px';
-        container.style.width = canvasWidth + 'px';
-        container.style.margin = '0 auto';
-
-        // Setup drag and drop for images
-        setupDragAndDrop(container);
-    }
-
-    // Setup clipboard paste support for images
-    setupClipboardPasteSupport();
-
-    return canvas;
+    return null;
 }
 
 /**
@@ -560,81 +498,26 @@ function setMode(mode) {
 }
 
 /**
- * Add text to the canvas
+ * Add text to the canvas - now just forwards to 3D editor
  * @param {string} text - The text to add
  */
 function addText(text) {
-    // Create a high-quality text object
-    const textObj = new fabric.IText(text, {
-        left: canvas.width / 2,
-        top: canvas.height / 2,
-        fontFamily: selectedFontFamily,
+    // Forward to 3D editor
+    add3DText(text, {
         fontSize: selectedFontSize,
-        fill: selectedColor,
-        textAlign: 'center',
-        editable: true,
-        centeredRotation: true,
-        originX: 'center',
-        originY: 'center'
+        color: selectedColor
     });
-
-    canvas.add(textObj);
-    canvas.setActiveObject(textObj);
-    canvas.renderAll();
-
-    // Return the created object
-    return textObj;
 }
 
 /**
- * Add a shape to the canvas
+ * Add a shape to the canvas - now just forwards to 3D editor
  * @param {string} shapeType - The type of shape to add
  */
 function addShape(shapeType) {
-    let shape;
-
-    switch (shapeType) {
-        case 'rect':
-            shape = new fabric.Rect({
-                left: canvas.width / 2,
-                top: canvas.height / 2,
-                width: 100,
-                height: 100,
-                fill: selectedColor,
-                originX: 'center',
-                originY: 'center'
-            });
-            break;
-        case 'circle':
-            shape = new fabric.Circle({
-                left: canvas.width / 2,
-                top: canvas.height / 2,
-                radius: 50,
-                fill: selectedColor,
-                originX: 'center',
-                originY: 'center'
-            });
-            break;
-        case 'triangle':
-            shape = new fabric.Triangle({
-                left: canvas.width / 2,
-                top: canvas.height / 2,
-                width: 100,
-                height: 100,
-                fill: selectedColor,
-                originX: 'center',
-                originY: 'center'
-            });
-            break;
-    }
-
-    if (shape) {
-        canvas.add(shape);
-        canvas.setActiveObject(shape);
-
-        // Explicitly apply shape to the shirt texture
-        applyDesignToShirt();
-    }
+    // Forward to 3D editor
+    add3DShape(shapeType, {
+        fill: selectedColor
+    });
 }
 
 /**
@@ -642,102 +525,31 @@ function addShape(shapeType) {
  */
 export function applyDesignToShirt() {
     try {
-        // Get the canvas element
-        const canvas = window.fabricCanvas;
-        if (!canvas) {
-            console.error("Fabric canvas not initialized");
-            // Try to initialize it if not available
-            if (typeof initFabricCanvas === 'function') {
-                console.log("Attempting to initialize Fabric canvas");
-                window.fabricCanvas = initFabricCanvas();
-
-                // If still not available, exit gracefully
-                if (!window.fabricCanvas) {
-                    console.warn("Could not initialize Fabric canvas, operation aborted");
-                    return;
-                }
-            } else {
-                return;
-            }
-        }
-
-        // Add a visual indicator that updates are being applied
+        // Since we're using the 3D editor only, we don't need to get the fabric canvas
+        // Just show a notification that the design is being applied
         showApplyingIndicator(true);
 
-        // Get the current canvas dimensions
-        const canvasWidth = canvas.width;
-        const canvasHeight = canvas.height;
-
-        // Temporarily upscale canvas for higher quality export if needed
-        const scaleMultiplier = 2; // Upscale by 2x for better quality
-
-        // Only upscale if the canvas is below a certain size threshold
-        if (canvasWidth < 1024 || canvasHeight < 1024) {
-            // Store original dimensions and scaling
-            const originalWidth = canvas.width;
-            const originalHeight = canvas.height;
-            const originalScaleFactor = canvas.getZoom();
-
-            // Scale up canvas temporarily
-            canvas.setWidth(originalWidth * scaleMultiplier);
-            canvas.setHeight(originalHeight * scaleMultiplier);
-            canvas.setZoom(originalScaleFactor * scaleMultiplier);
-            canvas.renderAll();
-
-            // After export, we'll restore the original dimensions
-        }
-
-        // Convert the canvas to a high-quality data URL
-        const designImage = canvas.lowerCanvasEl.toDataURL('image/png', 1.0);
-
-        // Restore canvas to original dimensions if we upscaled
-        if (canvasWidth < 1024 || canvasHeight < 1024) {
-            canvas.setWidth(canvasWidth);
-            canvas.setHeight(canvasHeight);
-            canvas.setZoom(canvas.getZoom() / scaleMultiplier);
-            canvas.renderAll();
-        }
-
-        // Import texture-mapper functions
-        import('./texture-mapper.js').then((textureMapper) => {
-            const currentView = textureMapper.getCurrentView ?
-                textureMapper.getCurrentView() : 'front';
-
-            // Apply design to the current view using the texture mapper
-            textureMapper.loadCustomImage(designImage, currentView)
-                .then(() => {
-                    console.log(`Applied design to ${currentView} view using texture mapper`);
-                    showNotification('Design applied to ' + currentView + ' view', 'success');
-                })
-                .catch(error => {
-                    console.error("Error applying design to view:", error);
-                    showNotification('Failed to apply design to ' + currentView + ' view', 'error');
-                })
-                .finally(() => {
-                    // Hide the applying indicator
-                    showApplyingIndicator(false);
-                });
-        }).catch(error => {
-            console.error("Error importing texture mapper:", error);
-
-            // Fallback to the old method if texture mapper import fails
-            if (typeof updateShirtTexture === 'function') {
-                updateShirtTexture(designImage, 'full');
-                showNotification('Design applied using fallback method', 'info');
-            } else {
-                console.error("updateShirtTexture function not available");
-                showNotification('Could not apply design - missing updateShirtTexture function', 'error');
+        // Use the 3D editor's texture update function
+        import('./3d-editor.js').then(editor => {
+            if (editor.updateShirt3DTexture) {
+                editor.updateShirt3DTexture();
+                Logger.log('Applied design to shirt using 3D editor');
             }
 
-            // Hide the applying indicator
+            // Hide the indicator after a short delay
+            setTimeout(() => {
+                showApplyingIndicator(false);
+                showNotification('Design applied to shirt', 'success');
+            }, 500);
+        }).catch(error => {
+            console.error('Error applying design:', error);
             showApplyingIndicator(false);
+            showNotification('Error applying design', 'error');
         });
     } catch (error) {
-        console.error("Failed to apply design to shirt:", error);
-        showNotification('Failed to apply design. Please try again.', 'error');
-
-        // Hide the applying indicator
+        console.error('Error in applyDesignToShirt:', error);
         showApplyingIndicator(false);
+        showNotification('Error applying design', 'error');
     }
 }
 
@@ -880,136 +692,33 @@ function simulateFabricLighting(canvasEl) {
  * @param {function} callback - Function to call with the edited image data
  */
 export function openImageInEditor(imageData, callback) {
-    // Create temporary image to get dimensions
-    const tempImg = new Image();
-    tempImg.onload = function () {
-        // Use consistent canvas size
-        const canvasWidth = 320;
-        const canvasHeight = 400;
+    // Since we've removed the 2D editor, we'll directly use the 3D editor to add the image
+    import('./3d-editor.js').then(editor => {
+        if (editor.addImage) {
+            // Add the image to the current view
+            editor.addImage(imageData, {
+                view: state.cameraView || 'front',
+                center: true
+            }).then(imageObj => {
+                // If a callback was provided, call it with the original image data
+                // since we're not editing the image in 2D anymore
+                if (typeof callback === 'function') {
+                    callback(imageData);
+                }
 
-        // Initialize the canvas with the fixed dimensions
-        if (!canvas) {
-            initFabricCanvas(canvasWidth, canvasHeight);
-        } else {
-            // Resize existing canvas
-            canvas.setWidth(canvasWidth);
-            canvas.setHeight(canvasHeight);
-
-            // Resize the background rectangle
-            const background = canvas.getObjects()[0];
-            if (background) {
-                background.set({
-                    width: canvasWidth,
-                    height: canvasHeight
-                });
-            }
-        }
-
-        // Clear any existing content (except the background)
-        clearCanvas(true);
-
-        // Switch to the file tab to show the editor
-        const fileTab = document.querySelector('.tab-btn[data-tab="file"]');
-        if (fileTab) {
-            fileTab.click();
-        } else {
-            // If file tab doesn't exist, activate the editor without switching tabs
-            const editorContainer = document.querySelector('.fabric-controls');
-            if (editorContainer) {
-                editorContainer.style.display = 'block';
-            }
-        }
-
-        // Load the image into the canvas
-        fabric.Image.fromURL(imageData, function (img) {
-            // Calculate scaling to fit the canvas while maintaining aspect ratio
-            const scaleFactor = Math.min(
-                (canvas.width - 40) / img.width,
-                (canvas.height - 40) / img.height
-            );
-
-            // Apply scaling
-            img.scale(scaleFactor);
-
-            // Center the image
-            img.set({
-                left: canvas.width / 2,
-                top: canvas.height / 2,
-                originX: 'center',
-                originY: 'center'
+                showNotification('Image added to 3D model', 'success');
+            }).catch(error => {
+                console.error('Error adding image to 3D editor:', error);
+                showNotification('Error adding image', 'error');
             });
-
-            // Add to canvas
-            canvas.add(img);
-            canvas.setActiveObject(img);
-            canvas.renderAll();
-
-            // Update container styling
-            const container = document.querySelector('.fabric-canvas-wrapper');
-            if (container) {
-                container.style.height = canvasHeight + 'px';
-                container.style.width = canvasWidth + 'px';
-                container.style.margin = '0 auto';
-                container.style.overflow = 'hidden';
-            }
-
-            // Show notification
-            showNotification('AI image loaded for editing. Use the tools to customize it.');
-
-            // Add a special button to finish editing in a dedicated container
-            const editorContainer = document.querySelector('.fabric-controls');
-            if (editorContainer) {
-                // Create a container for the finish action
-                const actionsContainer = document.createElement('div');
-                actionsContainer.className = 'ai-edit-actions';
-
-                // Create the finish button
-                const finishButton = document.createElement('button');
-                finishButton.id = 'finish-ai-edit';
-                finishButton.className = 'button primary';
-                finishButton.innerHTML = '<i class="fas fa-check"></i> Save and Return to AI';
-
-                // Add the button to the container
-                actionsContainer.appendChild(finishButton);
-
-                // Add the container to the editor
-                editorContainer.appendChild(actionsContainer);
-
-                // Add event listener to the finish button
-                finishButton.addEventListener('click', function () {
-                    // Convert canvas to image data
-                    const editedImageData = canvas.toDataURL('image/png');
-
-                    // Switch back to AI tab
-                    const aiTab = document.querySelector('.tab-btn[data-tab="ai"]');
-                    if (aiTab) {
-                        aiTab.click();
-                    }
-
-                    // Call the callback with the edited image
-                    if (typeof callback === 'function') {
-                        callback(editedImageData);
-                    }
-
-                    // Clean up after editing is complete
-                    // Remove the AI editing title
-                    const aiEditTitle = document.querySelector('.ai-edit-title');
-                    if (aiEditTitle) {
-                        aiEditTitle.remove();
-                    }
-
-                    // Remove the actions container
-                    actionsContainer.remove();
-
-                    // Show notification
-                    showNotification('Edited image saved! You can now apply it to your shirt.');
-                });
-            }
-        });
-    };
-
-    // Set the source to load the image
-    tempImg.src = imageData;
+        } else {
+            console.error('3D editor addImage function not available');
+            showNotification('Could not add image - 3D editor not available', 'error');
+        }
+    }).catch(error => {
+        console.error('Error importing 3D editor:', error);
+        showNotification('Error loading 3D editor', 'error');
+    });
 }
 
 /**
@@ -1017,36 +726,18 @@ export function openImageInEditor(imageData, callback) {
  * @param {boolean} keepBackground - Whether to keep the background rectangle
  */
 export function clearCanvas(keepBackground = false) {
-    if (use3DEditor) {
+    if (window.confirm('Are you sure you want to clear all elements?')) {
         // Use 3D editor's clear method
-        if (window.confirm('Are you sure you want to clear all elements?')) {
-            // Import clearCanvas function from 3d-editor
-            const { clearCanvas } = require('./3d-editor.js');
-            clearCanvas();
-        }
-    } else if (canvas) {
-        if (keepBackground) {
-            // Keep only the background rectangle (first object)
-            const background = canvas.getObjects()[0];
-            canvas.clear();
-            if (background) {
-                canvas.add(background);
+        import('./3d-editor.js').then(module => {
+            if (module.clearCanvas) {
+                module.clearCanvas();
+                console.log('3D editor canvas cleared');
+            } else {
+                console.error('3D editor clearCanvas function not found');
             }
-        } else {
-            // Get the background rectangle (first object)
-            const background = canvas.getObjects()[0];
-
-            // Clear the canvas
-            canvas.clear();
-
-            // Add back the background if it existed
-            if (background) {
-                canvas.add(background);
-            }
-
-            // Reset all objects on top of the background
-            canvas.renderAll();
-        }
+        }).catch(error => {
+            console.error('Error importing 3D editor module:', error);
+        });
     }
 }
 
@@ -1057,38 +748,31 @@ export function clearCanvas(keepBackground = false) {
 export function setColor(color) {
     selectedColor = color;
 
-    if (use3DEditor) {
-        // The 3D editor will use this color for new objects
-        // Existing objects can be modified through the 3D editor's UI
-    } else if (canvas) {
-        // Original fabric.js object update
-        const activeObject = canvas.getActiveObject();
-        if (activeObject) {
-            if (activeObject.type === 'i-text') {
-                activeObject.set('fill', color);
-            } else {
-                activeObject.set('fill', color);
-            }
-            canvas.renderAll();
+    // Set the color in the 3D editor
+    import('./3d-editor.js').then(module => {
+        if (module.setColor) {
+            module.setColor(color);
         }
-    }
+    }).catch(error => {
+        console.error('Error setting color in 3D editor:', error);
+    });
 }
 
 /**
  * Download the current design
  */
 export function downloadDesign() {
-    const dataURL = canvas.toDataURL({
-        format: 'png',
-        quality: 1
+    // Use the 3D renderer to capture the current view
+    import('./scene.js').then(module => {
+        if (module.downloadCanvas) {
+            module.downloadCanvas();
+            console.log('Design downloaded using 3D renderer');
+        } else {
+            console.error('3D downloadCanvas function not found');
+        }
+    }).catch(error => {
+        console.error('Error downloading design:', error);
     });
-
-    const link = document.createElement('a');
-    link.download = 'shirt-design.png';
-    link.href = dataURL;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
 }
 
 /**
@@ -1103,37 +787,12 @@ export function setFabricType(fabricType) {
 }
 
 /**
- * Update canvas size on window resize
- */
-function updateCanvasSize() {
-    const container = document.querySelector('.fabric-canvas-wrapper');
-    if (container && canvas) {
-        const width = container.clientWidth;
-        canvas.setWidth(width);
-        canvas.setHeight(width); // Make it square
-        canvas.renderAll();
-    }
-}
-
-/**
  * Update canvas background color to match current theme
  */
-function updateCanvasBackgroundForTheme() {
-    const fabricContainer = document.querySelector('.canvas-container');
-    if (fabricContainer) {
-        fabricContainer.style.backgroundColor = 'transparent';
-    }
 
-    // Also listen for theme changes
-    window.addEventListener('theme-changed', (e) => {
-        if (fabricContainer) {
-            fabricContainer.style.backgroundColor = 'transparent';
-        }
-    });
-}
 
 /**
- * Add an image to the canvas from a file upload
+ * Add an image to the 3D editor from a file upload
  * @param {File} file - The image file to add
  */
 function addImageFromFile(file) {
@@ -1146,171 +805,76 @@ function addImageFromFile(file) {
     reader.onload = function (e) {
         const imgData = e.target.result;
 
-        // Pre-load image to get dimensions and apply advanced processing
-        const img = new Image();
-        img.onload = function () {
-            // Create a temporary canvas for image processing
-            const tempCanvas = document.createElement('canvas');
-            let tempWidth = img.width;
-            let tempHeight = img.height;
-
-            // Limit maximum dimensions while preserving aspect ratio
-            const maxDimension = 2048; // Maximum size for high-quality images
-
-            if (tempWidth > maxDimension || tempHeight > maxDimension) {
-                if (tempWidth > tempHeight) {
-                    tempHeight = (tempHeight / tempWidth) * maxDimension;
-                    tempWidth = maxDimension;
-                } else {
-                    tempWidth = (tempWidth / tempHeight) * maxDimension;
-                    tempHeight = maxDimension;
-                }
-            }
-
-            // Set canvas size to the calculated dimensions
-            tempCanvas.width = tempWidth;
-            tempCanvas.height = tempHeight;
-
-            // Enable high quality image processing
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.imageSmoothingEnabled = true;
-            tempCtx.imageSmoothingQuality = 'high';
-
-            // Fix image orientation based on EXIF data
-            fixImageOrientation(img, tempCtx, tempWidth, tempHeight);
-
-            // Get processed image data
-            const processedImgData = tempCanvas.toDataURL('image/png', 1.0);
-
-            // Add the processed image to the fabric canvas
-            fabric.Image.fromURL(processedImgData, function (fabricImg) {
-                // Calculate scaling to fit the canvas while maintaining aspect ratio
-                const scaleFactor = Math.min(
-                    (canvas.width * 0.6) / fabricImg.width,
-                    (canvas.height * 0.6) / fabricImg.height
-                );
-
-                // Apply scaling
-                fabricImg.scale(scaleFactor);
-
-                // Center the image
-                fabricImg.set({
-                    left: canvas.width / 2,
-                    top: canvas.height / 2,
-                    originX: 'center',
-                    originY: 'center',
-                    cornerSize: 10, // Increased from 8 for easier grabbing
-                    borderColor: 'rgba(0, 0, 0, 0.3)', // Made slightly more visible
-                    cornerColor: 'rgba(0, 102, 204, 0.5)', // Blue, more visible handles
-                    transparentCorners: false,
-                    lockUniScaling: false, // Allow non-uniform scaling
-                    hasControls: true,
-                    hasBorders: true,
-                    borderScaleFactor: 1.5, // Larger border when selected
-                    padding: 5 // Add padding to make selection easier
+        // Add the image to the 3D editor
+        import('./3d-editor.js').then(module => {
+            if (module.addImage) {
+                module.addImage(imgData, {
+                    view: state.cameraView || 'front',
+                    center: true
+                }).then(() => {
+                    showNotification('Image added to 3D model', 'success');
+                }).catch(error => {
+                    console.error('Error adding image:', error);
+                    showNotification('Error adding image', 'error');
                 });
-
-                // Add to canvas with improved anti-aliasing
-                canvas.add(fabricImg);
-                canvas.setActiveObject(fabricImg);
-                canvas.renderAll();
-
-                // Show success notification
-                showNotification('High-quality image added to design', 'success');
-
-                // Apply to shirt
-                applyDesignToShirt();
-            }, { crossOrigin: 'anonymous' });
-        };
-
-        // Load the image
-        img.src = imgData;
+            } else {
+                console.error('3D editor addImage function not found');
+                showNotification('Could not add image - 3D editor not available', 'error');
+            }
+        }).catch(error => {
+            console.error('Error importing 3D editor module:', error);
+            showNotification('Error loading 3D editor', 'error');
+        });
     };
 
     reader.readAsDataURL(file);
 }
 
 /**
- * Fix image orientation based on EXIF data
- * @param {HTMLImageElement} img - The image element to fix
- * @param {CanvasRenderingContext2D} ctx - Canvas context to draw the fixed image
- * @param {number} width - The width to use for the fixed image
- * @param {number} height - The height to use for the fixed image
- */
-function fixImageOrientation(img, ctx, width, height) {
-    // First clear the canvas
-    ctx.clearRect(0, 0, width, height);
-
-    // Apply transformations to fix the upside-down issue
-    ctx.save();
-    ctx.translate(width / 2, height / 2);
-    ctx.rotate(Math.PI); // 180 degrees - fixes upside down
-    ctx.scale(1, -1); // Flip vertically
-    ctx.translate(-width / 2, -height / 2);
-    ctx.drawImage(img, 0, 0, width, height);
-    ctx.restore();
-
-    // Note: For a more comprehensive solution, we would typically:
-    // 1. Extract EXIF orientation data from the image
-    // 2. Apply the appropriate transformations based on the orientation value
-    // For a production application, consider using a library like exif-js
-}
-
-/**
- * Setup support for pasting images from clipboard
+ * Setup clipboard paste support for images in the 3D editor
  */
 function setupClipboardPasteSupport() {
     // Listen for paste events on the document
     document.addEventListener('paste', function (e) {
-        // Only proceed if the canvas exists and is visible
-        const canvasWrapper = document.querySelector('.fabric-canvas-wrapper');
-        if (!canvas || !canvasWrapper || getComputedStyle(canvasWrapper).display === 'none') {
-            return;
-        }
-
         // Check if we have clipboard items (modern browsers)
         if (e.clipboardData && e.clipboardData.items) {
             // Look for images in the clipboard items
             const items = e.clipboardData.items;
 
             for (let i = 0; i < items.length; i++) {
+                // If we find an image, add it to the 3D editor
                 if (items[i].type.indexOf('image') !== -1) {
-                    // We found an image - get the blob
                     const blob = items[i].getAsFile();
+                    const reader = new FileReader();
 
-                    if (blob) {
-                        // Process the blob as a file
-                        addImageFromFile(blob);
+                    reader.onload = function (event) {
+                        // Import the 3D editor's addImage function
+                        import('./3d-editor.js').then(module => {
+                            if (module.addImage) {
+                                module.addImage(event.target.result, {
+                                    view: state.cameraView || 'front',
+                                    center: true
+                                }).then(() => {
+                                    showNotification('Image pasted to 3D model', 'success');
+                                }).catch(error => {
+                                    console.error('Error adding pasted image:', error);
+                                    showNotification('Error adding pasted image', 'error');
+                                });
+                            }
+                        }).catch(error => {
+                            console.error('Error importing 3D editor module:', error);
+                        });
+                    };
 
-                        // Show a notification
-                        showNotification('Image pasted from clipboard', 'success');
-
-                        // We're done, prevent default behavior
-                        e.preventDefault();
-                        return;
-                    }
+                    reader.readAsDataURL(blob);
+                    break;
                 }
             }
         }
     });
 
     // Add a visual indicator that paste is supported
-    const fabricControls = document.querySelector('.fabric-controls');
-    if (fabricControls) {
-        const pasteHint = document.createElement('div');
-        pasteHint.className = 'paste-hint';
-        pasteHint.innerHTML = '<i class="fas fa-clipboard"></i> You can also paste images from clipboard (Ctrl+V)';
-        pasteHint.style.fontSize = '0.9rem';
-        pasteHint.style.color = 'var(--text-primary, #333)';
-        pasteHint.style.padding = '10px';
-        pasteHint.style.margin = '10px 0';
-        pasteHint.style.textAlign = 'center';
-        pasteHint.style.backgroundColor = 'var(--bg-light, #f5f5f5)';
-        pasteHint.style.borderRadius = '5px';
-        pasteHint.style.border = '1px dashed var(--border-color, #ddd)';
-
-        fabricControls.appendChild(pasteHint);
-    }
+    Logger.log('Clipboard paste support enabled for 3D editor');
 }
 
 /**
@@ -1330,13 +894,6 @@ function setupEditorTools() {
             </div>
             <div class="tool-group">
                 <input type="color" id="color-picker" value="${selectedColor}" title="Color">
-                <select id="font-family" title="Font">
-                    <option value="Arial">Arial</option>
-                    <option value="Times New Roman">Times</option>
-                    <option value="Courier New">Courier</option>
-                    <option value="Georgia">Georgia</option>
-                    <option value="Verdana">Verdana</option>
-                </select>
                 <select id="font-size" title="Size">
                     <option value="20">20</option>
                     <option value="24">24</option>
@@ -1349,10 +906,6 @@ function setupEditorTools() {
             <div class="tool-group">
                 <button class="tool-btn" data-tool="delete" title="Delete Selected"><i class="fas fa-trash"></i></button>
                 <button class="tool-btn" data-tool="clear" title="Clear All"><i class="fas fa-trash-alt"></i></button>
-            </div>
-            <div class="tool-group mode-toggle">
-                <button class="tool-btn" data-mode="2d" title="2D Editing"><i class="fas fa-square"></i></button>
-                <button class="tool-btn active" data-mode="3d" title="3D Editing"><i class="fas fa-cube"></i></button>
             </div>
         `;
 
@@ -1387,38 +940,12 @@ function setupEditorToolListeners() {
         });
     });
 
-    // Mode toggle
-    const modeButtons = editorTools.querySelectorAll('[data-mode]');
-    modeButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            // Remove active class from all mode buttons
-            modeButtons.forEach(btn => btn.classList.remove('active'));
-            // Add active class to clicked button
-            button.classList.add('active');
-
-            // Toggle 3D editor mode
-            use3DEditor = button.dataset.mode === '3d';
-
-            // Update state and UI
-            toggleEditorMode();
-        });
-    });
-
     // Color picker
     const colorPicker = editorTools.querySelector('#color-picker');
     if (colorPicker) {
         colorPicker.addEventListener('change', (e) => {
             selectedColor = e.target.value;
             setColor(selectedColor);
-        });
-    }
-
-    // Font family
-    const fontFamily = editorTools.querySelector('#font-family');
-    if (fontFamily) {
-        fontFamily.addEventListener('change', (e) => {
-            selectedFontFamily = e.target.value;
-            updateSelectedObjectProperty('fontFamily', selectedFontFamily);
         });
     }
 
@@ -1437,123 +964,74 @@ function setupEditorToolListeners() {
  * @param {string} tool - The selected tool
  */
 function handleToolAction(tool) {
-    if (use3DEditor) {
-        // Handle action in 3D editor
-        switch (tool) {
-            case 'select':
-                // Select mode is the default, no action needed
-                break;
-            case 'text':
-                // Add text in 3D
-                const text = prompt('Enter text:', 'Your text here');
-                if (text) {
-                    add3DText(text, {
-                        fontFamily: selectedFontFamily,
-                        fontSize: selectedFontSize,
-                        color: selectedColor
-                    });
+    // Handle action in 3D editor
+    switch (tool) {
+        case 'select':
+            // Select mode is the default, no action needed
+            break;
+        case 'text':
+            // Add text in 3D
+            const text = prompt('Enter text:', 'Your text here');
+            if (text) {
+                add3DText(text, {
+                    fontSize: selectedFontSize,
+                    color: selectedColor
+                });
+            }
+            break;
+        case 'image':
+            // Trigger file input for image upload
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = 'image/*';
+            fileInput.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        addImage(event.target.result);
+                    };
+                    reader.readAsDataURL(file);
                 }
-                break;
-            case 'image':
-                // Trigger file input for image upload
-                const fileInput = document.createElement('input');
-                fileInput.type = 'file';
-                fileInput.accept = 'image/*';
-                fileInput.onchange = (e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                            addImage(event.target.result);
-                        };
-                        reader.readAsDataURL(file);
+            };
+            fileInput.click();
+            break;
+        case 'shape':
+            // Show shape options
+            const shape = prompt('Enter shape type (rect, circle):', 'rect');
+            if (shape === 'rect' || shape === 'circle') {
+                add3DShape(shape, {
+                    fill: selectedColor
+                });
+            }
+            break;
+        case 'delete':
+            // Handled by 3D editor's keydown event
+            break;
+        case 'clear':
+            if (confirm('Are you sure you want to clear all elements?')) {
+                // Import clearCanvas function from 3d-editor
+                import('./3d-editor.js').then(module => {
+                    if (module.clearCanvas) {
+                        module.clearCanvas();
                     }
-                };
-                fileInput.click();
-                break;
-            case 'shape':
-                // Show shape options
-                const shape = prompt('Enter shape type (rect, circle):', 'rect');
-                if (shape === 'rect' || shape === 'circle') {
-                    add3DShape(shape, {
-                        fill: selectedColor
-                    });
-                }
-                break;
-            case 'delete':
-                // Handled by 3D editor's keydown event
-                break;
-            case 'clear':
-                if (confirm('Are you sure you want to clear all elements?')) {
-                    clearCanvas();
-                }
-                break;
-        }
-    } else if (canvas) {
-        // Handle action in 2D fabric canvas (original code)
-        switch (tool) {
-            case 'select':
-                canvas.isDrawingMode = false;
-                break;
-            case 'text':
-                canvas.isDrawingMode = false;
-                const fabricText = prompt('Enter text:', 'Your text here');
-                if (fabricText) {
-                    addText(fabricText);
-                }
-                break;
-            case 'shape':
-                canvas.isDrawingMode = false;
-                const fabricShape = prompt('Enter shape type (rect, circle, triangle):', 'rect');
-                if (['rect', 'circle', 'triangle'].includes(fabricShape)) {
-                    addShape(fabricShape);
-                }
-                break;
-            case 'draw':
-                canvas.isDrawingMode = true;
-                break;
-            case 'delete':
-                const activeObject = canvas.getActiveObject();
-                if (activeObject) {
-                    canvas.remove(activeObject);
-                    canvas.renderAll();
-                }
-                break;
-            case 'clear':
-                if (confirm('Are you sure you want to clear all elements?')) {
-                    clearCanvas();
-                }
-                break;
-        }
+                });
+            }
+            break;
     }
 }
 
 /**
- * Toggle between 3D and 2D editing modes
+ * Toggle editor mode
  */
 function toggleEditorMode() {
-    // Get fabric canvas container
-    const container = document.querySelector('.fabric-canvas-wrapper');
+    // Always use 3D editor
+    use3DEditor = true;
 
-    // Update UI
-    if (use3DEditor) {
-        // Hide fabric canvas
-        if (container) container.style.display = 'none';
-        // Enable 3D editor mode
-        updateState({ editorMode: true });
-    } else {
-        // Show fabric canvas
-        if (container) container.style.display = 'block';
-        // Disable 3D editor mode
-        updateState({ editorMode: false });
+    // Enable 3D editor mode in state
+    updateState({ editorMode: true });
 
-        // Initialize fabric canvas if it doesn't exist
-        if (!canvas) {
-            initFabricCanvas();
-        }
-    }
-
-    Logger.log(`Switched to ${use3DEditor ? '3D' : '2D'} editing mode`);
+    Logger.log('Using 3D editing mode only');
 }
 
 /**
@@ -1562,72 +1040,28 @@ function toggleEditorMode() {
  * @param {any} value - The new value
  */
 function updateSelectedObjectProperty(property, value) {
-    if (use3DEditor) {
-        // This will be handled by the 3D editor internally
-        // The 3D editor will update its selected object
-    } else if (canvas) {
-        // Original fabric.js object update
-        const activeObject = canvas.getActiveObject();
-        if (activeObject) {
-            activeObject.set(property, value);
-            canvas.renderAll();
+    // This will be handled by the 3D editor internally
+    import('./3d-editor.js').then(module => {
+        if (module.updateSelectedObjectProperty) {
+            module.updateSelectedObjectProperty(property, value);
         }
-    }
+    }).catch(error => {
+        console.error('Error updating property in 3D editor:', error);
+    });
 }
 
-// Initialize and set up window resize listener
+// Initialize 3D editor when the window loads
 window.addEventListener('load', () => {
-    console.log('Window loaded - initializing Fabric canvas');
+    console.log('Window loaded - initializing 3D editor');
 
-    // Check if the canvas element exists
-    const canvasElement = document.getElementById('fabric-canvas');
-    if (!canvasElement) {
-        console.error('Canvas element #fabric-canvas not found in DOM');
-
-        // Create the canvas element if it doesn't exist
-        const canvasWrapper = document.querySelector('.fabric-canvas-wrapper');
-        if (canvasWrapper) {
-            console.log('Creating canvas element within .fabric-canvas-wrapper');
-            const newCanvas = document.createElement('canvas');
-            newCanvas.id = 'fabric-canvas';
-            canvasWrapper.appendChild(newCanvas);
-        } else {
-            console.error('Canvas wrapper .fabric-canvas-wrapper not found');
-            // Try to create both elements
-            const mainContainer = document.querySelector('.main-container') || document.body;
-            const newWrapper = document.createElement('div');
-            newWrapper.className = 'fabric-canvas-wrapper';
-            newWrapper.style.width = '500px';
-            newWrapper.style.height = '500px';
-            newWrapper.style.margin = '0 auto';
-            newWrapper.style.position = 'relative';
-
-            const newCanvas = document.createElement('canvas');
-            newCanvas.id = 'fabric-canvas';
-            newWrapper.appendChild(newCanvas);
-            mainContainer.appendChild(newWrapper);
-            console.log('Created fabric-canvas-wrapper and canvas elements');
-        }
-    }
-
-    // Initialize the canvas
+    // Initialize the 3D editor
     try {
-        const canvas = initFabricCanvas();
-        window.fabricCanvas = canvas; // Ensure global access
-        updateCanvasSize();
-        console.log('Fabric canvas initialized successfully');
+        // Call initFabricCanvas which now only sets up 3D editor
+        initFabricCanvas();
+        console.log('3D editor initialized successfully');
     } catch (error) {
-        console.error('Error initializing Fabric canvas:', error);
+        console.error('Error initializing 3D editor:', error);
     }
-
-    // Set up resize listener
-    window.addEventListener('resize', () => {
-        try {
-            updateCanvasSize();
-        } catch (error) {
-            console.error('Error updating canvas size:', error);
-        }
-    });
 
     // Apply initial design if needed
     if (window.initialDesign) {
