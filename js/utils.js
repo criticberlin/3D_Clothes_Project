@@ -48,6 +48,14 @@ export const Performance = {
             Logger.warn(`Performance issue: ${label} took ${duration.toFixed(2)}ms (threshold: ${thresholdMs}ms)`);
         }
         return duration;
+    },
+
+    getTime(label) {
+        if (this.timings[label]) {
+            return (performance.now() - this.timings[label]).toFixed(2);
+        } else {
+            return 'unknown';
+        }
     }
 };
 

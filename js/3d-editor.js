@@ -2073,9 +2073,13 @@ export function showEditableAreas(show = true) {
  * @param {CanvasRenderingContext2D} ctx - The canvas context
  */
 function drawEditableAreas(ctx) {
-    if (!state.showEditableAreas) return;
+    if (!canvasData || !ctx) return;
+
+    // Clear any previous outlines
+    ctx.clearRect(0, 0, canvasData.width, canvasData.height);
 
     const views = modelConfig[state.currentModel].views;
+    if (!views) return;
 
     // Draw each view's editable area
     for (const [viewName, viewConfig] of Object.entries(views)) {
@@ -2087,17 +2091,32 @@ function drawEditableAreas(ctx) {
         const width = (uvRect.u2 - uvRect.u1) * canvasData.width;
         const height = (uvRect.v2 - uvRect.v1) * canvasData.height;
 
-        // Draw a subtle outline
+        // Draw a subtle outline with fixed color (not affected by shirt color)
         ctx.save();
-        ctx.strokeStyle = 'rgba(100, 149, 237, 0.4)'; // Light blue
+        
+        // Use a solid fixed color that won't be affected by shirt color
+        ctx.strokeStyle = 'rgb(64, 127, 255)'; // Fixed bright blue
         ctx.lineWidth = 2;
         ctx.setLineDash([5, 5]);
+        
+        // Use composite operation that ensures the line is always visible
+        ctx.globalCompositeOperation = 'source-over';
+        
         ctx.strokeRect(x, y, width, height);
 
-        // Add view name label
-        ctx.fillStyle = 'rgba(100, 149, 237, 0.8)';
+        // Add view name label with solid background to ensure visibility
+        const labelText = viewConfig.name || viewName;
         ctx.font = '14px Arial';
-        ctx.fillText(viewConfig.name || viewName, x + 10, y + 20);
+        
+        // Draw text background
+        const textWidth = ctx.measureText(labelText).width;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.fillRect(x + 10, y + 6, textWidth + 10, 20);
+        
+        // Draw text on top
+        ctx.fillStyle = 'rgb(0, 85, 255)'; // Fixed blue color for text
+        ctx.fillText(labelText, x + 15, y + 20);
+        
         ctx.restore();
     }
 }

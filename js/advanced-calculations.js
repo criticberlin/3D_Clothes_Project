@@ -597,71 +597,74 @@ export function calculatePreciseTextureUVs(mesh, placementOptions = {}) {
 }
 
 /**
- * Calculate physically accurate color adjustment based on fabric properties
- * 
- * @param {THREE.Color} baseColor - The input color
- * @param {string} fabricType - Type of fabric
- * @param {Object} options - Additional adjustment options
- * @returns {THREE.Color} The adjusted color for physically accurate rendering
+ * Calculate fabric color based on base color and fabric type
+ * @param {THREE.Color} baseColor - The base color
+ * @param {string} fabricType - The fabric type
+ * @returns {object} - Color properties for the fabric
  */
-export function calculateFabricColor(baseColor, fabricType = 'cotton', options = {}) {
-    const properties = FABRIC_PROPERTIES[fabricType] || FABRIC_PROPERTIES.cotton;
-    const {
-        weathered = 0,    // 0-1 scale of fabric weathering/fading
-        wet = 0,          // 0-1 scale of fabric wetness
-        lighting = 'neutral', // 'warm', 'cool', 'neutral' lighting environment
-    } = options;
-
-    // Convert color to HSL for easier adjustment
+export function calculateFabricColor(baseColor, fabricType = 'cotton') {
+    // Ensure baseColor is a THREE.Color
+    if (!baseColor || typeof baseColor.getHSL !== 'function') {
+        console.error('Invalid base color provided:', baseColor);
+        // Return default color properties
+        return {
+            color: baseColor || new THREE.Color(0xFFFFFF),
+            emissive: new THREE.Color(0x000000)
+        };
+    }
+    
+    // Get HSL values from base color
     const hsl = {};
     baseColor.getHSL(hsl);
-
-    // Apply fabric-specific color adjustments
-    // Different fabrics reflect light differently and affect the perceived color
-
-    // Cotton tends to be more matte and slightly warmer
-    if (fabricType === 'cotton') {
-        hsl.s *= 0.9; // Slightly reduce saturation
-        hsl.l = Math.max(0.1, Math.min(0.9, hsl.l * 0.95)); // Slightly darker
+    
+    // Adjust properties based on fabric type
+    let emissiveIntensity = 0.02; // Default subtle emissive
+    let emissiveColor = new THREE.Color(baseColor.getHex());
+    
+    // Different fabrics have different light reflectance properties
+    switch (fabricType) {
+        case 'silk':
+            // Silk has high sheen and subtle emissive
+            emissiveIntensity = 0.06;
+            // Brighten emissive color for silk
+            emissiveColor.r = Math.min(1, emissiveColor.r * 1.2);
+            emissiveColor.g = Math.min(1, emissiveColor.g * 1.2);
+            emissiveColor.b = Math.min(1, emissiveColor.b * 1.2);
+            break;
+            
+        case 'wool':
+            // Wool has low reflectance and warm undertones
+            emissiveIntensity = 0.01;
+            // Add warm undertones to wool
+            emissiveColor.r = Math.min(1, emissiveColor.r * 1.1);
+            emissiveColor.g = Math.min(1, emissiveColor.g * 0.95);
+            emissiveColor.b = Math.min(1, emissiveColor.b * 0.9);
+            break;
+            
+        case 'polyester':
+            // Polyester has medium reflectance and cool undertones
+            emissiveIntensity = 0.04;
+            // Add cool undertones to polyester
+            emissiveColor.r = Math.min(1, emissiveColor.r * 0.95);
+            emissiveColor.g = Math.min(1, emissiveColor.g * 1);
+            emissiveColor.b = Math.min(1, emissiveColor.b * 1.05);
+            break;
+            
+        case 'cotton':
+        default:
+            // Cotton has natural matte finish
+            emissiveIntensity = 0.02;
+            // Cotton is neutral
+            break;
     }
-    // Polyester often has a slight sheen and maintains color better
-    else if (fabricType === 'silk') {
-        hsl.s *= 1.1; // Increase saturation
-        hsl.l = Math.min(0.95, hsl.l * 1.05); // Slightly brighter
-    }
-    // Wool absorbs more light and appears more muted
-    else if (fabricType === 'wool') {
-        hsl.s *= 0.8; // Reduce saturation
-        hsl.l = Math.max(0.1, hsl.l * 0.9); // Darker
-    }
-
-    // Apply weathering/fading effect
-    if (weathered > 0) {
-        // Weathered fabrics lose saturation and become lighter
-        hsl.s = Math.max(0, hsl.s * (1 - weathered * 0.5));
-        hsl.l = Math.min(0.9, hsl.l + weathered * 0.1);
-    }
-
-    // Apply wetness effect
-    if (wet > 0) {
-        // Wet fabrics appear darker and more saturated
-        hsl.s = Math.min(1, hsl.s * (1 + wet * 0.3));
-        hsl.l = Math.max(0.05, hsl.l * (1 - wet * 0.3));
-    }
-
-    // Apply lighting environment adjustments
-    if (lighting === 'warm') {
-        // Warm lighting adds a slight yellow/orange tint
-        hsl.h += (hsl.h > 0.1 && hsl.h < 0.5) ? -0.02 : 0.02;
-    } else if (lighting === 'cool') {
-        // Cool lighting adds a slight blue tint
-        hsl.h += (hsl.h > 0.5 && hsl.h < 0.9) ? 0.02 : -0.02;
-    }
-
-    // Create a new color with the adjusted HSL values
-    const adjustedColor = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
-
-    return adjustedColor;
+    
+    // Apply emissive intensity
+    emissiveColor.multiplyScalar(emissiveIntensity);
+    
+    return {
+        color: baseColor,
+        emissive: emissiveColor
+    };
 }
 
 /**

@@ -516,36 +516,49 @@ body {
 }
 
 /* Color Picker */
-.color-wheel-container {
-	margin-bottom: 1.5rem;
-}
-
-.selected-color-display {
+.color-section {
 	display: flex;
+	flex-direction: column;
+	gap: 1.25rem;
+}
+
+.color-wheel-container {
+	display: flex;
+	flex-direction: column;
 	align-items: center;
-	margin-bottom: 1rem;
+	gap: 1rem;
 }
 
-.color-preview {
-	width: 64px;
-	height: 64px;
-	border-radius: var(--border-radius);
-	background-color: #ffffff;
-	margin-right: 1rem;
-	box-shadow: var(--shadow-sm);
-	border: 1px solid var(--border-color);
+.color-wheel-wrapper {
+	width: 200px;
+	height: 200px;
 	position: relative;
+	border-radius: 50%;
 	overflow: hidden;
+	border: 1px solid var(--border-color);
+	box-shadow: var(--shadow-sm);
 }
 
-.color-name-display {
+#color-wheel {
+	width: 100%;
+	height: 100%;
+	cursor: pointer;
+}
+
+.color-info {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.25rem;
+}
+
+.color-name {
 	font-size: 1rem;
 	font-weight: 500;
 	color: var(--text-primary);
-	margin-bottom: 0.25rem;
 }
 
-#color-hex {
+.color-code {
 	font-size: 0.875rem;
 	color: var(--text-secondary);
 	font-family: monospace;
@@ -560,7 +573,7 @@ body {
 
 .colors {
 	display: grid;
-	grid-template-columns: repeat(5, 1fr);
+	grid-template-columns: repeat(4, 1fr);
 	gap: 0.5rem;
 }
 
@@ -581,7 +594,17 @@ body {
 }
 
 .color-btn.active {
-	border: 2px solid var(--text-primary);
+	border: 2px solid var(--primary-color);
+	box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.5);
+}
+
+/* Light border for white button to make it visible */
+.color-btn[data-color="#FFFFFF"] {
+	border: 1px solid #ddd;
+}
+
+.color-btn[data-color="#FFFFFF"].active {
+	border: 2px solid var(--primary-color);
 }
 
 /* AI Generator */

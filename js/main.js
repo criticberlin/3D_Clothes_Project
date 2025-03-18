@@ -4,6 +4,7 @@ import { initializeTabs, setupFilePicker, setupAIPicker, setupCameraViewButtons,
 import { state, updateState, subscribe } from './state.js';
 import { Logger, Performance } from './utils.js';
 import { initFabricCanvas, applyDesignToShirt } from './fabric-integration.js';
+import { initColorManager } from './color-manager.js';
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
@@ -167,6 +168,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Set up model selector
         setupModelSelector();
+        
+        // Initialize color manager
+        // We'll delay initializing the color manager until after a delay to ensure model is loaded
+        setTimeout(() => {
+            console.log("Delayed initialization of color manager to ensure model is loaded");
+            initColorManager();
+            
+            // Try to force the shirt color to white after initialization
+            setTimeout(() => {
+                console.log("Attempting direct color fix");
+                if (window.forceShirtColor) {
+                    window.forceShirtColor('#FFFFFF');
+                }
+            }, 500);
+        }, 2000); // Wait for scene and model to be fully loaded
 
         // Welcome animation
         setTimeout(animateWelcome, 500);
@@ -362,6 +378,8 @@ function setupFabricTypeSelector() {
             const fabricType = e.target.value;
             updateState({ fabricType });
         });
+    } else {
+        console.warn('Fabric type selector not found in the DOM');
     }
 
     // Listen for texture style changes
@@ -371,6 +389,8 @@ function setupFabricTypeSelector() {
             const textureStyle = e.target.value;
             updateState({ textureStyle });
         });
+    } else {
+        console.warn('Texture style selector not found in the DOM');
     }
 
     // Set initial values from state
@@ -386,11 +406,73 @@ function setupFabricTypeSelector() {
 document.addEventListener('DOMContentLoaded', function () {
     console.log('DOM fully loaded and parsed');
 
-    // Check WebGL support first
+    // Define WebGL support check function if not already available
+    if (typeof window.checkWebGLSupport !== 'function') {
+        window.checkWebGLSupport = function() {
+            try {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                
+                if (!gl) {
+                    return {
+                        supported: false,
+                        limitedSupport: false,
+                        message: 'WebGL is not supported in your browser.'
+                    };
+                }
+                
+                // Check for basic capabilities
+                const capabilities = {
+                    maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+                    maxCubeMapSize: gl.getParameter(gl.MAX_CUBE_MAP_TEXTURE_SIZE),
+                    maxViewportDims: gl.getParameter(gl.MAX_VIEWPORT_DIMS),
+                    maxRenderbufferSize: gl.getParameter(gl.MAX_RENDERBUFFER_SIZE)
+                };
+                
+                // Check for limited support
+                const isLimited = capabilities.maxTextureSize < 4096 || 
+                                capabilities.maxCubeMapSize < 4096;
+                
+                return {
+                    supported: true,
+                    limitedSupport: isLimited,
+                    capabilities: capabilities,
+                    message: isLimited ? 
+                        'Your device supports WebGL but has limited capabilities.' : 
+                        'Full WebGL support detected.'
+                };
+            } catch (e) {
+                return {
+                    supported: false,
+                    limitedSupport: false,
+                    message: 'Error checking WebGL support: ' + e.message
+                };
+            }
+        };
+    }
+
+    // Check WebGL support
     const webGLStatus = window.checkWebGLSupport();
     if (!webGLStatus.supported) {
         console.error('WebGL not properly supported:', webGLStatus.message);
-        document.getElementById('loading-message').innerHTML = `
+        
+        let loadingMessage = document.getElementById('loading-message');
+        if (!loadingMessage) {
+            loadingMessage = document.createElement('div');
+            loadingMessage.id = 'loading-message';
+            loadingMessage.style.position = 'fixed';
+            loadingMessage.style.top = '50%';
+            loadingMessage.style.left = '50%';
+            loadingMessage.style.transform = 'translate(-50%, -50%)';
+            loadingMessage.style.background = 'rgba(0, 0, 0, 0.7)';
+            loadingMessage.style.color = 'white';
+            loadingMessage.style.padding = '15px';
+            loadingMessage.style.borderRadius = '5px';
+            loadingMessage.style.zIndex = '9999';
+            document.body.appendChild(loadingMessage);
+        }
+        
+        loadingMessage.innerHTML = `
             <div class="alert alert-danger">
                 ${webGLStatus.message} 3D models may not display correctly on your device.
             </div>`;
@@ -424,7 +506,24 @@ document.addEventListener('DOMContentLoaded', function () {
     // Load all models with proper error handling
     loadModels().catch(error => {
         console.error('Error during model loading:', error);
-        document.getElementById('loading-message').innerHTML = `
+        
+        let loadingMessage = document.getElementById('loading-message');
+        if (!loadingMessage) {
+            loadingMessage = document.createElement('div');
+            loadingMessage.id = 'loading-message';
+            loadingMessage.style.position = 'fixed';
+            loadingMessage.style.top = '50%';
+            loadingMessage.style.left = '50%';
+            loadingMessage.style.transform = 'translate(-50%, -50%)';
+            loadingMessage.style.background = 'rgba(0, 0, 0, 0.7)';
+            loadingMessage.style.color = 'white';
+            loadingMessage.style.padding = '15px';
+            loadingMessage.style.borderRadius = '5px';
+            loadingMessage.style.zIndex = '9999';
+            document.body.appendChild(loadingMessage);
+        }
+        
+        loadingMessage.innerHTML = `
             <div class="alert alert-danger">
                 Error loading 3D models: ${error.message}
             </div>`;
@@ -434,11 +533,27 @@ document.addEventListener('DOMContentLoaded', function () {
 // Improved model loading function with better error handling
 async function loadModels() {
     try {
-        // Safely update loading message
-        const loadingMessage = document.getElementById('loading-message');
-        if (loadingMessage) {
-            loadingMessage.textContent = 'Loading models...';
+        // Safely find or create loading message element
+        let loadingMessage = document.getElementById('loading-message');
+        
+        // If loading message element doesn't exist, create one
+        if (!loadingMessage) {
+            console.log('Creating loading message element as it does not exist');
+            loadingMessage = document.createElement('div');
+            loadingMessage.id = 'loading-message';
+            loadingMessage.style.position = 'fixed';
+            loadingMessage.style.top = '50%';
+            loadingMessage.style.left = '50%';
+            loadingMessage.style.transform = 'translate(-50%, -50%)';
+            loadingMessage.style.background = 'rgba(0, 0, 0, 0.7)';
+            loadingMessage.style.color = 'white';
+            loadingMessage.style.padding = '15px';
+            loadingMessage.style.borderRadius = '5px';
+            loadingMessage.style.zIndex = '9999';
+            document.body.appendChild(loadingMessage);
         }
+        
+        loadingMessage.textContent = 'Loading models...';
 
         // Import the GLTFLoader
         const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
@@ -520,17 +635,30 @@ async function loadModels() {
         console.error('Error loading models:', error);
 
         // Show error message to user
-        const loadingMessage = document.getElementById('loading-message');
-        if (loadingMessage) {
-            loadingMessage.innerHTML = `
-                <div style="color: #e74c3c; font-weight: bold;">
-                    Error loading 3D models: ${error.message}
-                </div>
-                <div style="margin-top: 10px;">
-                    Please check your internet connection and refresh the page.
-                </div>
-            `;
+        let loadingMessage = document.getElementById('loading-message');
+        if (!loadingMessage) {
+            loadingMessage = document.createElement('div');
+            loadingMessage.id = 'loading-message';
+            loadingMessage.style.position = 'fixed';
+            loadingMessage.style.top = '50%';
+            loadingMessage.style.left = '50%';
+            loadingMessage.style.transform = 'translate(-50%, -50%)';
+            loadingMessage.style.background = 'rgba(0, 0, 0, 0.7)';
+            loadingMessage.style.color = 'white';
+            loadingMessage.style.padding = '15px';
+            loadingMessage.style.borderRadius = '5px';
+            loadingMessage.style.zIndex = '9999';
+            document.body.appendChild(loadingMessage);
         }
+        
+        loadingMessage.innerHTML = `
+            <div style="color: #e74c3c; font-weight: bold;">
+                Error loading 3D models: ${error.message}
+            </div>
+            <div style="margin-top: 10px;">
+                Please check your internet connection and refresh the page.
+            </div>
+        `;
 
         throw error; // Re-throw to be caught by the caller
     }
@@ -695,4 +823,281 @@ function setupEditorModeToggle() {
 
     // Initialize with current state
     updateState({ editorMode: state.editorMode || true });
-} 
+}
+
+// Add a function to directly force the shirt's color
+window.forceShirtColor = function(color) {
+    console.log(`Force setting shirt color to: ${color}`);
+    
+    // Store the color for use when the material becomes available
+    window.pendingShirtColor = color;
+
+    // First try to find the shirt material through the Scene module
+    let sceneMaterial = null;
+    try {
+        if (window.shirtMaterial) {
+            sceneMaterial = window.shirtMaterial;
+        }
+    } catch (error) {
+        console.warn('Could not access Scene module shirtMaterial:', error);
+    }
+    
+    // Try to find shirt mesh in the scene
+    let foundMesh = null;
+    let foundMaterial = null;
+    
+    try {
+        // Try to find mesh directly from scene
+        if (window.scene) {
+            window.scene.traverse((obj) => {
+                if (obj.isMesh && obj.material && !foundMesh) {
+                    console.log('Found potential shirt mesh:', obj.name);
+                    foundMesh = obj;
+                    foundMaterial = obj.material;
+                }
+            });
+        }
+    } catch (error) {
+        console.warn('Error traversing scene:', error);
+    }
+    
+    // Use the best available material (in order of preference)
+    const material = sceneMaterial || foundMaterial;
+    
+    if (material) {
+        try {
+            // Convert color to THREE.js format if it's a hex string
+            if (typeof color === 'string' && color.startsWith('#')) {
+                const threeColor = new THREE.Color(color);
+                material.color.set(threeColor);
+            } else {
+                material.color.set(color);
+            }
+            
+            // Make sure the material is visible
+            material.opacity = 1;
+            material.transparent = false;
+            material.visible = true;
+            material.needsUpdate = true;
+            
+            // Apply the material to mesh if we found one
+            if (foundMesh) {
+                foundMesh.material = material;
+                foundMesh.visible = true;
+            }
+            
+            // Debug log
+            console.log('Material after color change:', 
+                material.color.r.toFixed(2), 
+                material.color.g.toFixed(2), 
+                material.color.b.toFixed(2), 
+                'Hex:', '#' + material.color.getHexString());
+                
+            console.log(`Successfully forced shirt color to: ${color}`);
+        } catch (error) {
+            console.error('Error forcing shirt color:', error);
+        }
+    } else {
+        console.error('Cannot force shirt color - material not available');
+        // Schedule another attempt shortly
+        setTimeout(() => {
+            console.log('Retrying force color change');
+            window.forceShirtColor(color);
+        }, 1000);
+    }
+};
+
+// Add window aliases for key objects
+window.addEventListener('DOMContentLoaded', () => {
+    // Start measuring initialization time
+    Performance.start('app-initialization');
+
+    Logger.info('Initializing 3D Shirt Studio...');
+
+    // Detect and handle mobile devices
+    const isMobile = window.innerWidth < 768;
+    if (isMobile) {
+        document.body.classList.add('mobile');
+    }
+
+    // Add direct event listeners for zoom buttons as a fail-safe
+    setTimeout(() => {
+        Logger.info('Setting up fail-safe zoom button handlers');
+
+        const zoomInBtn = document.getElementById('zoom-in');
+        const zoomOutBtn = document.getElementById('zoom-out');
+
+        if (zoomInBtn) {
+            zoomInBtn.addEventListener('click', function () {
+                Logger.info('Zoom in clicked from fail-safe handler');
+                // Try the window method first
+                if (window.directZoomCamera) {
+                    window.directZoomCamera('in');
+                }
+                // If that fails, try to dispatch the event manually
+                else {
+                    window.dispatchEvent(new CustomEvent('camera-zoom', {
+                        detail: { direction: 'in' }
+                    }));
+                }
+            });
+        }
+
+        if (zoomOutBtn) {
+            zoomOutBtn.addEventListener('click', function () {
+                Logger.info('Zoom out clicked from fail-safe handler');
+                // Try the window method first
+                if (window.directZoomCamera) {
+                    window.directZoomCamera('out');
+                }
+                // If that fails, try to dispatch the event manually
+                else {
+                    window.dispatchEvent(new CustomEvent('camera-zoom', {
+                        detail: { direction: 'out' }
+                    }));
+                }
+            });
+        }
+    }, 500);
+
+    // Function to check if DOM elements are ready
+    function checkDOMElements() {
+        // List essential elements
+        const essentialElements = [
+            document.querySelector('.app'),
+            document.querySelector('.canvas-container'),
+            document.querySelector('.customization-panel')
+        ];
+
+        // Check if all essential elements exist
+        return essentialElements.every(el => el !== null);
+    }
+
+    // Main initialization function
+    function initializeApp() {
+        if (!checkDOMElements()) {
+            return; // Exit if elements aren't available yet
+        }
+
+        // Set default state (match original project)
+        updateState({
+            intro: true,
+            isFullTexture: false,
+            fullDecal: null,
+            stylish: false, // For the toggle button
+            currentModel: 'tshirt', // Default model is t-shirt
+            cameraView: 'front', // Default camera view
+            autoRotate: false, // Auto-rotation disabled by default
+            darkMode: true, // Default to dark mode
+            fabricType: 'cotton', // Default fabric type
+            textureStyle: 'plain', // Default texture style
+            autoApplyDesign: true, // Automatically apply design changes to the shirt
+            editorMode: true // Default to editor mode
+        });
+
+        // Set up theme toggle directly here instead of relying on other functions
+        setupDirectThemeToggle();
+
+        // Set up the 3D editor mode toggle
+        setupEditorModeToggle();
+
+        // Initialize the 3D scene
+        setupScene().then(() => {
+            Logger.info('Scene loaded successfully');
+
+            // Try to load the default model explicitly
+            if (!window.shirtMesh) {
+                Logger.info('Shirt mesh not found, trying to load default model');
+                changeModel('tshirt')
+                    .then(() => {
+                        Logger.info('Default model loaded');
+                    })
+                    .catch(error => {
+                        Logger.error('Error loading default model:', error);
+                    });
+            }
+
+            // Initialize 3D editor (previously Fabric.js integration)
+            window.addEventListener('load', () => {
+                // Initialize 3D editor
+                initFabricCanvas();
+
+                Logger.log('3D editor initialized');
+            });
+
+            // Connect fabric type selection
+            subscribe('fabricType', (fabricType) => {
+                // Update the 3D model material only
+                setFabricType(fabricType);
+            });
+
+            // Set up fabric type selector
+            setupFabricTypeSelector();
+        }).catch(error => {
+            Logger.error('Error setting up scene:', error);
+        });
+
+        // Initialize tabs, file picker, and camera buttons
+        initializeTabs();
+        setupFilePicker();
+        setupCameraViewButtons();
+        setupAIPicker();
+        setupMobileUI();
+
+        // Set up download button
+        const downloadBtn = document.getElementById('download-btn');
+        if (downloadBtn) {
+            downloadBtn.addEventListener('click', downloadCanvas);
+        }
+
+        // Set up auto-rotate toggle
+        const autoRotateToggle = document.getElementById('auto-rotate-toggle');
+        if (autoRotateToggle) {
+            autoRotateToggle.addEventListener('change', (e) => {
+                toggleAutoRotate(e.target.checked);
+                updateState({ autoRotate: e.target.checked });
+            });
+        }
+
+        // Connect rotation control based on state
+        subscribe('autoRotate', (autoRotate) => {
+            toggleAutoRotate(autoRotate);
+            // Update checkbox if it exists
+            const checkbox = document.getElementById('auto-rotate-toggle');
+            if (checkbox) checkbox.checked = autoRotate;
+        });
+
+        // Set up model selector
+        setupModelSelector();
+        
+        // Initialize color manager
+        // We'll delay initializing the color manager until after a delay to ensure model is loaded
+        setTimeout(() => {
+            console.log("Delayed initialization of color manager to ensure model is loaded");
+            initColorManager();
+            
+            // Try to force the shirt color to white after initialization
+            setTimeout(() => {
+                console.log("Attempting direct color fix");
+                if (window.forceShirtColor) {
+                    window.forceShirtColor('#FFFFFF');
+                }
+            }, 500);
+        }, 2000); // Wait for scene and model to be fully loaded
+
+        // Welcome animation
+        setTimeout(animateWelcome, 500);
+
+        // End performance measurement
+        Performance.end('app-initialization');
+        console.log('Initialization time:', Performance.getTime('app-initialization') + 'ms');
+    }
+
+    // Try to initialize, or wait for DOM to be more ready
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        initializeApp();
+    } else {
+        // Fallback if DOMContentLoaded might have already fired
+        window.addEventListener('load', initializeApp);
+    }
+}); 
