@@ -4,12 +4,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { state, updateState } from './state.js';
 import { initTextureMapper, loadCustomImage, setModelType, clearCustomImage } from './texture-mapper.js';
 import { Logger, Performance } from './utils.js';
-import {
-    calculateFabricMaterialProperties,
-    generateAdvancedFabricNormalMap,
-    enhanceFabricLightInteraction,
-    calculateFabricColor
-} from './advanced-calculations.js';
 import { init3DEditor } from './3d-editor.js';
 
 // ============================================================================
@@ -21,7 +15,7 @@ let pointer = { x: 0, y: 0 };
 let targetCameraPosition = new THREE.Vector3(0, 0, 2);
 let group;
 let fullDecal;
-let isFullTexture = false;
+let isFullTexture = false; // Initially set to false to prevent texture overlay
 let currentModelPath = '';
 let currentModelType = 'tshirt';
 let isAutoRotating = false;
@@ -257,20 +251,44 @@ const modelSettings = {
 export function setupScene() {
     return new Promise((resolve, reject) => {
         try {
-            // Make sure loading overlay exists
             ensureLoadingOverlayExists();
 
+            // Initialize the scene (creates scene, camera, renderer)
             initializeScene();
+
+            // Set up lighting
             setupLighting();
+
+            // Create environment map for material reflections
+            createEnvironmentMap();
+
+            // Set up interactive controls
             setupControls();
 
-            // Add debug verification for controls
-            console.log('Controls initialized:', controls ? 'Yes' : 'No');
+            // Handle window resize event
+            window.addEventListener('resize', onWindowResize);
 
-            // Load the default model if not already loaded
-            const defaultModelPath = './models/tshirt.glb';
+            // Handle pointer/mouse move event for interactive elements
+            document.addEventListener('pointermove', onPointerMove);
 
-            // Setup the scene animation
+            // Track mouse position for interactive highlights
+            pointer = {
+                x: 0,
+                y: 0
+            };
+
+            setupEventListeners();
+            setupCameraControls();
+
+            // Debug log before model loading
+            console.log('Scene initialization complete, preparing to load initial model');
+            console.log('Current scene children count:', scene ? scene.children.length : 0);
+            console.log('Group exists:', !!group);
+            if (group) {
+                console.log('Group children count:', group.children.length);
+            }
+            
+            // Start the animation loop for continuous rendering
             animate();
 
             // Expose key objects to window for direct access
@@ -282,6 +300,33 @@ export function setupScene() {
             // Expose shirt mesh and material for debugging
             window.getShirtMesh = () => shirtMesh;
             window.getShirtMaterial = () => shirtMaterial;
+            
+            // IMPORTANT: Remove any shadow effects by ensuring no full-decal is present at startup
+            setTimeout(() => {
+                if (shirtMesh) {
+                    // Force remove any full-decal layer that might be causing shadow effects
+                    const fullDecalLayer = shirtMesh.children.find(child => child.name === 'full-decal');
+                    if (fullDecalLayer) {
+                        console.log('Force removing shadow effects layer at initialization');
+                        shirtMesh.remove(fullDecalLayer);
+                        if (fullDecalLayer.material) {
+                            if (fullDecalLayer.material.map) {
+                                fullDecalLayer.material.map.dispose();
+                            }
+                            fullDecalLayer.material.dispose();
+                        }
+                        
+                        // Update state
+                        isFullTexture = false;
+                        updateState({ isFullTexture: false, fullDecal: null });
+                        
+                        // Force a render
+                        if (renderer && scene && camera) {
+                            renderer.render(scene, camera);
+                        }
+                    }
+                }
+            }, 100); // Run shortly after initialization
 
             // Add direct reset camera function
             window.directResetCamera = function () {
@@ -297,140 +342,30 @@ export function setupScene() {
             };
 
             // Add direct toggle rotation function to window
-            window.TOGGLE_ROTATION = function () {
-                // Toggle the global rotation flag
-                window.GLOBAL_ROTATION_ENABLED = !window.GLOBAL_ROTATION_ENABLED;
-
-                console.log("GLOBAL ROTATION TOGGLED TO:", window.GLOBAL_ROTATION_ENABLED ? "ON" : "OFF");
-
-                // Update the button appearance
-                const rotateButton = document.getElementById('rotate-view');
-                if (rotateButton) {
-                    if (window.GLOBAL_ROTATION_ENABLED) {
-                        rotateButton.classList.add('active');
-                        rotateButton.title = 'Stop Rotation';
-
-                        // Change icon to stop
-                        const icon = rotateButton.querySelector('i');
-                        if (icon) {
-                            icon.classList.remove('fa-redo');
-                            icon.classList.add('fa-stop');
-                        }
-
-                        // Disable view buttons when rotation is active
-                        document.querySelectorAll('.camera-view-btn').forEach(btn => {
-                            btn.disabled = true;
-                            btn.style.opacity = '0.5';
-                            btn.style.cursor = 'not-allowed';
-                        });
-
-                        // Set rotation axis
-                        updateRotationAxisForCurrentView();
-                    } else {
-                        rotateButton.classList.remove('active');
-                        rotateButton.title = 'Start Rotation';
-
-                        // Change icon back to rotate
-                        const icon = rotateButton.querySelector('i');
-                        if (icon) {
-                            icon.classList.remove('fa-stop');
-                            icon.classList.add('fa-redo');
-                        }
-
-                        // Re-enable view buttons when rotation is stopped
-                        document.querySelectorAll('.camera-view-btn').forEach(btn => {
-                            btn.disabled = false;
-                            btn.style.opacity = '1';
-                            btn.style.cursor = 'pointer';
-                        });
-
-                        // When stopping rotation, return to the last selected view
-                        const currentView = state.cameraView || 'front';
-                        changeCameraView(currentView);
-                    }
-                }
-
-                // Also update the other flags for consistency
-                rotationEnabled = window.GLOBAL_ROTATION_ENABLED;
-                manualRotationActive = window.GLOBAL_ROTATION_ENABLED;
-                isAutoRotating = window.GLOBAL_ROTATION_ENABLED;
-
-                // Force a render for immediate feedback
-                if (renderer && scene && camera) {
-                    renderer.render(scene, camera);
-                }
-            };
-
-            // Direct function to stop rotation
-            window.directStopRotation = function () {
-                console.log('Directly stopping rotation');
-
-                // Set all rotation flags to false
-                rotationEnabled = false;
-                manualRotationActive = false;
-                isAutoRotating = false;
-
-                // Update button visual state
-                const rotateButton = document.getElementById('rotate-view');
-                if (rotateButton) {
-                    rotateButton.classList.remove('active');
-                    rotateButton.title = 'Start Rotation';
-
-                    // Change icon back to rotate
-                    const icon = rotateButton.querySelector('i');
-                    if (icon) {
-                        icon.classList.remove('fa-stop');
-                        icon.classList.add('fa-redo');
-                    }
-                }
-
-                // Ensure controls auto-rotation is off
-                if (controls) {
-                    controls.autoRotate = false;
-                    controls.update();
-                }
-
-                // Force a render
-                if (renderer && scene && camera) {
-                    renderer.render(scene, camera);
-                }
-
-                console.log('Rotation has been stopped');
+            window.directToggleRotation = function () {
+                toggleRotation();
             };
 
             // Add direct zoom camera function to window
             window.directZoomCamera = function (direction) {
-                console.log('Direct window zoom camera:', direction);
-
-                const zoomAmount = direction === 'in' ? 0.3 : -0.3;
-
-                // Get direction vector from camera to target
-                const target = controls ? controls.target : new THREE.Vector3(0, 0, 0);
-                const zoomDirection = new THREE.Vector3();
-                zoomDirection.subVectors(target, camera.position).normalize();
-
-                // Apply zoom by moving camera position
-                camera.position.addScaledVector(zoomDirection, zoomAmount);
-
-                // Update camera matrix
-                camera.updateMatrixWorld();
-                camera.updateProjectionMatrix();
-
-                // Update controls
-                if (controls) controls.update();
-
-                // Force render update
-                if (renderer) renderer.render(scene, camera);
-
-                console.log('Camera position after zoom:', camera.position.toArray());
+                zoomCamera(direction);
             };
-
-            setupEventListeners();
-            setupCameraControls();
 
             // Load initial model
             loadModel('./models/tshirt.glb')
                 .then(() => {
+                    // Debug log after model loading
+                    console.log('Model loading complete');
+                    console.log('Current scene children count:', scene ? scene.children.length : 0);
+                    console.log('Group exists:', !!group);
+                    if (group) {
+                        console.log('Group children count:', group.children.length);
+                        // Check if we have exactly one model
+                        if (group.children.length !== 1) {
+                            console.warn('Unexpected number of models in the scene:', group.children.length);
+                        }
+                    }
+                    
                     initializeDefaultState();
 
                     // Remove loading overlay after scene is fully set up
@@ -455,8 +390,6 @@ export function setupScene() {
                             reject(error);
                         });
                 });
-
-            animate();
         } catch (error) {
             console.error('Error setting up scene:', error);
             reject(error);
@@ -1051,27 +984,29 @@ export function setupEventListeners() {
 
 // Set initial defaults
 function initializeDefaultState() {
-    // Fixed color for the shirt (white)
-    const fixedColor = '#FFFFFF';
+    // Initialize the state with values that match with the visual state
+    if (!state.color) {
+        updateState({ color: '#FFFFFF' }); // White
+    }
 
-    console.log(`Initializing shirt with fixed color`);
+    // Always ensure full texture is disabled by default
+    updateState({ 
+        isFullTexture: false,
+        fullDecal: null,
+        currentModel: currentModelType
+    });
 
-    // Apply the color directly to the shirt
-    if (shirtMaterial) {
-        // Create a Three.js color object from the hex string
-        const newColor = new THREE.Color(fixedColor);
-        shirtMaterial.color.copy(newColor);
-        shirtMaterial.needsUpdate = true;
+    console.log('Default state initialized:', state);
+    
+    // Apply the current color from state or default to white
+    if (shirtMaterial && state.color) {
+        updateShirtColor(state.color);
+    }
 
         // Make sure any fullDecal is properly aligned with visibility state
         if (fullDecal) {
             fullDecal.visible = state.isFullTexture;
             console.log(`Setting fullDecal visibility to: ${state.isFullTexture}`);
-        }
-
-        console.log(`Initialized shirt with fixed color`);
-    } else {
-        console.warn('Cannot initialize shirt color: shirtMaterial not found');
     }
 }
 
@@ -1109,8 +1044,63 @@ function loadModel(modelPath) {
         currentModelType = modelPath.includes('hoodie') ? 'hoodie' : 'tshirt';
         console.log(`Loading model type: ${currentModelType}, path: ${modelPath}`);
 
-        // Reset shirt mesh reference
+        // Reset references to avoid duplicates
+        fullDecal = null;
         shirtMesh = null;
+        shirtMaterial = null;
+        
+        // Perform a complete cleanup of the scene
+        // This is crucial to prevent double-loading of models
+        if (group) {
+            console.log('Cleaning up existing scene objects');
+            
+            // Traverse the entire group to find and dispose all resources
+            const cleanupObject = (obj) => {
+                if (obj.children && obj.children.length > 0) {
+                    // Create a copy of the children array since we'll be modifying it
+                    const children = [...obj.children];
+                    children.forEach(child => {
+                        cleanupObject(child);
+                    });
+                }
+                
+                // Dispose of geometry and materials
+                if (obj.geometry) {
+                    obj.geometry.dispose();
+                }
+                
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) {
+                        obj.material.forEach(material => {
+                            if (material.map) material.map.dispose();
+                            material.dispose();
+                        });
+                    } else {
+                        if (obj.material.map) obj.material.map.dispose();
+                        obj.material.dispose();
+                    }
+                }
+                
+                // Remove from parent
+                if (obj.parent) {
+                    obj.parent.remove(obj);
+                }
+            };
+            
+            // Create a copy of the children array to avoid modification issues during iteration
+            const groupChildren = [...group.children];
+            groupChildren.forEach(child => {
+                cleanupObject(child);
+            });
+            
+            // Ensure the group is actually empty
+            if (group.children.length > 0) {
+                console.warn('Some children remained in the group after cleanup');
+                while (group.children.length > 0) {
+                    group.remove(group.children[0]);
+                }
+            }
+        }
         
         // Ensure the loader exists
         if (!gltfLoader) {
@@ -1171,11 +1161,6 @@ function loadModel(modelPath) {
                 group.remove(child);
             }
         }
-
-        // Reset references
-        fullDecal = null;
-        shirtMesh = null;
-        shirtMaterial = null;
 
         // Update the currentModelPath to prevent reloading
         currentModelPath = modelPath;
@@ -1306,6 +1291,10 @@ function processLoadedModel(gltf, settings, color) {
     // Debug the model
     console.log('Loaded model structure:', gltf);
     
+    // Clear existing shirt mesh references before setting new ones
+    shirtMesh = null;
+    shirtMaterial = null;
+    
     // Check if any meshes have existing materials and identify the shirt mesh
     model.traverse((obj) => {
         if (obj.isMesh && obj.material) {
@@ -1322,20 +1311,17 @@ function processLoadedModel(gltf, settings, color) {
                 console.log(`Setting shirt mesh to first found mesh: ${obj.name}`);
                 shirtMesh = obj;
                 
+                // Initially set the shirt invisible to prevent showing the default material
+                obj.visible = false;
+                
                 // Also capture the material right away
                 if (!shirtMaterial && obj.material) {
                     console.log('Setting shirt material from mesh material');
                     shirtMaterial = obj.material.clone();
                     
                     // Store a reference to original shirt material
-                    if (!window.originalShirtMaterial) {
+                    if (!window.originalShirtMaterial && obj.material) {
                         window.originalShirtMaterial = obj.material.clone();
-                    }
-                    
-                    // If we have a pending color, apply it immediately
-                    if (window.pendingShirtColor) {
-                        console.log(`Applying pending color: ${window.pendingShirtColor}`);
-                        updateShirtColor(window.pendingShirtColor);
                     }
                 }
             }
@@ -1352,14 +1338,24 @@ function processLoadedModel(gltf, settings, color) {
     model.position.copy(settings.position);
     model.rotation.copy(settings.rotation || new THREE.Euler(0, 0, 0));
 
-    // Clear existing content
+    // Ensure group exists
     if (!group) {
         group = new THREE.Group();
         scene.add(group);
     }
+    
+    // Make sure group is empty before adding new model
+    while (group.children.length > 0) {
+        const child = group.children[0];
+            group.remove(child);
+    }
 
     // Add model to the group
+    console.log('Adding new model to the scene group');
     group.add(model);
+    
+    // Log children count after addition
+    console.log(`Scene group now has ${group.children.length} children`);
 
     // Track all meshes in the model
     const meshes = [];
@@ -1369,15 +1365,18 @@ function processLoadedModel(gltf, settings, color) {
         if (obj.isMesh) {
             meshes.push(obj);
 
-            // Set first mesh as our reference shirt mesh if not already set
-            if (!shirtMesh) {
-                shirtMesh = obj;
-            }
-            
-            // Force all meshes to white during initial load
-            if (obj.material) {
-                obj.material.color = new THREE.Color(0xFFFFFF);
-                obj.material.needsUpdate = true;
+            // Clear any existing children to prevent duplicate layers
+            if (obj.children && obj.children.length > 0) {
+                const childrenToRemove = [...obj.children];
+                childrenToRemove.forEach((child) => {
+                    obj.remove(child);
+                    // Dispose resources
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) {
+                        if (child.material.map) child.material.map.dispose();
+                        child.material.dispose();
+                    }
+                });
             }
         }
     });
@@ -1385,6 +1384,9 @@ function processLoadedModel(gltf, settings, color) {
     if (shirtMesh) {
         // Clone and store the original material
         shirtMaterial = shirtMesh.material.clone();
+        
+        // Mark the shirt mesh with a name for identification
+        shirtMesh.name = 'base-shirt';
     }
 
     // If there was a fullDecal previously, make sure it's removed from the old shirt mesh
@@ -1392,11 +1394,25 @@ function processLoadedModel(gltf, settings, color) {
         if (fullDecal.parent) {
             fullDecal.parent.remove(fullDecal);
         }
+        if (fullDecal.material && fullDecal.material.map) {
+            fullDecal.material.map.dispose();
+        }
+        if (fullDecal.material) {
+            fullDecal.material.dispose();
+        }
+        if (fullDecal.geometry) {
+            fullDecal.geometry.dispose();
+        }
         fullDecal = null;
     }
 
-    // Restore full texture if it was active before
-    if (state.isFullTexture && state.fullDecal) {
+    // Reset the full texture state to false to prevent the overlay issue
+    isFullTexture = false;
+    updateState({ isFullTexture: false, fullDecal: null });
+
+    // ONLY restore full texture if explicitly required and not a dark shadow texture
+    if (state.isFullTexture && state.fullDecal && 
+        !state.fullDecal.includes('shadow') && !state.fullDecal.includes('dark')) {
         updateShirtTexture(state.fullDecal, 'full');
     }
 
@@ -1416,357 +1432,385 @@ function processLoadedModel(gltf, settings, color) {
     // Initialize the 3D editor with the shirt mesh
     // Add after model is loaded and all mesh processing is complete
     if (shirtMesh) {
+        // Check for and remove any shadow effects before initializing the editor
+        const fullDecalLayer = shirtMesh.children.find(child => child.name === 'full-decal');
+        if (fullDecalLayer) {
+            console.log('Removing shadow effects layer before editor initialization');
+            shirtMesh.remove(fullDecalLayer);
+            if (fullDecalLayer.material) {
+                if (fullDecalLayer.material.map) {
+                    fullDecalLayer.material.map.dispose();
+                }
+                fullDecalLayer.material.dispose();
+            }
+            // Update state
+            isFullTexture = false;
+            updateState({ isFullTexture: false, fullDecal: null });
+        }
+        
         init3DEditor(scene, camera, renderer, shirtMesh);
         Logger.log('3D editor initialized with shirt mesh');
+
+        // Set a clean initial color with a slight delay to ensure proper initialization
+        setTimeout(() => {
+            // Get the stored color from state or use default
+            const initialColor = state.color || '#FFFFFF';
+            console.log('Applying delayed initial color:', initialColor);
+            updateShirtColor(initialColor);
+        }, 100);
     }
 }
 
-// Apply camera settings for the current model type
-function applyModelCameraSettings(settings) {
-    if (!settings || !settings.camera) return;
-
-    // Update camera FOV if specified
-    if (settings.camera.fov) {
-        camera.fov = settings.camera.fov;
-        camera.updateProjectionMatrix();
-    }
-
-    // Update camera target position (what the camera looks at)
-    if (settings.camera.target && controls) {
-        controls.target.copy(settings.camera.target);
-    }
-
-    // Update camera position with smooth transition
-    if (settings.camera.position) {
-        targetCameraPosition.copy(settings.camera.position);
-    }
-}
-
-// Create a decal from an existing texture
-function createDecalFromTexture(texture, type) {
-    if (!shirtMesh) return;
-
-    // Get model settings based on current type
-    const settings = modelSettings[currentModelType] || modelSettings.tshirt;
-
-    if (type === 'full') {
-        // Create a completely independent material for decals
-        // This will never be affected by shirt color changes
-        const decalMaterial = new THREE.MeshStandardMaterial({
-            map: texture,
-            transparent: true,
-            roughness: 0.4,
-            metalness: 0.0,
-            side: THREE.DoubleSide,
-            envMapIntensity: 0.8,
-            color: 0xFFFFFF, // Fixed white color
-            blending: THREE.NormalBlending
-        });
-
-        // Disable color influence from the shirt
-        decalMaterial.colorWrite = true;
-        decalMaterial.depthTest = true;
-        decalMaterial.depthWrite = true;
-        
-        // Clone the shirt geometry for our full texture overlay
-        const geometry = shirtMesh.geometry.clone();
-        fullDecal = new THREE.Mesh(geometry, decalMaterial);
-
-        // Position slightly in front of the shirt to prevent z-fighting
-        fullDecal.scale.set(1.01, 1.01, 1.01);
-        fullDecal.position.z += 0.005;
-        
-        // Set rendering priority
-        fullDecal.renderOrder = 1;
-        fullDecal.visible = isFullTexture;
-        fullDecal.name = 'full-decal';
-
-        if (isFullTexture) {
-            shirtMesh.add(fullDecal);
-            console.log("Added full texture decal to shirt with independent material");
-        }
-    }
-}
-
-// ============================================================================
-// Texture and Material Management
-// ============================================================================
 
 /**
  * Update the shirt color with the specified hex color
  * @param {string} color - Hex color code (e.g. '#FF0000')
  */
 export function updateShirtColor(color) {
-    console.log(`Attempting to update shirt color: ${color}`);
+    console.log(`Updating shirt color to ${color}`);
 
-    // Validate color to prevent black color issue
+    // Validate color to prevent issues
     if (!color || color === 'undefined' || color === 'null') {
         console.error('Invalid color value:', color);
         color = '#FFFFFF'; // Default to white if invalid
     }
-
-    // Store the color for later use
-    window.pendingShirtColor = color;
 
     if (!shirtMesh) {
         console.error('Shirt mesh not available - cannot update color');
         return;
     }
 
-    // If shirtMaterial doesn't exist, create it from the mesh material
-    if (!shirtMaterial && shirtMesh.material) {
-        console.log('Creating shirtMaterial from mesh material');
-        shirtMaterial = shirtMesh.material.clone();
-    } else if (!shirtMaterial) {
-        console.error('Shirt material not available and cannot be created - cannot update color');
-        // Create a default material as a fallback
+    // Convert to THREE color
+    const threeColor = new THREE.Color(color);
+    
+    // Debug the new color we're trying to apply
+    console.log('Color values:', 
+        threeColor.r.toFixed(2), 
+        threeColor.g.toFixed(2), 
+        threeColor.b.toFixed(2), 
+        'Hex:', '#' + threeColor.getHexString());
+    
+    // Create or update the base shirt material
+    if (!shirtMaterial) {
+        // Create a new standard material for the shirt
         shirtMaterial = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(color),
+            color: threeColor,
             roughness: 0.7,
             metalness: 0.1,
             side: THREE.DoubleSide
         });
-        console.log('Created fallback material');
+    } else {
+        // Update the existing material color
+        shirtMaterial.color.copy(threeColor);
     }
-
-    // Debug the current color before changing
-    console.log('Current shirt color before update:', 
-        shirtMaterial.color.r.toFixed(2), 
-        shirtMaterial.color.g.toFixed(2), 
-        shirtMaterial.color.b.toFixed(2), 
-        'Hex:', '#' + shirtMaterial.color.getHexString());
-
-    // Apply the color to the material
-    try {
-        const threeColor = new THREE.Color(color);
-        
-        // Debug the new color we're trying to set
-        console.log('New color to apply:', 
-            threeColor.r.toFixed(2), 
-            threeColor.g.toFixed(2), 
-            threeColor.b.toFixed(2), 
-            'Hex:', '#' + threeColor.getHexString());
-        
-        // Apply color to the material using a clone to prevent reference issues
-        shirtMaterial.color = threeColor.clone();
-        
-        // Ensure material is visible
-        shirtMaterial.transparent = false;
-        shirtMaterial.opacity = 1.0;
-        shirtMaterial.visible = true;
-        shirtMaterial.colorWrite = true;
-        
-        // Force material update
-        shirtMaterial.needsUpdate = true;
-        
-        // Store reference to any children to preserve them
-        const children = [...shirtMesh.children];
-        
-        // Reapply the material to the mesh to ensure change takes effect
-        if (shirtMesh) {
-            shirtMesh.material = shirtMaterial;
-            
-            // Verify children are still intact
-            if (children.length !== shirtMesh.children.length) {
-                console.warn('Children count mismatch after material update, restoring...');
-                children.forEach(child => {
-                    if (!shirtMesh.children.includes(child)) {
-                        shirtMesh.add(child);
-                    }
-                });
-            }
-            
-            // Make sure fullDecal (if exists) is not affected
-            const fullDecal = shirtMesh.children.find(child => child.name === 'full-decal');
-            if (fullDecal && fullDecal.material) {
-                // Ensure the decal has a fixed white material not affected by shirt color
-                fullDecal.material.color = new THREE.Color(0xFFFFFF);
-                fullDecal.material.needsUpdate = true;
-            }
-        }
-
-        // Debug shirt material properties
-        console.log('Shirt material after update:', {
-            color: '#' + shirtMaterial.color.getHexString(),
-            type: shirtMaterial.type,
-            transparent: shirtMaterial.transparent,
-            visible: shirtMaterial.visible,
-            colorWrite: shirtMaterial.colorWrite,
-            side: shirtMaterial.side
-        });
-
-        // Special handling for dark colors, especially black
-        if (threeColor.r < 0.1 && threeColor.g < 0.1 && threeColor.b < 0.1) {
-            // For very dark colors like black, ensure we use proper rendering settings
-            shirtMaterial.colorWrite = true;
-            shirtMaterial.blending = THREE.NormalBlending;
-
-            // Adjust material properties to ensure black appears correctly
-            shirtMaterial.roughness = 0.8;  // Higher roughness for dark fabrics
-            shirtMaterial.metalness = 0.02; // Keep low metalness for fabric look
-
-            console.log('Applied special rendering for dark color:', color);
-        }
-
-        // Update state to remember the color
-        updateState({ color: color });
-
-        // Note: We do NOT modify the fullDecal material color here anymore
-        // Decals now have their own independent material that is not affected by shirt color
-
-        // If we have advanced fabric properties, update them for the new color
-        if (typeof calculateFabricColor === 'function') {
-            const fabricType = state.fabricType || 'cotton';
-            const fabricColor = calculateFabricColor(threeColor, fabricType);
-
-            if (fabricColor && fabricColor.emissive) {
-                shirtMaterial.emissive.copy(fabricColor.emissive);
-            }
-        }
-
-        // Force a render update to show the new color
-        if (renderer && scene && camera) {
-            renderer.render(scene, camera);
-        }
-
-        console.log(`Shirt color updated to: ${color}`);
-        
-        // Double check after render that color was applied
-        console.log('Final shirt color after render:', 
-            shirtMaterial.color.r.toFixed(2), 
-            shirtMaterial.color.g.toFixed(2), 
-            shirtMaterial.color.b.toFixed(2), 
-            'Hex:', '#' + shirtMaterial.color.getHexString());
-    } catch (error) {
-        console.error('Error updating shirt color:', error);
+    
+    // Special handling for dark colors
+    if (threeColor.r < 0.1 && threeColor.g < 0.1 && threeColor.b < 0.1) {
+        shirtMaterial.roughness = 0.8;
+        shirtMaterial.metalness = 0.02;
     }
+    
+    // First, ensure the base shirt has the correct color material
+    // This replaces the main shirt material with our color material
+    ensureShirtLayer('base-shirt', shirtMaterial);
+    
+    // Make sure the shirt is visible after material has been applied
+    if (shirtMesh && !shirtMesh.visible) {
+        shirtMesh.visible = true;
+    }
+    
+    // Update state to remember the color
+    updateState({ color: color });
+    
+    // Refresh the canvas texture to ensure decals are properly displayed
+    // This will update the canvas-layer (if it exists) without touching the base shirt
+    import('./3d-editor.js').then(module => {
+        if (typeof module.updateShirt3DTexture === 'function') {
+            module.updateShirt3DTexture();
+        }
+    }).catch(err => {
+        console.error('Failed to update canvas texture:', err);
+    });
+    
+    // Ensure the full-decal layer keeps its visibility state
+    const fullDecalLayer = shirtMesh.children.find(child => child.name === 'full-decal');
+    if (fullDecalLayer) {
+        fullDecalLayer.visible = state.isFullTexture || false;
+    }
+    
+    // Render the scene to show changes
+    if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+    }
+    
+    console.log(`Shirt color updated to: ${color}`);
 }
 
-// Apply texture to a geometry with proper UV mapping
-function createDecal(imageUrl, type, callback) {
-    const textureLoader = new THREE.TextureLoader();
-    textureLoader.load(imageUrl, (loadedTexture) => {
-        // Proper texture settings
-        loadedTexture.colorSpace = THREE.SRGBColorSpace;
-        loadedTexture.wrapS = THREE.RepeatWrapping;
-        loadedTexture.wrapT = THREE.RepeatWrapping;
-        loadedTexture.anisotropy = 16; // Better texture quality
+/**
+ * Ensures a specific layer of the shirt exists
+ * Modified to ensure there is only one base fabric and all other elements are layers
+ * @param {string} layerName - Name of the layer to ensure
+ * @param {THREE.Material} material - Optional material to apply
+ * @returns {THREE.Mesh} The layer mesh
+ */
+function ensureShirtLayer(layerName, material = null) {
+    if (!shirtMesh) return null;
+    
+    // For the base shirt, we simply update the material of the main shirt mesh
+    if (layerName === 'base-shirt') {
+        // Apply material if provided and different from current
+        if (material && shirtMesh.material !== material) {
+            // Store the original material if necessary
+            if (!window.originalShirtMaterial && shirtMesh.material) {
+                window.originalShirtMaterial = shirtMesh.material.clone();
+            }
+            
+            // Remove any temporary canvas texture from the original material
+            if (shirtMesh.material && shirtMesh.material.map && 
+                shirtMesh.material.map.isCanvasTexture) {
+                shirtMesh.material.map.dispose();
+            }
+            
+            // Apply the new material
+            shirtMesh.material = material;
+            shirtMesh.material.needsUpdate = true;
+            
+            console.log('Updated base shirt material');
+            
+            // Ensure visibility only after proper material is applied
+            if (!shirtMesh.visible) {
+                console.log('Making shirt visible after material application');
+                // Add small delay to ensure material is fully ready before showing
+                setTimeout(() => {
+                    shirtMesh.visible = true;
+                    // Force a render
+                    if (renderer && scene && camera) {
+                        renderer.render(scene, camera);
+                    }
+                }, 50);
+            }
+        }
+        
+        // Ensure any existing material has the right properties
+        if (shirtMesh.material) {
+            shirtMesh.material.transparent = false;
+            shirtMesh.material.opacity = 1.0;
+            shirtMesh.material.visible = true;
+            shirtMesh.material.needsUpdate = true;
+        }
+        
+        // Apply a name to the shirt mesh for identification
+        shirtMesh.name = 'base-shirt';
+        
+        return shirtMesh;
+    }
+    
+    // Prevent creating the full-decal layer during initialization
+    if (layerName === 'full-decal' && document.readyState !== 'complete') {
+        console.log('Skipping full-decal layer creation during initialization');
+        return null;
+    }
+    
+    // For other layers, check if they already exist as children of shirt mesh
+    let layerMesh = shirtMesh.children.find(child => child.name === layerName);
+    
+    if (!layerMesh) {
+        // Create a new mesh with cloned geometry for this layer
+        const geometry = shirtMesh.geometry.clone();
+        
+        // Create appropriate material based on layer type
+        const layerMaterial = material || new THREE.MeshStandardMaterial({
+            transparent: true, 
+            opacity: 1.0,
+            side: THREE.DoubleSide,
+            depthWrite: true,
+            depthTest: true,
+            blending: THREE.NormalBlending
+        });
+        
+        // Create the layer mesh
+        layerMesh = new THREE.Mesh(geometry, layerMaterial);
+        layerMesh.name = layerName;
+        
+        // Position slightly in front of the shirt to prevent z-fighting
+        // Different z-offset for different layers
+        const zOffset = layerName === 'canvas-layer' ? 0.003 : 0.005;
+        layerMesh.position.z += zOffset;
+        
+        // Apply slight scaling to avoid edge artifacts
+        layerMesh.scale.set(1.0005, 1.0005, 1.0005);
+        
+        // Set rendering order based on layer type
+        layerMesh.renderOrder = layerName === 'canvas-layer' ? 1 : 2;
+        
+        // Add to shirt mesh
+        shirtMesh.add(layerMesh);
+        console.log(`Created new layer: ${layerName}`);
+    } 
+    else if (material) {
+        // Update material if provided
+        layerMesh.material = material;
+        layerMesh.material.needsUpdate = true;
+    }
+    
+    // Set visibility based on layer type
+    if (layerName === 'full-decal') {
+        layerMesh.visible = state.isFullTexture || false;
+    } else {
+        layerMesh.visible = true;
+    }
+    
+    return layerMesh;
+}
 
-        // Same flip setting for both models for consistency
-        loadedTexture.flipY = false;
-
-        callback(loadedTexture);
-    });
+/**
+ * Update the 3D editor canvas texture on the shirt
+ * This function is called from 3d-editor.js to ensure compatibility
+ */
+export function updateEditorCanvasTexture(texture) {
+    if (!shirtMesh) return;
+    
+    // Create or get the canvas layer
+    const canvasLayer = ensureShirtLayer('canvas-layer');
+    
+    if (!canvasLayer) {
+        console.error('Failed to create canvas layer');
+        return;
+    }
+    
+    // Create a proper material for the canvas layer if needed
+    if (!canvasLayer.material) {
+        canvasLayer.material = new THREE.MeshStandardMaterial({
+            transparent: true,
+            side: THREE.DoubleSide,
+            roughness: 0.4,
+            metalness: 0.0,
+            blending: THREE.NormalBlending
+        });
+    }
+    
+    // Update material properties
+    canvasLayer.material.transparent = true;
+    canvasLayer.material.blending = THREE.NormalBlending;
+    
+    // Apply the texture to the canvas layer
+    if (canvasLayer.material.map) {
+        canvasLayer.material.map.dispose();
+    }
+    
+    canvasLayer.material.map = texture;
+    canvasLayer.material.needsUpdate = true;
+    
+    // Ensure visibility
+    canvasLayer.visible = true;
+    
+    // Render the updated scene
+    if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+    }
 }
 
 // Update shirt texture with proper UV mapping
 export function updateShirtTexture(imageUrl, type) {
-    if (!shirtMesh) return;
+    if (!shirtMesh) {
+        console.error('Shirt mesh not available');
+        return null;
+    }
 
-    createDecal(imageUrl, type, (texture) => {
-        // Get model settings based on current type
-        const settings = modelSettings[currentModelType] || modelSettings.tshirt;
+    if (!imageUrl) {
+        console.error('Image URL is required');
+        return null;
+    }
+    
+    console.log(`Updating shirt texture with: ${imageUrl}, type: ${type}`);
 
         if (type === 'full') {
-            // For full texture, we need to create a material that wraps the entire shirt
-            if (fullDecal) {
-                shirtMesh.remove(fullDecal);
-                if (fullDecal.material.map) {
-                    fullDecal.material.map.dispose();
-                }
-                fullDecal.material.dispose();
-                fullDecal.geometry.dispose();
-            }
-
-            // Create a completely independent material for decals
-            // This will never be affected by shirt color changes
-            const decalMaterial = new THREE.MeshStandardMaterial({
-                map: texture,
-                transparent: true,
-                roughness: 0.4,
-                metalness: 0.0,
-                side: THREE.DoubleSide,
-                envMapIntensity: 0.8,
-                color: 0xFFFFFF, // Fixed white color
-                blending: THREE.NormalBlending
-            });
-
-            // Disable color influence from the shirt
-            decalMaterial.colorWrite = true;
-            decalMaterial.depthTest = true;
-            decalMaterial.depthWrite = true;
-            
-            // Clone the shirt geometry for our full texture overlay
-            const geometry = shirtMesh.geometry.clone();
-            fullDecal = new THREE.Mesh(geometry, decalMaterial);
-
-            // Position slightly in front of the shirt to prevent z-fighting
-            fullDecal.scale.set(1.01, 1.01, 1.01);
-            fullDecal.position.z += 0.005;
-            
-            // Set rendering priority
-            fullDecal.renderOrder = 1;
-            fullDecal.visible = isFullTexture;
-            fullDecal.name = 'full-decal';
-
-            if (isFullTexture) {
-                shirtMesh.add(fullDecal);
-                console.log("Added full texture decal to shirt with independent material");
-            } else {
-                shirtMesh.add(fullDecal);
-                fullDecal.visible = false;
-                console.log("Added full texture decal to shirt, but keeping it hidden (isFullTexture=false)");
-            }
-
-            // Update state to track the full decal
-            updateState({ fullDecal: imageUrl });
-            
-            // Force a render to show the texture change
-            if (renderer && scene && camera) {
-                renderer.render(scene, camera);
-            }
+        // Check for "dark shadow" pattern in URL which is causing the issue
+        if (imageUrl.includes('shadow') || imageUrl.includes('dark')) {
+            console.log('Skipping dark shadow texture that causes overlay issues');
+            return null;
         }
-    });
+        
+        // Skip if the app is just initializing to prevent initial layers
+        if (document.readyState !== 'complete') {
+            console.log('Skipping texture application during initialization');
+            return null;
+        }
+        
+        createFullDecalLayer(imageUrl);
+        return null;
+    }
 }
 
 // Toggle texture visibility
 export function toggleTexture(type, active) {
     if (!shirtMesh) return;
 
-    if (type === 'full') {
-        isFullTexture = active;
-
-        if (fullDecal) {
-            fullDecal.visible = active;
-
-            // When disabling the texture, make sure the shirt color is visible
-            if (!active && shirtMaterial) {
-                // Ensure the shirt's color is restored when hiding the texture
-                const currentColor = state.color || '#FFFFFF';
-                shirtMaterial.color.copy(new THREE.Color(currentColor));
-
-                // Force a material update to ensure color is refreshed
-                shirtMaterial.needsUpdate = true;
-                console.log("Texture disabled, showing base shirt color:", shirtMaterial.color);
-
-                // Force a render update
-                if (renderer && scene && camera) {
-                    renderer.render(scene, camera);
-                }
-            } else if (active) {
-                // Simply force a render when showing the texture
-                if (renderer && scene && camera) {
-                    renderer.render(scene, camera);
-                }
-            }
-        } else if (active) {
-            // Only create full texture if user has selected one, no default texture
-            if (state.fullDecal) {
-                updateShirtTexture(state.fullDecal, 'full');
-            }
+        if (type === 'full') {
+        // Completely disable this functionality
+        console.log('Full texture overlays have been disabled due to shadow effects issues');
+        
+        // Always ensure the full texture is removed
+        const fullDecalLayer = shirtMesh.children.find(child => child.name === 'full-decal');
+        if (fullDecalLayer) {
+            // Remove the layer completely
+            removeFullDecalLayer();
+        }
+        
+        // Update state to ensure it stays disabled
+        isFullTexture = false;
+        updateState({ isFullTexture: false, fullDecal: null });
+        
+        // Render to show changes
+        if (renderer && scene && camera) {
+            renderer.render(scene, camera);
         }
     }
 }
+
+/**
+ * Completely remove the full-decal layer to fix overlapping fabric issues
+ * This removes the dark shadow effect fabric that's overlapping the t-shirt
+ */
+export function removeFullDecalLayer() {
+    if (!shirtMesh) return false;
+    
+    // Find the full-decal layer
+    const fullDecalLayer = shirtMesh.children.find(child => child.name === 'full-decal');
+    
+    if (fullDecalLayer) {
+        // Dispose of material resources to prevent memory leaks
+        if (fullDecalLayer.material) {
+            if (fullDecalLayer.material.map) {
+                fullDecalLayer.material.map.dispose();
+            }
+            fullDecalLayer.material.dispose();
+        }
+        
+        // Remove from parent (the shirt mesh)
+        shirtMesh.remove(fullDecalLayer);
+        
+        // Update state
+        isFullTexture = false;
+        updateState({ isFullTexture: false, fullDecal: null });
+            
+        // Render to show changes
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        
+        console.log('Full decal layer completely removed');
+        return true;
+    }
+    
+    return false;
+}
+
+/**
+ * Create the full decal layer with the provided texture
+ * @param {string} imageUrl - URL of the texture to apply
+ */
+
 
 // Change the current 3D model
 export function changeModel(modelType) {
@@ -1811,8 +1855,6 @@ export function changeModel(modelType) {
 
     // Save the current model state
     const savedColor = shirtMaterial ? shirtMaterial.color.clone() : null;
-    const savedFullDecal = fullDecal && fullDecal.material && fullDecal.material.map ?
-        fullDecal.material.map.clone() : null;
     const isFullVisible = fullDecal && fullDecal.parent === shirtMesh;
 
     // Update current model type before loading
@@ -1820,10 +1862,6 @@ export function changeModel(modelType) {
 
     // Preserve current textures when changing models
     const currentFullDecal = state.fullDecal;
-    const fullTextureVisible = state.isFullTexture;
-
-    // Save the current model path
-    const oldModelPath = currentModelPath;
 
     // Try loading the new model
     return loadModel(modelPath)
@@ -1844,9 +1882,14 @@ export function changeModel(modelType) {
 
             // Restore textures
             if (isFullVisible && currentFullDecal) {
+                // Check if it's the problematic dark shadow texture
+                if (currentFullDecal.includes('shadow') || currentFullDecal.includes('dark')) {
+                    console.log('Skipping restore of dark shadow texture that causes overlay issues');
+                } else {
                 // Use the state.fullDecal to restore the texture
                 // This ensures we're using the original texture, not a potentially color-tinted one
                 updateShirtTexture(state.fullDecal || currentFullDecal, 'full');
+                }
                 
                 // Make sure fullDecal is visible if it was before
                 if (fullDecal) {
@@ -2206,7 +2249,7 @@ function ensureCameraControlsExist() {
 
 // Variables for FPS control
 let lastFrameTime = 0;
-const targetFPS = 30; // Reduced from 60 to 30 for better performance
+const targetFPS = 90; // Reduced from 60 to 30 for better performance
 const frameInterval = 1000 / targetFPS;
 let animationFrameId = null; // Track the animation frame for possible cancellation
 let isRendering = true; // Flag to control rendering
@@ -2476,31 +2519,6 @@ function determineCurrentView() {
     return currentView;
 }
 
-// Adjust rotation parameters based on current view
-function adjustRotationForView(view) {
-    if (!controls) return;
-
-    // Set up rotation axis and behavior based on view
-    switch (view) {
-        case 'front':
-        case 'back':
-            // For front/back views, rotate around Y axis (up/down)
-            controls.autoRotateSpeed = view === 'front' ? 2.5 : -2.5;
-            break;
-
-        case 'left':
-        case 'right':
-            // For side views, adjust rotation to showcase front and back
-            controls.autoRotateSpeed = view === 'left' ? -2.5 : 2.5;
-            break;
-
-        default:
-            // Default rotation
-            controls.autoRotateSpeed = 2.5;
-    }
-}
-
-
 
 
 // Add reset camera position function
@@ -2579,487 +2597,6 @@ function resetCameraPosition() {
     }
 }
 
-// New enhanced fabric textures function
-function createAdvancedFabricTextures(material) {
-    // Generate realistic fabric textures
-    const textureSize = 1024;
-
-    // Generate normal map for fabric weave
-    try {
-        // Try to load the advanced normal map generator
-        if (typeof generateAdvancedFabricNormalMap === 'function') {
-            const fabricType = state.fabricType || 'cotton';
-            material.normalMap = generateAdvancedFabricNormalMap(textureSize, textureSize, fabricType);
-            material.normalScale.set(0.8, 0.8);
-        } else {
-            // Fallback to basic normal map
-            material.normalMap = createAdvancedNormalMap(textureSize, textureSize);
-            material.normalScale.set(0.5, 0.5);
-        }
-    } catch (error) {
-        console.warn("Failed to generate advanced normal map:", error);
-        material.normalMap = createAdvancedNormalMap(textureSize, textureSize);
-        material.normalScale.set(0.5, 0.5);
-    }
-
-    // Create roughness map with fabric detail
-    material.roughnessMap = createAdvancedRoughnessMap(textureSize, textureSize);
-
-    // Add ambient occlusion for depth
-    material.aoMap = createAmbientOcclusionMap(textureSize, textureSize);
-    material.aoMapIntensity = 0.5;
-
-    // Add subtle displacement for fabric depth
-    material.displacementMap = createDisplacementMap(textureSize, textureSize);
-    material.displacementScale = 0.002; // Very subtle displacement
-
-    // Make sure textures are properly wrapped and repeated
-    [material.normalMap, material.roughnessMap, material.aoMap, material.displacementMap].forEach(texture => {
-        if (texture) {
-            texture.wrapS = THREE.RepeatWrapping;
-            texture.wrapT = THREE.RepeatWrapping;
-            texture.repeat.set(5, 5); // Scale the texture appropriately
-            texture.needsUpdate = true;
-        }
-    });
-
-    material.needsUpdate = true;
-}
-
-// Create a more detailed normal map for fabric
-function createAdvancedNormalMap(width, height) {
-    // Create a simple flat normal map (no details) for basic appearance
-    const size = width * height;
-    const data = new Uint8Array(4 * size);
-
-    // Fill with flat normal data (pointing straight up)
-    for (let i = 0; i < size; i++) {
-        const stride = i * 4;
-        data[stride] = 128;     // R: X component (flat)
-        data[stride + 1] = 128; // G: Y component (flat) 
-        data[stride + 2] = 255; // B: Z component (pointing outward)
-        data[stride + 3] = 255; // A: fully opaque
-    }
-
-    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
-    texture.colorSpace = THREE.SRGBColorSpace; // Use colorSpace instead of encoding
-    texture.needsUpdate = true;
-    return texture;
-}
-
-// Create an enhanced roughness map for fabric
-function createAdvancedRoughnessMap(width, height) {
-    // Create a detailed roughness map with fabric texture
-    const size = width * height;
-    const data = new Uint8Array(4 * size);
-
-    // Fabric properties - get from state or use defaults
-    const fabricType = state.fabricType || 'cotton';
-    const baseFabricRoughness = fabricType === 'silk' ? 150 :
-        fabricType === 'wool' ? 220 :
-            fabricType === 'polyester' ? 170 : 180; // cotton default
-
-    // Generate noise frequencies for fabric texture
-    const scale1 = 0.03;
-    const scale2 = 0.1;
-    const scale3 = 0.3;
-
-    // Use a simple pseudo-random number generator for consistency
-    const seed = 12345;
-    const random = (x, y) => {
-        const dot = x * 12.9898 + y * 78.233 + seed;
-        return Math.abs(Math.sin(dot) * 43758.5453) % 1;
-    };
-
-    // Generate Perlin-like noise for natural fabric appearance
-    const noise = (x, y, scale) => {
-        const x0 = Math.floor(x * scale);
-        const y0 = Math.floor(y * scale);
-        const x1 = x0 + 1;
-        const y1 = y0 + 1;
-
-        const sx = (x * scale) - x0;
-        const sy = (y * scale) - y0;
-
-        const n00 = random(x0, y0);
-        const n10 = random(x1, y0);
-        const n01 = random(x0, y1);
-        const n11 = random(x1, y1);
-
-        const nx0 = n00 * (1 - sx) + n10 * sx;
-        const nx1 = n01 * (1 - sx) + n11 * sx;
-
-        return nx0 * (1 - sy) + nx1 * sy;
-    };
-
-    // Fill with varying roughness values based on noise functions
-    for (let i = 0; i < size; i++) {
-        const x = i % width;
-        const y = Math.floor(i / width);
-        const stride = i * 4;
-
-        // Multi-scale noise for fabric detail
-        const noiseValue1 = noise(x, y, scale1);
-        const noiseValue2 = noise(x, y, scale2) * 0.5;
-        const noiseValue3 = noise(x, y, scale3) * 0.25;
-
-        // Combine noise layers with different frequencies
-        const combinedNoise = (noiseValue1 + noiseValue2 + noiseValue3) / 1.75;
-
-        // Calculate final roughness value with variation
-        const roughnessValue = Math.min(255, Math.max(0,
-            baseFabricRoughness + (combinedNoise * 70 - 35)
-        ));
-
-        // Apply to all RGB channels (grayscale texture)
-        data[stride] = roughnessValue;
-        data[stride + 1] = roughnessValue;
-        data[stride + 2] = roughnessValue;
-        data[stride + 3] = 255; // Fully opaque
-    }
-
-    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
-    texture.colorSpace = THREE.SRGBColorSpace; // Use colorSpace instead of encoding
-    texture.needsUpdate = true;
-    return texture;
-}
-
-// Create an ambient occlusion map for the fabric
-function createAmbientOcclusionMap(width, height) {
-    // Create a flat white AO map (no occlusion) for basic appearance
-    const size = width * height;
-    const data = new Uint8Array(4 * size);
-
-    // Fill with white (no occlusion)
-    for (let i = 0; i < size; i++) {
-        const stride = i * 4;
-        data[stride] = 255;     // White
-        data[stride + 1] = 255; // White
-        data[stride + 2] = 255; // White
-        data[stride + 3] = 255; // Fully opaque
-    }
-
-    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
-    texture.colorSpace = THREE.SRGBColorSpace; // Use colorSpace instead of encoding
-    texture.needsUpdate = true;
-    return texture;
-}
-
-// Create a displacement map for subtle fabric detail
-function createDisplacementMap(width, height) {
-    // Create a flat displacement map (no displacement) for basic appearance
-    const size = width * height;
-    const data = new Uint8Array(4 * size);
-
-    // Fill with middle gray (no displacement)
-    for (let i = 0; i < size; i++) {
-        const stride = i * 4;
-        data[stride] = 128;     // Middle value (no displacement)
-        data[stride + 1] = 128; // Middle value
-        data[stride + 2] = 128; // Middle value
-        data[stride + 3] = 255; // Fully opaque
-    }
-
-    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
-    texture.colorSpace = THREE.SRGBColorSpace; // Use colorSpace instead of encoding
-    texture.needsUpdate = true;
-    return texture;
-}
-
-// Create a procedural normal map using noise
-function createNormalMap(width, height) {
-    const size = width * height;
-    const data = new Uint8Array(4 * size);
-
-    // Fill with a fabric-like normal pattern
-    for (let i = 0; i < size; i++) {
-        const stride = i * 4;
-
-        // Basic noise function to mimic fabric weave
-        const x = i % width;
-        const y = Math.floor(i / width);
-
-        // Create fabric weave pattern
-        const noiseX = Math.sin(x * 0.1) * 10 + Math.sin(x * 0.05) * 5;
-        const noiseY = Math.sin(y * 0.1) * 10 + Math.sin(y * 0.05) * 5;
-
-        // Combine noises to create a fabric texture
-        const noise = (noiseX + noiseY) * 0.5;
-
-        // RGB corresponds to XYZ normal directions
-        data[stride] = 128 + noise; // R: X normal (128 is neutral)
-        data[stride + 1] = 128 + noise; // G: Y normal
-        data[stride + 2] = 255; // B: Z normal (mostly facing outward)
-        data[stride + 3] = 255; // Alpha: fully opaque
-    }
-
-    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(5, 5); // Repeat texture
-    texture.colorSpace = THREE.SRGBColorSpace; // Use colorSpace instead of encoding
-    texture.needsUpdate = true;
-
-    return texture;
-}
-
-// Create a procedural roughness map
-function createRoughnessMap(width, height) {
-    const size = width * height;
-    const data = new Uint8Array(4 * size);
-
-    // Fill with a fabric-like roughness pattern
-    for (let i = 0; i < size; i++) {
-        const stride = i * 4;
-
-        const x = i % width;
-        const y = Math.floor(i / width);
-
-        // Create variation in roughness for more realistic fabric
-        const noiseX = Math.sin(x * 0.2) * 20 + Math.cos(x * 0.1) * 10;
-        const noiseY = Math.sin(y * 0.2) * 20 + Math.cos(y * 0.1) * 10;
-
-        // Combine for a fabric-like pattern
-        const noise = (noiseX + noiseY) * 0.25;
-
-        // Grayscale value determines roughness
-        const value = Math.min(255, Math.max(0, 180 + noise));
-
-        // Use same value for R, G, B (grayscale)
-        data[stride] = value;
-        data[stride + 1] = value;
-        data[stride + 2] = value;
-        data[stride + 3] = 255; // Alpha: fully opaque
-    }
-
-    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(5, 5); // Repeat texture
-    texture.colorSpace = THREE.SRGBColorSpace; // Use colorSpace instead of encoding
-    texture.needsUpdate = true;
-
-    return texture;
-}
-
-// Try to upgrade to physical material for better realism
-function tryUpgradeToPhysicalMaterial(standardMaterial, color, materialSettings) {
-    // Only try if MeshPhysicalMaterial is available
-    if (THREE.MeshPhysicalMaterial) {
-        try {
-            // Get current fabric type from state or default to cotton
-            const fabricType = state.fabricType || 'cotton';
-
-            // Create a Three.js color from the input
-            const threeColor = new THREE.Color(color);
-
-            // Determine if this is a very dark color (like black)
-            const isDarkColor = threeColor.r < 0.1 && threeColor.g < 0.1 && threeColor.b < 0.1;
-
-            // Calculate physically-based material properties with error handling
-            let physicsMaterialProperties;
-            try {
-                physicsMaterialProperties = calculateFabricMaterialProperties(
-                    fabricType,
-                    threeColor
-                );
-            } catch (error) {
-                console.error("Failed to calculate fabric properties:", error);
-                // Use enhanced default properties for realism
-                physicsMaterialProperties = {
-                    roughness: isDarkColor ? 0.8 : 0.65,
-                    metalness: isDarkColor ? 0.01 : 0.05,
-                    clearcoat: isDarkColor ? 0.1 : 0.15,
-                    clearcoatRoughness: 0.4,
-                    sheen: isDarkColor ? 0.1 : 0.25,
-                    sheenRoughness: 0.8,
-                    sheenColor: new THREE.Color(color).offsetHSL(0, 0, isDarkColor ? 0.05 : 0.1)
-                };
-            }
-
-            // Merge with any provided settings
-            const finalSettings = {
-                ...physicsMaterialProperties,
-                ...materialSettings,
-                color: color,
-                side: THREE.DoubleSide,
-                transparent: false,
-                opacity: 1.0
-            };
-
-            // Create physical material with advanced properties
-            const physicalMaterial = new THREE.MeshPhysicalMaterial(finalSettings);
-
-            // Enhanced shadows and lighting interaction
-            physicalMaterial.shadowSide = THREE.DoubleSide;
-            physicalMaterial.envMapIntensity = 0.8;  // Subtle environment reflections
-
-            // Generate advanced fabric normal map with error handling
-            try {
-                // Try to use dynamic normal map
-                if (typeof generateAdvancedFabricNormalMap === 'function') {
-                    const normalMap = generateAdvancedFabricNormalMap(2048, 2048, fabricType);
-                    physicalMaterial.normalMap = normalMap;
-                    physicalMaterial.normalScale.set(0.9, 0.9); // Increased normal scale for more detail
-                } else {
-                    // Fallback to more basic normal map with enhanced settings
-                    const normalMap = createAdvancedNormalMap(1024, 1024);
-                    physicalMaterial.normalMap = normalMap;
-                    physicalMaterial.normalScale.set(0.6, 0.6);
-                }
-            } catch (error) {
-                console.error("Failed to generate normal map:", error);
-                // Continue without normal map
-            }
-
-            // Copy other maps from standard material if available
-            if (standardMaterial.roughnessMap) {
-                physicalMaterial.roughnessMap = standardMaterial.roughnessMap;
-                // Enhanced texture settings
-                physicalMaterial.roughnessMap.wrapS = THREE.RepeatWrapping;
-                physicalMaterial.roughnessMap.wrapT = THREE.RepeatWrapping;
-                physicalMaterial.roughnessMap.repeat.set(5, 5);  // Increased repeats for more detailed texture
-            } else {
-                // Create a new roughness map if none exists
-                try {
-                    const roughnessMap = createAdvancedRoughnessMap(2048, 2048);
-                    physicalMaterial.roughnessMap = roughnessMap;
-                    physicalMaterial.roughnessMap.wrapS = THREE.RepeatWrapping;
-                    physicalMaterial.roughnessMap.wrapT = THREE.RepeatWrapping;
-                    physicalMaterial.roughnessMap.repeat.set(5, 5);
-                } catch (error) {
-                    console.error("Failed to create roughness map:", error);
-                }
-            }
-
-            if (standardMaterial.aoMap) {
-                physicalMaterial.aoMap = standardMaterial.aoMap;
-                physicalMaterial.aoMapIntensity = 0.8;  // Enhanced AO intensity
-                // Enhanced texture settings
-                physicalMaterial.aoMap.wrapS = THREE.RepeatWrapping;
-                physicalMaterial.aoMap.wrapT = THREE.RepeatWrapping;
-                physicalMaterial.aoMap.repeat.set(5, 5);  // Matched with other textures
-            } else {
-                // Create a new AO map if none exists
-                try {
-                    const aoMap = createAmbientOcclusionMap(2048, 2048);
-                    physicalMaterial.aoMap = aoMap;
-                    physicalMaterial.aoMapIntensity = 0.8;
-                    physicalMaterial.aoMap.wrapS = THREE.RepeatWrapping;
-                    physicalMaterial.aoMap.wrapT = THREE.RepeatWrapping;
-                    physicalMaterial.aoMap.repeat.set(5, 5);
-                } catch (error) {
-                    console.error("Failed to create AO map:", error);
-                }
-            }
-
-            // Add subtle displacement map if available
-            if (standardMaterial.displacementMap) {
-                physicalMaterial.displacementMap = standardMaterial.displacementMap;
-                physicalMaterial.displacementScale = 0.002;  // Very subtle effect
-                physicalMaterial.displacementBias = 0;
-                // Enhanced texture settings
-                physicalMaterial.displacementMap.wrapS = THREE.RepeatWrapping;
-                physicalMaterial.displacementMap.wrapT = THREE.RepeatWrapping;
-                physicalMaterial.displacementMap.repeat.set(5, 5);
-            }
-
-            // Add subtle bump map to enhance detail even without normal map
-            try {
-                const bumpMap = createAdvancedRoughnessMap(2048, 2048);
-                physicalMaterial.bumpMap = bumpMap;
-                physicalMaterial.bumpScale = 0.008; // Increased for better detail
-                // Enhanced texture settings
-                physicalMaterial.bumpMap.wrapS = THREE.RepeatWrapping;
-                physicalMaterial.bumpMap.wrapT = THREE.RepeatWrapping;
-                physicalMaterial.bumpMap.repeat.set(8, 8);  // Higher frequency for bump
-            } catch (error) {
-                console.error("Failed to create bump map:", error);
-            }
-
-            // Apply advanced light interaction calculations with error handling
-            try {
-                enhanceFabricLightInteraction(physicalMaterial, fabricType, new THREE.Color(color));
-            } catch (error) {
-                console.error("Failed to enhance light interaction:", error);
-                // Continue without enhancement
-            }
-
-            // Replace the material
-            shirtMaterial = physicalMaterial;
-            if (shirtMesh) {
-                shirtMesh.material = shirtMaterial;
-
-                // Ensure proper material on all parts of the shirt (including inside)
-                shirtMesh.traverse(child => {
-                    if (child.isMesh) {
-                        child.material = shirtMaterial;
-                    }
-                });
-            }
-
-            console.log(`Advanced physical material applied with ${fabricType} properties`);
-        } catch (e) {
-            console.error("Failed to upgrade to advanced material", e);
-            // Fallback to standard material
-            useFallbackMaterial(standardMaterial, color);
-        }
-    } else {
-        // THREE.MeshPhysicalMaterial not available, use fallback
-        useFallbackMaterial(standardMaterial, color);
-    }
-}
-
-/**
- * Fallback to simpler material when advanced features aren't available
- */
-function useFallbackMaterial(standardMaterial, color) {
-    // Create a simpler material as fallback but still with improved settings
-    const fallbackMaterial = new THREE.MeshStandardMaterial({
-        color: color,
-        roughness: 0.65,
-        metalness: 0.1,
-        side: THREE.DoubleSide,
-        shadowSide: THREE.DoubleSide,
-        envMapIntensity: 0.6
-    });
-
-    // Try to add basic textures for better realism even in fallback mode
-    try {
-        // Add a simple normal map
-        fallbackMaterial.normalMap = createAdvancedNormalMap(512, 512);
-        fallbackMaterial.normalScale.set(0.4, 0.4);
-
-        // Add a roughness map for texture variation
-        fallbackMaterial.roughnessMap = createAdvancedRoughnessMap(512, 512);
-
-        // Make sure textures are properly wrapped
-        [fallbackMaterial.normalMap, fallbackMaterial.roughnessMap].forEach(texture => {
-            if (texture) {
-                texture.wrapS = THREE.RepeatWrapping;
-                texture.wrapT = THREE.RepeatWrapping;
-                texture.repeat.set(3, 3); // Lower repeat count for performance
-                texture.needsUpdate = true;
-            }
-        });
-    } catch (error) {
-        console.warn("Failed to create textures for fallback material:", error);
-        // Continue without textures
-    }
-
-    // Replace the material
-    shirtMaterial = fallbackMaterial;
-    if (shirtMesh) {
-        shirtMesh.material = shirtMaterial;
-
-        // Ensure shadows are properly set
-        shirtMesh.castShadow = true;
-        shirtMesh.receiveShadow = true;
-    }
-
-    console.log("Using enhanced fallback material for compatibility");
-}
-
 // Add this new function for direct camera zooming
 function zoomCamera(direction) {
     if (!camera) {
@@ -3124,12 +2661,6 @@ function easeOutCubic(t) {
     return 1 - Math.pow(1 - t, 3);
 }
 
-// Helper function to get the current model settings
-function getModelSettingsForCurrentView() {
-    const modelType = currentModelType || 'tshirt';
-    return modelSettings[modelType];
-}
-
 // Helper function to update rotation axis based on current camera view
 function updateRotationAxisForCurrentView() {
     const currentView = state.cameraView || determineCurrentView();
@@ -3154,71 +2685,6 @@ function updateRotationAxisForCurrentView() {
     }
 
     console.log('Rotation axis set for view:', currentView);
-}
-
-// Add a function to reset rotation when stopped
-function resetRotation() {
-    // Reset any ongoing rotation effects
-    if (group) {
-        console.log('Reset rotation called for group');
-
-        // Ensure the manualRotationActive flag is set to false
-        manualRotationActive = false;
-        isAutoRotating = false;
-
-        // Ensure OrbitControls auto-rotation is off
-        if (controls) {
-            controls.autoRotate = false;
-            controls.update();
-        }
-
-        // Force an immediate render to ensure the model stops exactly where it is
-        if (renderer && scene && camera) {
-            console.log('Forcing render to stop rotation');
-            renderer.render(scene, camera);
-        }
-
-        console.log('Rotation has been completely stopped');
-    } else {
-        console.warn('Cannot reset rotation: model group not found');
-    }
-}
-
-// Add a dedicated function to stop rotation
-function stopRotation() {
-    console.log('stopRotation function called');
-
-    // First set the flags
-    manualRotationActive = false;
-    isAutoRotating = false;
-
-    // Update the button visual state
-    const rotateButton = document.getElementById('rotate-view');
-    if (rotateButton) {
-        rotateButton.classList.remove('active');
-        rotateButton.title = 'Start Rotation';
-
-        // Change icon back to rotate
-        const icon = rotateButton.querySelector('i');
-        if (icon) {
-            icon.classList.remove('fa-stop');
-            icon.classList.add('fa-redo');
-        }
-    }
-
-    // Disable OrbitControls auto-rotation
-    if (controls) {
-        controls.autoRotate = false;
-        controls.update();
-    }
-
-    // Render one final frame
-    if (renderer && scene && camera) {
-        renderer.render(scene, camera);
-    }
-
-    console.log('Rotation has been stopped');
-    return false; // Return false to indicate rotation is now off
 }
 
 // Add a debug wrapper function for the rotate button
@@ -3449,39 +2915,9 @@ function toggleRotation() {
 
 // Add a new function to set fabric type and update material
 export function setFabricType(fabricType) {
-    // Update state
-    updateState({ fabricType });
-
-    // Update material if it exists
-    if (shirtMaterial && shirtMesh) {
-        // Get current color
-        const color = shirtMaterial.color;
-
-        // Recalculate material with new fabric type
-        const materialSettings = calculateFabricMaterialProperties(
-            fabricType,
-            color
-        );
-
-        // Apply new material settings
-        for (const [property, value] of Object.entries(materialSettings)) {
-            if (property in shirtMaterial) {
-                shirtMaterial[property] = value;
-            }
-        }
-
-        // Regenerate normal map for the new fabric type
-        const normalMap = generateAdvancedFabricNormalMap(1024, 1024, fabricType);
-        shirtMaterial.normalMap = normalMap;
-
-        // Enhance light interaction for the specific fabric
-        enhanceFabricLightInteraction(shirtMaterial, fabricType, color);
-
-        // Update material
-        shirtMaterial.needsUpdate = true;
-
-        console.log(`Fabric type updated to ${fabricType}`);
-    }
+    // Function has been removed - this is a placeholder for compatibility
+    console.log(`Fabric type functionality has been removed.`);
+    // The default cotton fabric is used
 }
 
 // Expose updateThemeBackground to window for direct access from HTML

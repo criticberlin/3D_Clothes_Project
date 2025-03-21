@@ -1344,3 +1344,66 @@ body {
 		box-shadow: 0 0 0 0 rgba(74, 144, 226, 0);
 	}
 }
+
+/* Notification styles */
+.notification {
+	position: fixed;
+	top: 20px;
+	right: 20px;
+	padding: 12px 20px;
+	border-radius: 8px;
+	background-color: var(--gray-800);
+	color: var(--light-color);
+	font-size: 14px;
+	font-weight: 500;
+	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+	z-index: 1000;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	animation: slideInRight 0.4s ease, fadeIn 0.4s ease;
+}
+
+.notification.success {
+	background-color: var(--success-color);
+}
+
+.notification.error {
+	background-color: var(--danger-color);
+}
+
+.notification.warning {
+	background-color: var(--warning-color);
+}
+
+.notification i {
+	font-size: 18px;
+}
+
+.notification.fade-out {
+	animation: fadeOut 0.5s ease forwards;
+}
+
+@keyframes slideInRight {
+	from {
+		transform: translateX(100%);
+	}
+	to {
+		transform: translateX(0);
+	}
+}
+
+@keyframes fadeOut {
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
+	}
+}
+
+/* Disabled button style */
+.button.disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}

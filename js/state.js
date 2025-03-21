@@ -9,7 +9,7 @@ export const state = {
     cameraView: 'front',      // Current camera view: 'front', 'back', 'left', 'right'
 
     // Theme
-    darkMode: true,           // Theme mode: true for dark, false for light
+    darkMode: false,           // Theme mode: true for dark, false for light
 
     // Model selection
     currentModel: 'tshirt',   // Current 3D model ('tshirt' or 'hoodie')
@@ -18,8 +18,6 @@ export const state = {
         hoodie: './models/hoodie.glb'
     },
 
-    // Fabric properties
-    fabricType: 'cotton'      // Default fabric type (cotton, polyester, silk, wool)
 };
 
 // State change callbacks

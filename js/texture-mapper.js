@@ -3,19 +3,24 @@
  * Handles texture configurations for 3D clothing models
  * Improved with advanced mapping capabilities and better user experience
  */
-
-import * as THREE from 'three';
 import { state, updateState } from './state.js';
 import { Logger, Performance, debounce } from './utils.js';
 import { showToast } from './ui.js';
 import {
-    init3DEditor,
     addImage,
     clearObjectsByView,
     toggleDragAndDrop,
     toggleSmartPlacement,
     toggleAutoAdjustment
 } from './3d-editor.js';
+
+// Define textureState object
+const textureState = {
+    currentModel: 'tshirt',
+    baseTexture: null,
+    normalMap: null,
+    roughnessMap: null
+};
 
 // Configuration for different model types
 export const modelConfig = {
@@ -66,55 +71,54 @@ export const modelConfig = {
                 }
             }
         },
-        "fabricTextureStrength": 0.8,
-        "bumpMapStrength": 0.08,
-        "materialSettings": {
-            "roughness": 0.65,
-            "metalness": 0.02,
-            "clearcoat": 0.08,
-            "clearcoatRoughness": 0.4,
-            "transmission": 0.01,
-            "thickness": 0.3,
-            "envMapIntensity": 0.6,
-            "anisotropy": 0.3,
-            "normalScale": 0.7,
-            "displacementScale": 0.02,
-            "aoMapIntensity": 0.8
-        }
     },
-    hoodie: {
-        views: {
-            front: {
-                bounds: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
-                defaultScale: 0.35,
-                uvRect: { u1: 0.25, v1: 0.25, u2: 0.75, v2: 0.75 },
-                name: "Front"
+    "hoodie": {
+       "views": {
+            "front": {
+                "bounds": { "x": 0.1, "y": 0.4, "width": 0.2, "height": 0.9 },
+                "defaultScale": 1,
+                "uvRect": { "u1": 0.1, "v1": 0.5, "u2": 0.62, "v2": 0.85 },
+                "name": "Front",
+                "transformMatrix": {
+                    "scale": { "x": 1, "y": 1 },
+                    "rotation": 0,
+                    "offset": { "x": 0, "y": 0 }
+                }
             },
-            back: {
-                bounds: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
-                defaultScale: 0.35,
-                uvRect: { u1: 0.25, v1: 0.25, u2: 0.75, v2: 0.75 },
-                name: "Back"
+            "back": {
+                "bounds": { "x": 0.20, "y": 0.48, "width": 0.52, "height": 0.52 },
+                "defaultScale": 1,
+                "uvRect": { "u1": 0.18, "v1": 0.30, "u2": 0.68, "v2": 0.80 },
+                "name": "Back",
+                "transformMatrix": {
+                    "scale": { "x": 1.0, "y": 1.0 },
+                    "rotation": 0,
+                    "offset": { "x": -0.04, "y": -0.04 }
+                }
             },
-            left_arm: {
-                bounds: { x: 0.10, y: 0.30, width: 0.15, height: 0.25 },
-                defaultScale: 0.2,
-                uvRect: { u1: 0.10, v1: 0.30, u2: 0.25, v2: 0.55 },
-                name: "Left Sleeve"
+            "left_arm": {
+                "bounds": { "x": 0.14, "y": 0.33, "width": 0.17, "height": 0.26 },
+                "defaultScale": 0.27,
+                "uvRect": { "u1": 0.03, "v1": 0.21, "u2": 0.18, "v2": 0.46 },
+                "name": "Left Sleeve",
+                "transformMatrix": {
+                    "scale": { "x": 1.05, "y": 0.97 },
+                    "rotation": -6,
+                    "offset": { "x": 0.02, "y": -0.01 }
+                }
             },
-            right_arm: {
-                bounds: { x: 0.75, y: 0.30, width: 0.15, height: 0.25 },
-                defaultScale: 0.2,
-                uvRect: { u1: 0.75, v1: 0.30, u2: 0.90, v2: 0.55 },
-                name: "Right Sleeve"
+            "right_arm": {
+                "bounds": { "x": 0.74, "y": 0.33, "width": 0.17, "height": 0.26 },
+                "defaultScale": 0.27,
+                "uvRect": { "u1": 0.78, "v1": 0.21, "u2": 0.93, "v2": 0.46 },
+                "name": "Right Sleeve",
+                "transformMatrix": {
+                    "scale": { "x": 1.05, "y": 0.97 },
+                    "rotation": 6,
+                    "offset": { "x": -0.02, "y": -0.01 }
+                }
             }
         },
-        fabricTextureStrength: 0.7,
-        bumpMapStrength: 0.07,
-        materialSettings: {
-            roughness: 0.8,
-            metalness: 0.03
-        }
     }
 };
 
@@ -142,24 +146,13 @@ const viewDetectionMatrix = {
     }
 };
 
-// Minimal texture state management 
-const textureState = {
-    currentModel: 'tshirt',
-    baseTexture: null,
-    fabricTexture: null,
-    bumpMap: null
-};
 
-// Create texture loader
-const textureLoader = new THREE.TextureLoader();
 
 /**
  * Initialize texture mapper with base textures
- * @param {string} fabricTextureUrl - URL to the fabric texture (optional)
- * @param {string} bumpMapUrl - URL to the bump map for fabric texture (optional)
  * @param {string} modelType - Type of model ('tshirt', 'hoodie', etc)
  */
-export function initTextureMapper(fabricTextureUrl, bumpMapUrl, modelType = 'tshirt') {
+export function initTextureMapper(modelType = 'tshirt') {
     textureState.currentModel = modelType;
     console.log('Texture mapper initialized - 3D Editor Mode');
 
@@ -174,19 +167,6 @@ export function initTextureMapper(fabricTextureUrl, bumpMapUrl, modelType = 'tsh
         baseTexture: null,
         bumpMap: null
     });
-}
-
-/**
- * Map camera view to texture view (compatibility function)
- * @param {string} cameraView - The camera view (front, back, left, right)
- * @returns {string} The corresponding texture view
- */
-function mapCameraViewToTextureView(cameraView) {
-    switch (cameraView) {
-        case 'left': return 'left_arm';
-        case 'right': return 'right_arm';
-        default: return cameraView; // 'front' and 'back' remain the same
-    }
 }
 
 /**

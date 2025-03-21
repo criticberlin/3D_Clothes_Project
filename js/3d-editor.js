@@ -9,6 +9,7 @@ import { state, updateState } from './state.js';
 import { modelConfig } from './texture-mapper.js';
 import { Logger, Performance, debounce } from './utils.js';
 import { showToast } from './ui.js';
+import { updateShirtColor } from './scene.js';
 
 // Global variables
 let scene, camera, renderer, raycaster, mouse;
@@ -141,6 +142,14 @@ export function init3DEditor(threeScene, threeCamera, threeRenderer, targetMesh)
     }
 
     Logger.log('3D Editor initialized');
+
+    // Set a clean initial color with a slight delay to ensure proper initialization
+    setTimeout(() => {
+        // Get the stored color from state or use default
+        const initialColor = state.color || '#FFFFFF';
+        console.log('Applying delayed initial color:', initialColor);
+        updateShirtColor(initialColor);
+    }, 100);
 }
 
 /**
@@ -1082,8 +1091,8 @@ function constrainObjectToUVBoundary(object) {
 /**
  * Update the 3D shirt texture based on canvas data
  */
-function updateShirt3DTexture() {
-    if (!canvasData.canvas || !shirtMesh || !shirtMesh.material) return;
+export function updateShirt3DTexture() {
+    if (!canvasData.canvas || !shirtMesh) return;
 
     // Clear canvas
     canvasData.ctx.clearRect(0, 0, canvasData.width, canvasData.height);
@@ -1113,35 +1122,42 @@ function updateShirt3DTexture() {
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.needsUpdate = true;
 
-    // Save the current shirt color
-    const currentColor = shirtMesh.material.color.clone();
-
-    // Apply the texture to the shirt material
-    if (shirtMesh.material.map) {
-        shirtMesh.material.map.dispose();
-    }
-
-    // Set the texture map
-    shirtMesh.material.map = texture;
-
-    // Important: Preserve the shirt color when applying textures
-    // Ensure color is preserved properly for dark colors like black
-    shirtMesh.material.color.copy(currentColor);
-
-    // Fix for black and dark colored shirts to ensure proper rendering
-    if (currentColor.r < 0.1 && currentColor.g < 0.1 && currentColor.b < 0.1) {
-        // For very dark colors, adjust the rendering to preserve black
-        shirtMesh.material.colorWrite = true;
-        shirtMesh.material.blending = THREE.NormalBlending;
-    }
-
-    // Set material to update and render
-    shirtMesh.material.needsUpdate = true;
+    // Use the scene module to apply the texture to the canvas layer
+    import('./scene.js').then(module => {
+        if (typeof module.updateEditorCanvasTexture === 'function') {
+            module.updateEditorCanvasTexture(texture);
+        }
+    }).catch(err => {
+        console.error('Error updating canvas texture:', err);
+        
+        // Fallback direct application if needed
+        const canvasLayer = shirtMesh.children.find(child => child.name === 'canvas-layer');
+        if (canvasLayer && canvasLayer.material) {
+            if (canvasLayer.material.map) {
+                canvasLayer.material.map.dispose();
+            }
+            canvasLayer.material.map = texture;
+            canvasLayer.material.needsUpdate = true;
+        }
+    });
 
     // Render scene with new texture
     renderer.render(scene, camera);
 
-    Logger.log('Updated 3D texture');
+    Logger.log('3D texture updated');
+
+    // Ensure visibility only after proper material is applied
+    if (!shirtMesh.visible) {
+        console.log('Making shirt visible after material application');
+        // Add small delay to ensure material is fully ready before showing
+        setTimeout(() => {
+            shirtMesh.visible = true;
+            // Force a render
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        }, 50);
+    }
 }
 
 /**
@@ -1156,13 +1172,16 @@ function drawObjectToCanvas(object) {
 
     // Apply transformations
     ctx.translate(object.left + object.width / 2, object.top + object.height / 2);
+    
+    // Fix for upside-down and mirrored images
+    // Apply a scale transformation to flip the content vertically
+    ctx.scale(1, -1);
+    
     if (object.angle) ctx.rotate(object.angle * Math.PI / 180);
 
     // Draw based on object type
     if (object.type === 'image' && object.img) {
-        // Add vertical flip transformation to fix upside-down images
-
-        // Draw the image with natural colors
+        // For decals, use source-over to preserve original appearance
         ctx.globalCompositeOperation = 'source-over';
 
         // Draw the image
@@ -1174,38 +1193,44 @@ function drawObjectToCanvas(object) {
             object.height
         );
 
-        // Apply a white filter only if removeColor is explicitly set to true
-        if (object.removeColor === true) {
+        // Only apply color filtering if explicitly required and not a decal
+        if (object.removeColor === true && !object.isDecal) {
             ctx.globalCompositeOperation = 'luminosity';
             ctx.fillStyle = '#FFFFFF';
             ctx.fillRect(-object.width / 2, -object.height / 2, object.width, object.height);
         }
     } else if (object.type === 'text') {
-
+        // Apply an additional scale to make text readable after the flip
+        ctx.scale(1, -1);
+        
         ctx.font = `${object.fontSize || 20}px ${object.fontFamily || 'Arial'}`;
         ctx.fillStyle = object.color || '#000000';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(object.text, 0, 0);
     } else if (object.type === 'shape') {
-
-        ctx.fillStyle = object.fill || '#000000';
-        ctx.strokeStyle = object.stroke || '#000000';
-        ctx.lineWidth = object.strokeWidth || 1;
-
         if (object.shape === 'rect') {
-
+            ctx.fillStyle = object.fill || '#000000';
+            ctx.strokeStyle = object.stroke || '#000000';
+            ctx.lineWidth = object.strokeWidth || 1;
+            
+            // Draw rectangle with proper dimensions
             ctx.fillRect(-object.width / 2, -object.height / 2, object.width, object.height);
-            if (object.strokeWidth) {
+            
+            if (object.strokeWidth > 0) {
                 ctx.strokeRect(-object.width / 2, -object.height / 2, object.width, object.height);
             }
         } else if (object.shape === 'circle') {
-
-            const radius = Math.min(object.width, object.height) / 2;
+            ctx.fillStyle = object.fill || '#000000';
+            ctx.strokeStyle = object.stroke || '#000000';
+            ctx.lineWidth = object.strokeWidth || 1;
+            
+            // Draw circle with proper radius
             ctx.beginPath();
-            ctx.arc(0, 0, radius, 0, Math.PI * 2);
+            ctx.arc(0, 0, object.width / 2, 0, Math.PI * 2);
             ctx.fill();
-            if (object.strokeWidth) {
+            
+            if (object.strokeWidth > 0) {
                 ctx.stroke();
             }
         }
@@ -1227,6 +1252,10 @@ function drawSelectionOverlay(object) {
 
     // Apply transformations
     ctx.translate(object.left + object.width / 2, object.top + object.height / 2);
+    
+    // Apply the same vertical flip as in drawObjectToCanvas for consistency
+    ctx.scale(1, -1);
+    
     if (object.angle) ctx.rotate(object.angle * Math.PI / 180);
 
     // Draw bounding box with improved visibility
@@ -1278,41 +1307,26 @@ function drawSelectionOverlay(object) {
     // Rotation handle - make it more distinctive
     const rotationHandleDistance = 30; // Increased distance
 
-    // Draw rotation icon
+    // Draw rotation icon - adjusting for the vertical flip
     ctx.fillStyle = '#4CAF50'; // Green for rotation handle
     ctx.beginPath();
-    ctx.arc(0, -object.height / 2 - rotationHandleDistance, handleSize / 1.5, 0, Math.PI * 2);
+    ctx.arc(0, object.height / 2 + rotationHandleDistance, handleSize / 1.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // Add rotation arrow indicator inside the handle
+    // Add rotation arrow indicator inside the handle - also adjusted for flip
     ctx.strokeStyle = '#FFFFFF';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(0, -object.height / 2 - rotationHandleDistance, handleSize / 3, 0.5, Math.PI * 1.5, false);
+    ctx.arc(0, object.height / 2 + rotationHandleDistance, handleSize / 3, 0.5, Math.PI * 1.5, false);
     ctx.stroke();
 
-    // Arrow head
+    // Arrow head - adjusted for flip
     ctx.beginPath();
-    ctx.moveTo(handleSize / 3, -object.height / 2 - rotationHandleDistance - handleSize / 6);
-    ctx.lineTo(handleSize / 2, -object.height / 2 - rotationHandleDistance);
-    ctx.lineTo(handleSize / 3, -object.height / 2 - rotationHandleDistance + handleSize / 6);
+    ctx.moveTo(handleSize / 3, object.height / 2 + rotationHandleDistance - handleSize / 6);
+    ctx.lineTo(handleSize / 2, object.height / 2 + rotationHandleDistance);
+    ctx.lineTo(handleSize / 3, object.height / 2 + rotationHandleDistance + handleSize / 6);
     ctx.stroke();
-
-    // Line to rotation handle with pulsing effect for visibility
-    ctx.strokeStyle = '#4CAF50';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([4, 3]); // Dashed line for visual interest
-    ctx.beginPath();
-    ctx.moveTo(0, -object.height / 2);
-    ctx.lineTo(0, -object.height / 2 - rotationHandleDistance + handleSize / 2);
-    ctx.stroke();
-
-    // Reset shadow
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
 
     // Restore context state
     ctx.restore();
@@ -1393,8 +1407,6 @@ export function addImage(imageUrl, options = {}) {
             if (options.smartPlacement) {
                 // Make sure the image is fully within the UV rectangle of the view
                 const uvRect = viewConfig.uvRect;
-                const viewWidth = (uvRect.u2 - uvRect.u1) * canvasData.width;
-                const viewHeight = (uvRect.v2 - uvRect.v1) * canvasData.height;
 
                 // Ensure we're inside the view boundaries
                 const minX = uvRect.u1 * canvasData.width;
@@ -1480,6 +1492,10 @@ export function addImage(imageUrl, options = {}) {
                 originY: 'center',
                 removeColor: options.removeColor === true,
                 targetView: targetView,
+                // Mark as a decal to ensure it keeps its colors
+                isDecal: options.isDecal === undefined ? true : options.isDecal,
+                // Explicitly set to preserve colors when shirt color changes
+                preserveColor: options.preserveColor === undefined ? true : options.preserveColor,
                 filters: imageFilters,
                 metadata: {
                     originalSize: { width: img.width, height: img.height },
@@ -1852,6 +1868,11 @@ function highlightEditableArea(area) {
 
     // Draw a more visible highlight for the active editable area
     ctx.save();
+    
+    // Apply the same vertical flip transformation for consistency with other drawing operations
+    ctx.translate(x + width/2, y + height/2);
+    ctx.scale(1, -1);
+    ctx.translate(-(x + width/2), -(y + height/2));
 
     // Create highlight effect with animated dash
     const dashOffset = (Date.now() / 100) % 16;
@@ -1861,24 +1882,24 @@ function highlightEditableArea(area) {
     ctx.lineDashOffset = dashOffset;
     ctx.strokeRect(x, y, width, height);
 
-    // Remove the fill to only keep the border highlight
-    // ctx.fillStyle = 'rgba(76, 149, 175, 0.08)';  // Very light green
-    // ctx.fillRect(x, y, width, height);
-
     // Add a label for the current view
     const viewName = currentLockedView ?
         (modelConfig[state.currentModel].views[currentLockedView].name || currentLockedView) :
         'Editing Area';
 
+    // Flip text back to be readable (scale back vertically)
+    ctx.translate(x + width/2, y - 10);
+    ctx.scale(1, -1);
+    ctx.translate(-(x + width/2), -(y - 10));
+    
     ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
     ctx.strokeStyle = 'rgb(76, 149, 175)';  // Fixed color format for text stroke
     ctx.lineWidth = 2;
     ctx.font = 'bold 16px Arial';
     const textWidth = ctx.measureText(viewName).width;
     const labelX = x + (width - textWidth) / 2;
-    const labelY = y - 10;
-    ctx.fillText(viewName, labelX, labelY);
-    ctx.strokeText(viewName, labelX, labelY);
+    ctx.fillText(viewName, labelX, y - 10);
+    ctx.strokeText(viewName, labelX, y - 10);
 
     ctx.restore();
 }
@@ -2094,6 +2115,11 @@ function drawEditableAreas(ctx) {
         // Draw a subtle outline with fixed color (not affected by shirt color)
         ctx.save();
         
+        // Apply vertical flip transformation for consistency
+        ctx.translate(x + width/2, y + height/2);
+        ctx.scale(1, -1);
+        ctx.translate(-(x + width/2), -(y + height/2));
+        
         // Use a solid fixed color that won't be affected by shirt color
         ctx.strokeStyle = 'rgb(64, 127, 255)'; // Fixed bright blue
         ctx.lineWidth = 2;
@@ -2106,6 +2132,12 @@ function drawEditableAreas(ctx) {
 
         // Add view name label with solid background to ensure visibility
         const labelText = viewConfig.name || viewName;
+        
+        // Flip text back to be readable
+        ctx.translate(x + width/2, y + 15);
+        ctx.scale(1, -1);
+        ctx.translate(-(x + width/2), -(y + 15));
+        
         ctx.font = '14px Arial';
         
         // Draw text background

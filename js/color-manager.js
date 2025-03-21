@@ -217,12 +217,6 @@ function setActiveColor(color, isPreset = false) {
     // Apply color to the shirt using both methods for reliability
     console.log(`Calling updateShirtColor with color: ${color}`);
     updateShirtColor(color);
-    
-    // Also use the direct force method if available
-    if (window.forceShirtColor) {
-        console.log(`Using force method with color: ${color}`);
-        window.forceShirtColor(color);
-    }
 }
 
 /**
