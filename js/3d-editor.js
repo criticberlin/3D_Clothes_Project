@@ -1093,8 +1093,8 @@ function constrainObjectToUVBoundary(object) {
  */
 export function updateShirt3DTexture() {
     if (!canvasData.canvas || !shirtMesh) return;
-
-    // Clear canvas
+    
+    // Clear canvas with a fully transparent background
     canvasData.ctx.clearRect(0, 0, canvasData.width, canvasData.height);
 
     // Draw all objects
@@ -1116,48 +1116,25 @@ export function updateShirt3DTexture() {
     if (isEditingMode && currentEditableArea) {
         highlightEditableArea(currentEditableArea);
     }
-
-    // Create a texture from the canvas
-    const texture = new THREE.CanvasTexture(canvasData.canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.needsUpdate = true;
-
-    // Use the scene module to apply the texture to the canvas layer
+    
+    console.log('Generating high-quality texture from editor canvas');
+    
+    // Create a texture from the canvas with enhanced properties for perfect rendering
+    const canvasTexture = new THREE.CanvasTexture(canvasData.canvas);
+    
+    // Do not set anisotropy here, as it will be set in the scene.js module
+    // Do not set premultiplyAlpha here, as it will be configured in the scene.js module
+    
+    // If not found, request it from the scene module
     import('./scene.js').then(module => {
         if (typeof module.updateEditorCanvasTexture === 'function') {
-            module.updateEditorCanvasTexture(texture);
+            module.updateEditorCanvasTexture(canvasTexture);
         }
     }).catch(err => {
-        console.error('Error updating canvas texture:', err);
-        
-        // Fallback direct application if needed
-        const canvasLayer = shirtMesh.children.find(child => child.name === 'canvas-layer');
-        if (canvasLayer && canvasLayer.material) {
-            if (canvasLayer.material.map) {
-                canvasLayer.material.map.dispose();
-            }
-            canvasLayer.material.map = texture;
-            canvasLayer.material.needsUpdate = true;
-        }
+        console.error('Error updating editor canvas texture:', err);
     });
-
-    // Render scene with new texture
-    renderer.render(scene, camera);
-
-    Logger.log('3D texture updated');
-
-    // Ensure visibility only after proper material is applied
-    if (!shirtMesh.visible) {
-        console.log('Making shirt visible after material application');
-        // Add small delay to ensure material is fully ready before showing
-        setTimeout(() => {
-            shirtMesh.visible = true;
-            // Force a render
-            if (renderer && scene && camera) {
-                renderer.render(scene, camera);
-            }
-        }, 50);
-    }
+    
+    Logger.log('3D texture update requested with direct rendering technique');
 }
 
 /**
@@ -1173,34 +1150,59 @@ function drawObjectToCanvas(object) {
     // Apply transformations
     ctx.translate(object.left + object.width / 2, object.top + object.height / 2);
     
-    // Fix for upside-down and mirrored images
-    // Apply a scale transformation to flip the content vertically
-    ctx.scale(1, -1);
+    // Fix for coordinate system - Three.js uses a different coordinate system than Canvas
+    ctx.scale(1, -1); // This flips the Y-axis so that +Y is up (Three.js convention)
     
+    // Apply rotation if needed
     if (object.angle) ctx.rotate(object.angle * Math.PI / 180);
 
     // Draw based on object type
     if (object.type === 'image' && object.img) {
-        // For decals, use source-over to preserve original appearance
-        ctx.globalCompositeOperation = 'source-over';
+        // Determine if this is a decal (has transparency)
+        const isDecal = object.isDecal || 
+                       (object.metadata && object.metadata.hasTransparency) ||
+                       object.src?.toLowerCase().endsWith('.png');
+        
+        // For decals with transparency, use the most direct rendering approach possible
+        if (isDecal) {
+            // No transformations that might affect transparency
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.globalAlpha = 1.0;
+            
+            // Maximum quality settings for image drawing
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            
+            // Draw at original dimensions to maintain fine details
+            ctx.drawImage(
+                object.img,
+                -object.width / 2,
+                -object.height / 2,
+                object.width,
+                object.height
+            );
+        } else {
+            // For regular images, use standard rendering
+            ctx.globalCompositeOperation = 'source-over';
+            
+            // Draw the image
+            ctx.drawImage(
+                object.img,
+                -object.width / 2,
+                -object.height / 2,
+                object.width,
+                object.height
+            );
 
-        // Draw the image
-        ctx.drawImage(
-            object.img,
-            -object.width / 2,
-            -object.height / 2,
-            object.width,
-            object.height
-        );
-
-        // Only apply color filtering if explicitly required and not a decal
-        if (object.removeColor === true && !object.isDecal) {
-            ctx.globalCompositeOperation = 'luminosity';
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(-object.width / 2, -object.height / 2, object.width, object.height);
+            // Apply color filtering if needed
+            if (object.removeColor === true) {
+                ctx.globalCompositeOperation = 'luminosity';
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(-object.width / 2, -object.height / 2, object.width, object.height);
+            }
         }
     } else if (object.type === 'text') {
-        // Apply an additional scale to make text readable after the flip
+        // Text needs to be flipped back for proper rendering after our Y-axis flip
         ctx.scale(1, -1);
         
         ctx.font = `${object.fontSize || 20}px ${object.fontFamily || 'Arial'}`;
@@ -1376,151 +1378,117 @@ export function removeObject(object) {
  */
 export function addImage(imageUrl, options = {}) {
     return new Promise((resolve, reject) => {
+        // Create an image element to load the URL
         const img = new Image();
-        img.crossOrigin = 'Anonymous';
+        img.crossOrigin = 'anonymous';
 
+        // Handle load event
         img.onload = () => {
-            // Use target view or fallback to current camera view
-            const targetView = options.view || state.cameraView || 'front';
-            const viewConfig = modelConfig[state.currentModel].views[targetView];
-
-            // Get current view's UV boundaries
-            if (!viewConfig) {
-                reject(new Error(`View "${targetView}" not found in model configuration`));
-                return;
+            // Create object with default properties
+            const imageWidth = options.width || img.width;
+            const imageHeight = options.height || img.height;
+            
+            // Calculate aspect ratio to maintain proportions if needed
+            const aspectRatio = img.width / img.height;
+            
+            // Default size based on target view
+            let defaultWidth = 200;
+            let defaultHeight = defaultWidth / aspectRatio;
+            
+            // Get target view from options or use current view
+            const targetView = options.view || state.cameraView;
+            
+            // Check for the presence of transparency to auto-detect if it's a decal
+            let hasTransparency = false;
+            let isDecalType = false;
+            
+            // Check file extension to guess if it's likely a decal
+            if (imageUrl.toLowerCase().endsWith('.png') || 
+                imageUrl.toLowerCase().endsWith('.webp') || 
+                imageUrl.includes('data:image/png') ||
+                imageUrl.includes('data:image/webp')) {
+                // PNG and WebP likely have transparency - mark as potential decal
+                isDecalType = true;
             }
-
-            // Determine position - use options.left/top if provided, otherwise center in view
-            let left, top;
-            if (options.left !== undefined && options.top !== undefined) {
-                left = options.left;
-                top = options.top;
-            } else {
-                // Center the image in the view
-                const uvMidX = (viewConfig.uvRect.u1 + viewConfig.uvRect.u2) / 2;
-                const uvMidY = (viewConfig.uvRect.v1 + viewConfig.uvRect.v2) / 2;
-                left = uvMidX * canvasData.width;
-                top = uvMidY * canvasData.height;
-            }
-
-            // Smart placement adjustments
-            if (options.smartPlacement) {
-                // Make sure the image is fully within the UV rectangle of the view
-                const uvRect = viewConfig.uvRect;
-
-                // Ensure we're inside the view boundaries
-                const minX = uvRect.u1 * canvasData.width;
-                const maxX = uvRect.u2 * canvasData.width;
-                const minY = uvRect.v1 * canvasData.height;
-                const maxY = uvRect.v2 * canvasData.height;
-
-                left = Math.max(minX, Math.min(maxX, left));
-                top = Math.max(minY, Math.min(maxY, top));
-            }
-
-            // Calculate optimal scaling for the image
-            let scaleFactor;
-
-            if (options.width || options.height) {
-                // User-specified dimensions
-                const scaleX = options.width ? (options.width / img.width) : 1;
-                const scaleY = options.height ? (options.height / img.height) : 1;
-                scaleFactor = options.maintainAspectRatio ? Math.min(scaleX, scaleY) : { x: scaleX, y: scaleY };
-            } else {
-                // Auto-calculate based on view size
-                const uvRect = viewConfig.uvRect;
-                const viewWidth = (uvRect.u2 - uvRect.u1) * canvasData.width;
-                const viewHeight = (uvRect.v2 - uvRect.v1) * canvasData.height;
-
-                // Size to fit approximately 60% of the view area by default
-                // Use smaller percentage for larger images to avoid overwhelming the view
-                let fitPercentage = 0.6;
-                if (img.width > 1000 || img.height > 1000) {
-                    fitPercentage = 0.4;
-                } else if (img.width < 200 || img.height < 200) {
-                    fitPercentage = 0.8; // Small images can be larger relative to the view
+            
+            // Get decal information from the image if possible
+            try {
+                // Create a small canvas to check for transparency
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+                const sampleSize = Math.min(img.width, img.height, 128); // Reasonable sample size
+                
+                tempCanvas.width = sampleSize;
+                tempCanvas.height = sampleSize;
+                
+                // Draw image to temp canvas
+                tempCtx.drawImage(img, 0, 0, sampleSize, sampleSize);
+                
+                // Check for transparent pixels in the sample
+                const imageData = tempCtx.getImageData(0, 0, sampleSize, sampleSize);
+                const pixels = imageData.data;
+                
+                // Check a reasonable number of pixels for transparency
+                for (let i = 3; i < pixels.length; i += 4) {
+                    if (pixels[i] < 240) { // Alpha channel less than 240 (not fully opaque)
+                        hasTransparency = true;
+                        break;
+                    }
                 }
-
-                const scaleX = (viewWidth * fitPercentage) / img.width;
-                const scaleY = (viewHeight * fitPercentage) / img.height;
-                scaleFactor = Math.min(scaleX, scaleY);
-
-                // Ensure minimum/maximum reasonable size
-                const minDimension = Math.min(viewWidth, viewHeight) * 0.1;
-                const maxDimension = Math.max(viewWidth, viewHeight) * 0.8;
-
-                const scaledWidth = img.width * scaleFactor;
-                const scaledHeight = img.height * scaleFactor;
-
-                if (scaledWidth < minDimension || scaledHeight < minDimension) {
-                    // Scale up if too small
-                    const upscaleX = minDimension / img.width;
-                    const upscaleY = minDimension / img.height;
-                    scaleFactor = Math.max(scaleFactor, Math.min(upscaleX, upscaleY));
-                } else if (scaledWidth > maxDimension || scaledHeight > maxDimension) {
-                    // Scale down if too large
-                    const downscaleX = maxDimension / img.width;
-                    const downscaleY = maxDimension / img.height;
-                    scaleFactor = Math.min(scaleFactor, Math.min(downscaleX, downscaleY));
+                
+                // If we detected transparency or it's a common decal format, mark as decal
+                if (hasTransparency || isDecalType) {
+                    options.isDecal = true;
                 }
+            } catch (e) {
+                console.warn('Error checking image transparency:', e);
+                // If we can't check, fall back to file extension check
+                options.isDecal = isDecalType;
             }
-
-            // Apply auto color adjustments if enabled
-            let imageFilters = {};
-            if (options.autoAdjust) {
-                // Add automatic image adjustments like brightness/contrast optimization
-                // or background removal for better integration with the fabric
-                imageFilters = {
-                    brightness: 0,
-                    contrast: 0,
-                    removeBackground: options.removeBackground === true,
-                    colorCorrection: true
-                };
-            }
-
-            // Create image object with all calculated parameters
-            const imageObj = {
+            
+            // Create the object with improved default properties for decals
+            const obj = {
                 type: 'image',
                 img: img,
-                left: left,
-                top: top,
-                width: img.width * (typeof scaleFactor === 'object' ? scaleFactor.x : scaleFactor),
-                height: img.height * (typeof scaleFactor === 'object' ? scaleFactor.y : scaleFactor),
+                src: imageUrl,
+                left: options.left || (canvasData.width / 2 - defaultWidth / 2),
+                top: options.top || (canvasData.height / 2 - defaultHeight / 2),
+                width: options.width || defaultWidth,
+                height: options.height || defaultHeight,
                 angle: options.angle || 0,
-                active: false,
-                originX: 'center',
-                originY: 'center',
-                removeColor: options.removeColor === true,
-                targetView: targetView,
-                // Mark as a decal to ensure it keeps its colors
-                isDecal: options.isDecal === undefined ? true : options.isDecal,
-                // Explicitly set to preserve colors when shirt color changes
-                preserveColor: options.preserveColor === undefined ? true : options.preserveColor,
-                filters: imageFilters,
+                isDecal: options.isDecal || false, // Explicit decal flag
+                removeColor: options.removeColor || false,
+                view: targetView,
                 metadata: {
-                    originalSize: { width: img.width, height: img.height },
-                    uploadDate: new Date().toISOString(),
-                    fileName: options.fileName || 'custom_image.png'
+                    originalWidth: img.width,
+                    originalHeight: img.height,
+                    hasTransparency: hasTransparency
                 }
             };
 
-            // Add to canvas
-            addObject(imageObj);
-
-            // Select the new object immediately
-            selectObject(imageObj);
-
-            // Update texture to show the new object
+            // Add object to collection
+            canvasData.objects.push(obj);
+            
+            // Save state for undo
+            historyStack.saveState();
+            
+            // Update the 3D texture
             updateShirt3DTexture();
-
+            
             // Resolve with the created object
-            resolve(imageObj);
+            resolve(obj);
+            
+            // Log success but with additional decal information
+            Logger.log(`Added image${obj.isDecal ? ' (decal)' : ''}: ${imageUrl.substring(0, 50)}...`);
         };
 
-        img.onerror = () => {
-            reject(new Error('Failed to load image'));
+        // Handle error
+        img.onerror = (error) => {
+            console.error('Error loading image:', error);
+            reject(error);
         };
 
+        // Set source to start loading
         img.src = imageUrl;
     });
 }

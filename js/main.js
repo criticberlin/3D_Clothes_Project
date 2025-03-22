@@ -453,36 +453,6 @@ function setupUIControls() {
             }
         });
     }
-    
-    // Setup remove overlay button
-    const removeOverlayBtn = document.getElementById('remove-overlay');
-    if (removeOverlayBtn) {
-        removeOverlayBtn.addEventListener('click', function() {
-            console.log('Remove fabric overlay button clicked');
-            const removed = removeFullDecalLayer();
-            
-            if (removed) {
-                // Show success message
-                const notification = document.createElement('div');
-                notification.className = 'notification success';
-                notification.innerHTML = '<i class="fas fa-check-circle"></i> Fabric overlay removed successfully';
-                document.body.appendChild(notification);
-                
-                // Remove notification after 3 seconds
-                setTimeout(() => {
-                    notification.classList.add('fade-out');
-                    setTimeout(() => {
-                        document.body.removeChild(notification);
-                    }, 500);
-                }, 3000);
-                
-                // Disable the button after successful removal
-                removeOverlayBtn.disabled = true;
-                removeOverlayBtn.classList.add('disabled');
-                removeOverlayBtn.innerHTML = '<i class="fas fa-check"></i> Overlay Removed';
-            }
-        });
-    }
 }
 
 // Direct implementation of theme toggle without external dependencies
