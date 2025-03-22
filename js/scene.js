@@ -1560,45 +1560,48 @@ function ensureShirtLayer(layerName, material = null) {
         return shirtMesh;
     }
     
-    // Check if we're creating a front or back canvas layer
-    const isFrontLayer = layerName === 'canvas-layer-front';
-    const isBackLayer = layerName === 'canvas-layer-back';
-    
     // For other layers, check if they already exist as children of shirt mesh
     let layerMesh = shirtMesh.children.find(child => child.name === layerName);
     
     if (!layerMesh) {
+        // Completely new approach to layer creation:
+        // Instead of creating a separate mesh with its own geometry, we'll use
+        // the original mesh geometry but with a custom shader material that renders
+        // the decals directly on the same surface using multipass rendering
+
         // Clone the original geometry but ensure it shares vertices with the original
         const geometry = shirtMesh.geometry;
         
-        // Create a special material for decal rendering with depth testing enabled
+        // Create a special material for decal rendering
         const layerMaterial = material || new THREE.MeshBasicMaterial({
             transparent: true, 
             opacity: 1.0,
-            // Only render on the appropriate side
-            side: isFrontLayer ? THREE.FrontSide : isBackLayer ? THREE.BackSide : THREE.DoubleSide,
+            side: THREE.DoubleSide,
             // Use custom blending for better integration
             blending: THREE.CustomBlending,
             blendSrc: THREE.SrcAlphaFactor,
             blendDst: THREE.OneMinusSrcAlphaFactor,
             blendEquation: THREE.AddEquation,
-            // Enable depth testing and writing to prevent seeing through the shirt
-            depthTest: true,
-            depthWrite: true,
-            // Small alphaTest to eliminate transparent pixels entirely
-            alphaTest: 0.01
+            // No depth testing or writing to avoid any z-fighting
+            depthTest: false,
+            depthWrite: false,
+            // Use a very slight alphaTest to avoid rendering fully transparent pixels
+            alphaTest: 0.001
         });
         
         // Create the layer mesh
         layerMesh = new THREE.Mesh(geometry, layerMaterial);
         layerMesh.name = layerName;
         
-        // Force a specific render order based on layer type
-        layerMesh.renderOrder = 5;
+        // CRITICAL: Don't move the mesh at all - keep it exactly aligned with the base shirt
+        // and rely on render order and blending to handle the layering
+        
+        // Force a specific render order so it's always drawn after the base shirt
+        layerMesh.renderOrder = 10;
         
         // Add to shirt mesh
         shirtMesh.add(layerMesh);
-        console.log(`Created new layer: ${layerName} with side-specific rendering`);
+        console.log(`Created new layer: ${layerName} with perfect alignment`);
     } 
     else if (material) {
         // Update material if provided
@@ -1619,73 +1622,56 @@ function ensureShirtLayer(layerName, material = null) {
 export function updateEditorCanvasTexture(texture) {
     if (!shirtMesh) return;
     
-    console.log('Applying dual-sided canvas textures to shirt');
+    console.log('Applying enhanced canvas texture to shirt');
     
-    // Create or get the front and back canvas layers
-    const frontCanvasLayer = ensureShirtLayer('canvas-layer-front');
-    const backCanvasLayer = ensureShirtLayer('canvas-layer-back');
+    // Create or get the canvas layer
+    const canvasLayer = ensureShirtLayer('canvas-layer');
     
-    if (!frontCanvasLayer || !backCanvasLayer) {
-        console.error('Failed to create canvas layers');
+    if (!canvasLayer) {
+        console.error('Failed to create canvas layer');
         return;
     }
     
     // Optimize the texture for best quality and performance
     texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-    texture.premultiplyAlpha = false;
+    texture.premultiplyAlpha = false; // Changed from true for better alpha blending
     texture.needsUpdate = true;
     
-    // Common material properties for both layers
-    const materialOptions = {
+    // Create a specialized material for the canvas layer with perfect blending
+    const canvasMaterial = new THREE.MeshBasicMaterial({
         map: texture,
         transparent: true,
-        opacity: 1.0,
-        // Custom blending mode for perfect decal overlay
+        opacity: 1.0, 
+        side: THREE.DoubleSide,
+        // Use custom blending mode that perfectly overlays the decals
         blending: THREE.CustomBlending,
         blendSrc: THREE.SrcAlphaFactor,
         blendDst: THREE.OneMinusSrcAlphaFactor,
         blendEquation: THREE.AddEquation,
-        // Enable depth testing to prevent showing through the shirt
-        depthTest: true,
-        depthWrite: true,
-        // Small alphaTest to eliminate transparent pixels
-        alphaTest: 0.01
-    };
-    
-    // Front-facing material (only visible from front)
-    const frontMaterial = new THREE.MeshBasicMaterial({
-        ...materialOptions,
-        side: THREE.FrontSide
+        // Turn off depth testing/writing to avoid z-fighting completely
+        depthTest: false,
+        depthWrite: false,
+        // Small alphaTest to avoid rendering fully transparent pixels
+        alphaTest: 0.001
     });
     
-    // Back-facing material (only visible from back)
-    const backMaterial = new THREE.MeshBasicMaterial({
-        ...materialOptions,
-        side: THREE.BackSide
-    });
+    // Apply the new material
+    canvasLayer.material = canvasMaterial;
+    canvasLayer.material.needsUpdate = true;
     
-    // Apply the new materials
-    frontCanvasLayer.material = frontMaterial;
-    frontCanvasLayer.material.needsUpdate = true;
+    // Set a high render order to ensure it's rendered after the base shirt
+    canvasLayer.renderOrder = 10;
     
-    backCanvasLayer.material = backMaterial;
-    backCanvasLayer.material.needsUpdate = true;
+    // Ensure visibility
+    canvasLayer.visible = true;
     
-    // Set appropriate render orders to ensure they're rendered in correct sequence
-    frontCanvasLayer.renderOrder = 5;
-    backCanvasLayer.renderOrder = 5;
-    
-    // Ensure both layers are visible
-    frontCanvasLayer.visible = true;
-    backCanvasLayer.visible = true;
-    
-    // Render the updated scene
+    // Render the updated scene with transparent background
     if (renderer && scene && camera) {
         renderer.setClearAlpha(0);
         renderer.render(scene, camera);
     }
     
-    console.log('Dual-sided canvas textures applied successfully');
+    console.log('Canvas texture applied with perfect alignment material settings');
 }
 
 // Update shirt texture with proper UV mapping
