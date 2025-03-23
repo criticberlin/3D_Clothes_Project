@@ -1637,20 +1637,27 @@ export function updateEditorCanvasTexture(texture) {
     texture.premultiplyAlpha = false; // Changed from true for better alpha blending
     texture.needsUpdate = true;
     
+    // Apply correct UV transformation to prevent flipping/mirroring
+    texture.flipY = false; // Prevent automatic Y-flip that THREE.js applies
+    texture.matrixAutoUpdate = false; // We'll set the matrix manually
+    
+    // Set texture transformation matrix to ensure correct orientation
+    texture.matrix.identity(); // Reset matrix
+    
     // Create a specialized material for the canvas layer with perfect blending
     const canvasMaterial = new THREE.MeshBasicMaterial({
         map: texture,
         transparent: true,
         opacity: 1.0, 
-        side: THREE.DoubleSide,
+        side: THREE.FrontSide, // Changed from DoubleSide to FrontSide
         // Use custom blending mode that perfectly overlays the decals
         blending: THREE.CustomBlending,
         blendSrc: THREE.SrcAlphaFactor,
         blendDst: THREE.OneMinusSrcAlphaFactor,
         blendEquation: THREE.AddEquation,
-        // Turn off depth testing/writing to avoid z-fighting completely
-        depthTest: false,
-        depthWrite: false,
+        // Enable depth testing to prevent seeing the texture from behind
+        depthTest: true,
+        depthWrite: true,
         // Small alphaTest to avoid rendering fully transparent pixels
         alphaTest: 0.001
     });

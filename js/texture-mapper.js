@@ -29,10 +29,10 @@ export const modelConfig = {
             "front": {
                 "bounds": { "x": 0.1, "y": 0.4, "width": 0.2, "height": 0.9 },
                 "defaultScale": 1,
-                "uvRect": { "u1": 0.1, "v1": 0.5, "u2": 0.62, "v2": 0.85 },
+                "uvRect": { "u1": 0.38, "v1": 0.5, "u2": 0.9, "v2": 0.15 },
                 "name": "Front",
                 "transformMatrix": {
-                    "scale": { "x": 1, "y": 1 },
+                    "scale": { "x": -1, "y": -1 },
                     "rotation": 0,
                     "offset": { "x": 0, "y": 0 }
                 }
@@ -40,10 +40,10 @@ export const modelConfig = {
             "back": {
                 "bounds": { "x": 0.20, "y": 0.48, "width": 0.52, "height": 0.52 },
                 "defaultScale": 1,
-                "uvRect": { "u1": 0.18, "v1": 0.30, "u2": 0.68, "v2": 0.80 },
+                "uvRect": { "u1": 0.32, "v1": 0.3, "u2": 0.82, "v2": 0.8 },
                 "name": "Back",
                 "transformMatrix": {
-                    "scale": { "x": 1.0, "y": 1.0 },
+                    "scale": { "x": -1.0, "y": -1.0 },
                     "rotation": 0,
                     "offset": { "x": -0.04, "y": -0.04 }
                 }
@@ -51,22 +51,22 @@ export const modelConfig = {
             "left_arm": {
                 "bounds": { "x": 0.14, "y": 0.33, "width": 0.17, "height": 0.26 },
                 "defaultScale": 0.27,
-                "uvRect": { "u1": 0.03, "v1": 0.21, "u2": 0.18, "v2": 0.46 },
+                "uvRect": { "u1": 0.97, "v1": 0.21, "u2": 0.82, "v2": 0.46 },
                 "name": "Left Sleeve",
                 "transformMatrix": {
-                    "scale": { "x": 1.05, "y": 0.97 },
-                    "rotation": -6,
+                    "scale": { "x": -1.05, "y": -0.97 },
+                    "rotation": 6,
                     "offset": { "x": 0.02, "y": -0.01 }
                 }
             },
             "right_arm": {
                 "bounds": { "x": 0.74, "y": 0.33, "width": 0.17, "height": 0.26 },
                 "defaultScale": 0.27,
-                "uvRect": { "u1": 0.78, "v1": 0.21, "u2": 0.93, "v2": 0.46 },
+                "uvRect": { "u1": 0.22, "v1": 0.21, "u2": 0.07, "v2": 0.46 },
                 "name": "Right Sleeve",
                 "transformMatrix": {
-                    "scale": { "x": 1.05, "y": 0.97 },
-                    "rotation": 6,
+                    "scale": { "x": -1.05, "y": -0.97 },
+                    "rotation": -6,
                     "offset": { "x": -0.02, "y": -0.01 }
                 }
             }
@@ -77,10 +77,10 @@ export const modelConfig = {
             "front": {
                 "bounds": { "x": 0.1, "y": 0.4, "width": 0.2, "height": 0.9 },
                 "defaultScale": 1,
-                "uvRect": { "u1": 0.1, "v1": 0.5, "u2": 0.62, "v2": 0.85 },
+                "uvRect": { "u1": 0.38, "v1": 0.5, "u2": 0.9, "v2": 0.15 },
                 "name": "Front",
                 "transformMatrix": {
-                    "scale": { "x": 1, "y": 1 },
+                    "scale": { "x": -1, "y": -1 },
                     "rotation": 0,
                     "offset": { "x": 0, "y": 0 }
                 }
@@ -88,10 +88,10 @@ export const modelConfig = {
             "back": {
                 "bounds": { "x": 0.20, "y": 0.48, "width": 0.52, "height": 0.52 },
                 "defaultScale": 1,
-                "uvRect": { "u1": 0.18, "v1": 0.30, "u2": 0.68, "v2": 0.80 },
+                "uvRect": { "u1": 0.32, "v1": 0.3, "u2": 0.82, "v2": 0.8 },
                 "name": "Back",
                 "transformMatrix": {
-                    "scale": { "x": 1.0, "y": 1.0 },
+                    "scale": { "x": -1.0, "y": -1.0 },
                     "rotation": 0,
                     "offset": { "x": -0.04, "y": -0.04 }
                 }
@@ -99,22 +99,22 @@ export const modelConfig = {
             "left_arm": {
                 "bounds": { "x": 0.14, "y": 0.33, "width": 0.17, "height": 0.26 },
                 "defaultScale": 0.27,
-                "uvRect": { "u1": 0.03, "v1": 0.21, "u2": 0.18, "v2": 0.46 },
+                "uvRect": { "u1": 0.97, "v1": 0.21, "u2": 0.82, "v2": 0.46 },
                 "name": "Left Sleeve",
                 "transformMatrix": {
-                    "scale": { "x": 1.05, "y": 0.97 },
-                    "rotation": -6,
+                    "scale": { "x": -1.05, "y": -0.97 },
+                    "rotation": 6,
                     "offset": { "x": 0.02, "y": -0.01 }
                 }
             },
             "right_arm": {
                 "bounds": { "x": 0.74, "y": 0.33, "width": 0.17, "height": 0.26 },
                 "defaultScale": 0.27,
-                "uvRect": { "u1": 0.78, "v1": 0.21, "u2": 0.93, "v2": 0.46 },
+                "uvRect": { "u1": 0.22, "v1": 0.21, "u2": 0.07, "v2": 0.46 },
                 "name": "Right Sleeve",
                 "transformMatrix": {
-                    "scale": { "x": 1.05, "y": 0.97 },
-                    "rotation": 6,
+                    "scale": { "x": -1.05, "y": -0.97 },
+                    "rotation": -6,
                     "offset": { "x": -0.02, "y": -0.01 }
                 }
             }

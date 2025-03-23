@@ -298,15 +298,23 @@ function onMouseMove(event) {
  * @param {MouseEvent} event 
  */
 function onMouseUp(event) {
+    // Only take action if we're in a transform mode
     if (transformMode !== 'none') {
         // Finalize any transformations
         updateShirt3DTexture();
-
-        // Reset cursor
-        document.body.style.cursor = cursors.default;
+        
+        // Save the state for undo/redo
+        saveCurrentState();
+        
+        // Keep the transform mode active but change cursor back to move
+        if (selectedObject) {
+            document.body.style.cursor = cursors.move;
+        } else {
+            // Reset cursor and mode if no object is selected
+            document.body.style.cursor = cursors.default;
+            transformMode = 'none';
+        }
     }
-
-    transformMode = 'none';
 }
 
 /**
@@ -332,28 +340,27 @@ function updateMousePosition(event) {
  * @returns {string} The transform mode or null
  */
 function detectTransformHandleClick() {
-    if (!transformControls.visible || !selectedObject) return null;
+    if (!selectedObject) return null;
 
-    // Get the model UV position from the raycaster
+    // Calculate global mouse position
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObject(shirtMesh);
-
     if (intersects.length === 0) return null;
 
     const uv = intersects[0].uv;
     const x = uv.x * canvasData.width;
     const y = uv.y * canvasData.height;
 
-    // Object center and dimensions
-    const centerX = selectedObject.left + selectedObject.width / 2;
-    const centerY = selectedObject.top + selectedObject.height / 2;
-    const width = selectedObject.width;
-    const height = selectedObject.height;
-    const angle = selectedObject.angle || 0;
+    // Object dimensions and position
+    const object = selectedObject;
+    const width = object.width;
+    const height = object.height;
+    const centerX = object.left + width / 2;
+    const centerY = object.top + height / 2;
 
-    // Increase handle size for easier selection
-    const handleSize = 12; // Increased from 8 for easier selection
-    const rotationHandleOffset = 25; // Increased from 20 to make it easier to grab
+    // Handle size and rotation handle offset
+    const handleSize = 12; // Increased from 8 for easier interaction
+    const rotationHandleOffset = 20;
 
     // Convert mouse position to object-relative coordinates
     // This accounts for object rotation
@@ -361,6 +368,7 @@ function detectTransformHandleClick() {
     const relY = (y - centerY);
 
     // Apply inverse rotation to get coordinates in the object's local space
+    const angle = object.angle || 0;
     const radians = -angle * Math.PI / 180;
     const localX = relX * Math.cos(radians) - relY * Math.sin(radians);
     const localY = relX * Math.sin(radians) + relY * Math.cos(radians);
@@ -450,8 +458,27 @@ function isPointInObject(uv, object) {
     const top = object.top;
     const right = left + object.width;
     const bottom = top + object.height;
-
-    return x >= left && x <= right && y >= top && y <= bottom;
+    
+    // Handle non-rotated objects simply
+    if (!object.angle || object.angle === 0) {
+        return x >= left && x <= right && y >= top && y <= bottom;
+    }
+    
+    // For rotated objects, need to check using rotation math
+    const centerX = left + object.width / 2;
+    const centerY = top + object.height / 2;
+    const angle = object.angle * Math.PI / 180;
+    
+    // Translate point to origin relative to object center
+    const relX = x - centerX;
+    const relY = y - centerY;
+    
+    // Rotate point by negative angle to align with object
+    const rotX = relX * Math.cos(-angle) - relY * Math.sin(-angle);
+    const rotY = relX * Math.sin(-angle) + relY * Math.cos(-angle);
+    
+    // Check if rotated point is inside object bounds
+    return Math.abs(rotX) <= object.width / 2 && Math.abs(rotY) <= object.height / 2;
 }
 
 /**
@@ -630,9 +657,7 @@ function rotateObject(object, deltaX, deltaY) {
     // Get the center of the object in UV space
     const centerX = object.left + object.width / 2;
     const centerY = object.top + object.height / 2;
-    const centerU = centerX / canvasData.width;
-    const centerV = centerY / canvasData.height;
-
+    
     // Cast a ray to get current mouse position in world space
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObject(shirtMesh);
@@ -643,61 +668,27 @@ function rotateObject(object, deltaX, deltaY) {
         const x = uv.x * canvasData.width;
         const y = uv.y * canvasData.height;
 
-        // Calculate angle between center and current point more accurately
-        // by considering 3D curvature
+        // Calculate angle between center and current point
         const angle = Math.atan2(y - centerY, x - centerX);
 
-        // Account for surface normal at the intersection point for more accurate rotation
-        const normal = intersects[0].face.normal.clone();
-        normal.transformDirection(shirtMesh.matrixWorld);
-
-        // Adjust rotation based on surface orientation
-        const upVector = new THREE.Vector3(0, 1, 0);
-        const rightVector = new THREE.Vector3(1, 0, 0);
-        const normalizedNormal = normal.normalize();
-
-        // Calculate dot products to determine surface orientation
-        const surfaceUp = upVector.dot(normalizedNormal);
-        const surfaceRight = rightVector.dot(normalizedNormal);
-
-        // Calculate rotation adjustment factor based on surface normal
-        // This makes rotation more accurate on curved surfaces
-        let rotationAdjustment = 1.0;
-
-        // If the surface is highly curved (normal deviates significantly from z-axis),
-        // adjust rotation sensitivity
-        if (Math.abs(normalizedNormal.z) < 0.8) {
-            rotationAdjustment = Math.max(0.5, Math.abs(normalizedNormal.z));
-        }
-
-        // Store the last angle if it's the first time
+        // Initialize the last angle if needed
         if (object._lastRotationAngle === undefined) {
             object._lastRotationAngle = angle;
             return;
         }
 
-        // Calculate the angle difference with adjustment for surface curvature
+        // Calculate the angle difference
         let angleDelta = angle - object._lastRotationAngle;
-
-        // Apply perspective correction based on camera position
-        const cameraPosition = camera.position.clone();
-        const distanceToIntersection = cameraPosition.distanceTo(worldPoint);
-        const fovFactor = Math.tan(camera.fov * Math.PI / 360) * distanceToIntersection;
 
         // Normalize angleDelta to avoid jumps
         if (angleDelta > Math.PI) angleDelta -= Math.PI * 2;
         if (angleDelta < -Math.PI) angleDelta += Math.PI * 2;
 
-        // Convert to degrees for better sensitivity, apply adjustments
-        angleDelta *= (180 / Math.PI) * rotationAdjustment;
+        // Convert to degrees and apply a rotation speed adjustment
+        const rotationSpeed = 1.0; // Adjust this value to change rotation sensitivity
+        angleDelta *= (180 / Math.PI) * rotationSpeed;
 
-        // Apply view-specific rotation adjustments if available
-        if (viewConfig.transformMatrix && viewConfig.transformMatrix.rotation) {
-            const viewRotation = viewConfig.transformMatrix.rotation * Math.PI / 180;
-            angleDelta *= Math.cos(viewRotation);
-        }
-
-        // Update the object's rotation with smooth dampening
+        // Update the object's rotation with dampening
         const smoothingFactor = 0.8; // Lower = more dampening
         object.angle = (object.angle || 0) + (angleDelta * smoothingFactor);
 
@@ -705,12 +696,12 @@ function rotateObject(object, deltaX, deltaY) {
         object._lastRotationAngle = angle;
     } else {
         // Fallback to a simpler method if ray doesn't hit
-        const rotationFactor = 2.5; // Adjusted for better sensitivity
+        const rotationFactor = 1.0; // Adjusted for appropriate rotation speed
         const rotationDelta = deltaX * rotationFactor;
         object.angle = (object.angle || 0) + rotationDelta;
     }
 
-    Logger.log('Rotated object with advanced calculations');
+    Logger.log('Rotated object');
 }
 
 /**
@@ -724,95 +715,35 @@ function scaleObject(object, deltaX, deltaY) {
     const viewConfig = modelConfig[state.currentModel].views[state.cameraView];
     if (!viewConfig) return;
 
-    // Get advanced world space deltas with perspective correction
+    // Convert screen deltas to UV space
     const worldDeltas = screenToUVDelta(deltaX, deltaY);
 
-    // Get object center in both pixel and UV coordinates
+    // Get object center coordinates
     const centerX = object.left + object.width / 2;
     const centerY = object.top + object.height / 2;
-    const centerU = centerX / canvasData.width;
-    const centerV = centerY / canvasData.height;
 
-    // Cast a ray to get exact position on the 3D model
+    // Cast a ray to get position on the model
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObject(shirtMesh);
 
-    let scaleFactor = 1.0;
-    let scaleX = 1.0;
-    let scaleY = 1.0;
+    // Calculate scale factor - positive delta = scale up, negative = scale down
+    const movementMagnitude = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    const scaleDirection = (deltaX + deltaY) > 0 ? 1 : -1;
+    const scaleFactor = 1 + (movementMagnitude * 0.05 * scaleDirection);
 
-    if (intersects.length > 0) {
-        const intersection = intersects[0];
-        const uv = intersection.uv;
-        const worldPoint = intersection.point;
-
-        // Calculate distance from object center to cursor in UV space
-        const pixelX = uv.x * canvasData.width;
-        const pixelY = uv.y * canvasData.height;
-        const dx = pixelX - centerX;
-        const dy = pixelY - centerY;
-        const distanceToCenter = Math.sqrt(dx * dx + dy * dy);
-
-        // Get surface normal at the intersection point
-        const normal = intersection.face.normal.clone();
-        normal.transformDirection(shirtMesh.matrixWorld);
-
-        // Calculate UV distortion factor based on surface normal
-        // This accounts for stretching of textures on curved surfaces
-        const uvDistortionX = Math.max(0.5, Math.abs(normal.z));
-        const uvDistortionY = Math.max(0.5, Math.abs(normal.z));
-
-        // Calculate weighted scale factor based on mouse movement direction
-        // and distance from center
-        const movementMagnitude = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-        const movementDirection = new THREE.Vector2(deltaX, deltaY).normalize();
-
-        // Calculate dot product to determine if scaling up or down
-        const movementFromCenter = new THREE.Vector2(dx, dy).normalize();
-        const scalingDirection = movementFromCenter.dot(movementDirection);
-
-        // Base scale factor on distance from center and movement magnitude
-        const distanceFactor = Math.min(1.0, distanceToCenter / 100);
-        const baseFactor = movementMagnitude * 2 * (scalingDirection > 0 ? 1 : -1);
-
-        // Apply scale with non-linear scaling for better precision at different sizes
-        if (object.width < 50 || object.height < 50) {
-            // For small objects, make scaling more gradual
-            scaleFactor = 1 + (baseFactor * distanceFactor * 0.5);
-        } else {
-            // For larger objects, normal scaling
-            scaleFactor = 1 + (baseFactor * distanceFactor);
-        }
-
-        // Apply different scaling factors for X and Y if needed, based on UV distortion
-        scaleX = Math.pow(scaleFactor, uvDistortionX);
-        scaleY = Math.pow(scaleFactor, uvDistortionY);
-
-        // Adjust for view-specific transformations
-        if (viewConfig.transformMatrix && viewConfig.transformMatrix.scale) {
-            const { x: transformScaleX, y: transformScaleY } = viewConfig.transformMatrix.scale;
-            scaleX = Math.pow(scaleX, 1 / (transformScaleX || 1));
-            scaleY = Math.pow(scaleY, 1 / (transformScaleY || 1));
-        }
-    } else {
-        // Fallback if ray doesn't hit
-        const scaleMagnitude = Math.max(Math.abs(worldDeltas.x * 3), Math.abs(worldDeltas.y * 3));
-        const scaleDirection = (deltaX > 0 || deltaY > 0) ? 1 : -1;
-        scaleFactor = 1 + (scaleMagnitude * scaleDirection);
-        scaleX = scaleY = scaleFactor;
-    }
-
-    // Apply minimum and maximum scale constraints
+    // Apply scaling with constraints
     const minDimension = 20; // Minimum size in pixels
-    const maxDimension = Math.min(canvasData.width, canvasData.height) * 0.8; // Maximum size (80% of canvas)
+    const maxDimension = Math.min(canvasData.width, canvasData.height) * 0.8; // Maximum size
 
     // Calculate new dimensions
-    let newWidth = Math.max(minDimension, Math.min(maxDimension, object.width * scaleX));
-    let newHeight = Math.max(minDimension, Math.min(maxDimension, object.height * scaleY));
+    let newWidth = Math.max(minDimension, Math.min(maxDimension, object.width * scaleFactor));
+    let newHeight = Math.max(minDimension, Math.min(maxDimension, object.height * scaleFactor));
 
-    // Optional: maintain aspect ratio for certain objects (like images)
+    // Maintain aspect ratio for images
     if (object.type === 'image' && object.preserveAspectRatio !== false) {
-        const originalAspect = object.img.width / object.img.height;
+        const originalAspect = object.metadata?.originalWidth / object.metadata?.originalHeight || 
+                               object.width / object.height;
+        
         // Use the dimension that changed more as the primary scale
         if (Math.abs(newWidth / object.width) > Math.abs(newHeight / object.height)) {
             newHeight = newWidth / originalAspect;
@@ -831,18 +762,16 @@ function scaleObject(object, deltaX, deltaY) {
         }
     }
 
-    // Update object properties - keep centered at original point
-    const widthDiff = newWidth - object.width;
-    const heightDiff = newHeight - object.height;
+    // Update object dimensions while keeping it centered
     object.width = newWidth;
     object.height = newHeight;
     object.left = centerX - newWidth / 2;
     object.top = centerY - newHeight / 2;
 
-    // Ensure object stays within boundaries with the new size
+    // Ensure object stays within boundaries
     constrainObjectToUVBoundary(object);
 
-    Logger.log('Scaled object with advanced calculations');
+    Logger.log('Scaled object');
 }
 
 /**
@@ -868,54 +797,24 @@ function screenToUVDelta(deltaX, deltaY) {
     const visibleWidth = visibleHeight * camera.aspect;
 
     // Calculate scaling factors
-    const uvWidth = uvRect.u2 - uvRect.u1;
-    const uvHeight = uvRect.v2 - uvRect.v1;
+    const uvWidth = Math.abs(uvRect.u2 - uvRect.u1);
+    const uvHeight = Math.abs(uvRect.v2 - uvRect.v1);
 
-    // Take into account camera perspective and model orientation
-    // The scaling factor is affected by camera FOV, distance, and rotation
+    // Calculate the delta in UV space with basic perspective correction
     const xScale = uvWidth / visibleWidth;
     const yScale = uvHeight / visibleHeight;
-
-    // Get camera view direction to adjust for perspective
-    const viewDirection = new THREE.Vector3();
-    camera.getWorldDirection(viewDirection);
-
-    // Adjust for camera angle to the surface
-    const surfaceNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(shirtMesh.quaternion);
-    const dotProduct = Math.abs(viewDirection.dot(surfaceNormal));
-
-    // Apply perspective correction
-    const perspectiveCorrection = Math.max(0.5, dotProduct);
-
-    // Apply model-specific transformations if available
-    let finalDeltaX = deltaX * xScale * perspectiveCorrection;
-    let finalDeltaY = deltaY * yScale * perspectiveCorrection;
-
-    // Apply view-specific transformations if available
-    if (viewConfig.transformMatrix) {
-        const { scale, rotation, offset } = viewConfig.transformMatrix;
-        if (scale) {
-            finalDeltaX *= scale.x || 1;
-            finalDeltaY *= scale.y || 1;
-        }
-
-        // Apply rotation transformation if needed
-        if (rotation) {
-            const rad = rotation * Math.PI / 180;
-            const cosTheta = Math.cos(rad);
-            const sinTheta = Math.sin(rad);
-            const rotatedX = finalDeltaX * cosTheta - finalDeltaY * sinTheta;
-            const rotatedY = finalDeltaX * sinTheta + finalDeltaY * cosTheta;
-            finalDeltaX = rotatedX;
-            finalDeltaY = rotatedY;
-        }
-    }
-
-    return new THREE.Vector2(finalDeltaX, finalDeltaY);
+    
+    // Get sensitivity adjustment from user settings or default
+    const sensitivity = state.mouseSensitivity || 1.0;
+    
+    return new THREE.Vector2(
+        deltaX * xScale * sensitivity,
+        deltaY * yScale * sensitivity
+    );
 }
 
 /**
- * Ensure object stays within UV boundaries with advanced 3D mapping
+ * Ensure object stays within UV boundaries
  * @param {Object} object 
  */
 function constrainObjectToUVBoundary(object) {
@@ -927,26 +826,31 @@ function constrainObjectToUVBoundary(object) {
     const uvRect = viewConfig.uvRect;
 
     // Calculate boundaries in canvas space
-    const minX = uvRect.u1 * canvasData.width;
-    const maxX = uvRect.u2 * canvasData.width;
-    const minY = uvRect.v1 * canvasData.height;
-    const maxY = uvRect.v2 * canvasData.height;
+    const minX = Math.min(uvRect.u1, uvRect.u2) * canvasData.width;
+    const maxX = Math.max(uvRect.u1, uvRect.u2) * canvasData.width;
+    const minY = Math.min(uvRect.v1, uvRect.v2) * canvasData.height;
+    const maxY = Math.max(uvRect.v1, uvRect.v2) * canvasData.height;
+
+    // Calculate padding for the boundaries (2% of each dimension)
+    const paddingX = (maxX - minX) * 0.02;
+    const paddingY = (maxY - minY) * 0.02;
+    
+    // Apply padding to boundaries
+    const effectiveMinX = minX + paddingX;
+    const effectiveMaxX = maxX - paddingX;
+    const effectiveMinY = minY + paddingY;
+    const effectiveMaxY = maxY - paddingY;
+
+    // Store the object center
+    const centerX = object.left + object.width / 2;
+    const centerY = object.top + object.height / 2;
 
     // Get object boundaries, accounting for rotation
-    let objectBounds = {
-        left: object.left,
-        right: object.left + object.width,
-        top: object.top,
-        bottom: object.top + object.height,
-    };
-
+    let objectBounds;
+    
     // If object is rotated, we need to calculate the rotated bounding box
-    if (object.angle && object.angle !== 0) {
-        const centerX = object.left + object.width / 2;
-        const centerY = object.top + object.height / 2;
+    if (object.angle && Math.abs(object.angle) > 0.1) {
         const angleRad = object.angle * Math.PI / 180;
-
-        // Calculate the rotated corners of the object
         const halfWidth = object.width / 2;
         const halfHeight = object.height / 2;
 
@@ -983,23 +887,15 @@ function constrainObjectToUVBoundary(object) {
             top: centerY + minRotY,
             bottom: centerY + maxRotY
         };
+    } else {
+        // For non-rotated objects, use simpler bounds
+        objectBounds = {
+            left: object.left,
+            right: object.left + object.width,
+            top: object.top,
+            bottom: object.top + object.height
+        };
     }
-
-    // Calculate a padding factor based on the view type
-    // Sleeves and curved areas need more padding to account for distortion
-    let paddingFactor = 0.02; // 2% padding by default
-    if (state.cameraView === 'left_arm' || state.cameraView === 'right_arm') {
-        paddingFactor = 0.05; // 5% padding for sleeves
-    }
-
-    // Apply padding to boundaries
-    const paddingX = (maxX - minX) * paddingFactor;
-    const paddingY = (maxY - minY) * paddingFactor;
-
-    const effectiveMinX = minX + paddingX;
-    const effectiveMaxX = maxX - paddingX;
-    const effectiveMinY = minY + paddingY;
-    const effectiveMaxY = maxY - paddingY;
 
     // Determine if object exceeds boundaries
     const exceededLeft = objectBounds.left < effectiveMinX;
@@ -1007,10 +903,23 @@ function constrainObjectToUVBoundary(object) {
     const exceededTop = objectBounds.top < effectiveMinY;
     const exceededBottom = objectBounds.bottom > effectiveMaxY;
 
-    // Apply different constraints based on rotation and object size
+    // If object is completely outside boundaries, force it back inside
+    const completelyOutside = 
+        objectBounds.right < effectiveMinX || 
+        objectBounds.left > effectiveMaxX || 
+        objectBounds.bottom < effectiveMinY || 
+        objectBounds.top > effectiveMaxY;
+
+    if (completelyOutside) {
+        // Center the object in the available area
+        object.left = effectiveMinX + (effectiveMaxX - effectiveMinX - object.width) / 2;
+        object.top = effectiveMinY + (effectiveMaxY - effectiveMinY - object.height) / 2;
+        return;
+    }
+
+    // Apply different constraints based on rotation
     if (object.angle && Math.abs(object.angle) > 5) {
-        // For rotated objects, we need to adjust the object's center
-        // Calculate the needed adjustment
+        // For rotated objects, adjust position
         let adjustX = 0;
         let adjustY = 0;
 
@@ -1026,28 +935,25 @@ function constrainObjectToUVBoundary(object) {
             adjustY = effectiveMaxY - objectBounds.bottom;
         }
 
-        // Apply the adjustments to the center of the object
+        // Apply adjustments
         object.left += adjustX;
         object.top += adjustY;
     } else {
-        // For non-rotated objects or slight rotations, use simpler constraints
-        // Constrain left/right
-        if (objectBounds.left < effectiveMinX) {
+        // For non-rotated objects, use direct constraints
+        if (exceededLeft) {
             object.left = effectiveMinX;
-        } else if (objectBounds.right > effectiveMaxX) {
+        } else if (exceededRight) {
             object.left = effectiveMaxX - object.width;
         }
 
-        // Constrain top/bottom
-        if (objectBounds.top < effectiveMinY) {
+        if (exceededTop) {
             object.top = effectiveMinY;
-        } else if (objectBounds.bottom > effectiveMaxY) {
+        } else if (exceededBottom) {
             object.top = effectiveMaxY - object.height;
         }
     }
 
-    // Apply additional specific adjustments for extreme cases
-    // If object is too large for the boundary, scale it down
+    // Scale down if object is too large for the boundary
     const availableWidth = effectiveMaxX - effectiveMinX;
     const availableHeight = effectiveMaxY - effectiveMinY;
 
@@ -1055,36 +961,54 @@ function constrainObjectToUVBoundary(object) {
         // Object is wider than 95% of available space
         const newWidth = availableWidth * 0.95;
         const scaleRatio = newWidth / object.width;
-
-        // Scale height proportionally
         const newHeight = object.height * scaleRatio;
 
-        // Update object size while keeping center position
-        const centerX = object.left + object.width / 2;
-        const centerY = object.top + object.height / 2;
-
+        // Update object dimensions while preserving center
+        const newCenterX = object.left + object.width / 2;
+        const newCenterY = object.top + object.height / 2;
+        
         object.width = newWidth;
         object.height = newHeight;
-        object.left = centerX - newWidth / 2;
-        object.top = centerY - newHeight / 2;
+        object.left = newCenterX - newWidth / 2;
+        object.top = newCenterY - newHeight / 2;
     }
 
     if (object.height > availableHeight * 0.95) {
         // Object is taller than 95% of available space
         const newHeight = availableHeight * 0.95;
         const scaleRatio = newHeight / object.height;
-
-        // Scale width proportionally
         const newWidth = object.width * scaleRatio;
 
-        // Update object size while keeping center position
-        const centerX = object.left + object.width / 2;
-        const centerY = object.top + object.height / 2;
-
+        // Update object dimensions while preserving center
+        const newCenterX = object.left + object.width / 2;
+        const newCenterY = object.top + object.height / 2;
+        
         object.width = newWidth;
         object.height = newHeight;
-        object.left = centerX - newWidth / 2;
-        object.top = centerY - newHeight / 2;
+        object.left = newCenterX - newWidth / 2;
+        object.top = newCenterY - newHeight / 2;
+    }
+    
+    // Final check to ensure object is fully contained
+    const newBounds = {
+        left: object.left,
+        right: object.left + object.width,
+        top: object.top,
+        bottom: object.top + object.height
+    };
+    
+    // Force hard constraints for any remaining boundary violations
+    if (newBounds.left < effectiveMinX) {
+        object.left = effectiveMinX;
+    }
+    if (newBounds.right > effectiveMaxX) {
+        object.left = effectiveMaxX - object.width;
+    }
+    if (newBounds.top < effectiveMinY) {
+        object.top = effectiveMinY;
+    }
+    if (newBounds.bottom > effectiveMaxY) {
+        object.top = effectiveMaxY - object.height;
     }
 }
 
@@ -1122,8 +1046,10 @@ export function updateShirt3DTexture() {
     // Create a texture from the canvas with enhanced properties for perfect rendering
     const canvasTexture = new THREE.CanvasTexture(canvasData.canvas);
     
-    // Do not set anisotropy here, as it will be set in the scene.js module
-    // Do not set premultiplyAlpha here, as it will be configured in the scene.js module
+    // Apply correct orientation settings for the texture
+    canvasTexture.flipY = false; // Prevent automatic Y-flip that THREE.js applies
+    canvasTexture.matrixAutoUpdate = false; // We'll set the matrix manually
+    canvasTexture.matrix.identity(); // Reset matrix
     
     // If not found, request it from the scene module
     import('./scene.js').then(module => {
@@ -1150,8 +1076,8 @@ function drawObjectToCanvas(object) {
     // Apply transformations
     ctx.translate(object.left + object.width / 2, object.top + object.height / 2);
     
-    // Fix for coordinate system - Three.js uses a different coordinate system than Canvas
-    ctx.scale(1, -1); // This flips the Y-axis so that +Y is up (Three.js convention)
+    // We no longer need to flip the Y-axis because our uvRect coordinates are already adjusted
+    // ctx.scale(1, -1); // This line was causing the flipping issue
     
     // Apply rotation if needed
     if (object.angle) ctx.rotate(object.angle * Math.PI / 180);
@@ -1202,8 +1128,8 @@ function drawObjectToCanvas(object) {
             }
         }
     } else if (object.type === 'text') {
-        // Text needs to be flipped back for proper rendering after our Y-axis flip
-        ctx.scale(1, -1);
+        // Text no longer needs to be flipped since we removed the Y-axis flip
+        // ctx.scale(1, -1);
         
         ctx.font = `${object.fontSize || 20}px ${object.fontFamily || 'Arial'}`;
         ctx.fillStyle = object.color || '#000000';
@@ -1255,80 +1181,66 @@ function drawSelectionOverlay(object) {
     // Apply transformations
     ctx.translate(object.left + object.width / 2, object.top + object.height / 2);
     
-    // Apply the same vertical flip as in drawObjectToCanvas for consistency
-    ctx.scale(1, -1);
+    // Remove vertical flip to match changes in drawObjectToCanvas
+    // ctx.scale(1, -1);
     
     if (object.angle) ctx.rotate(object.angle * Math.PI / 180);
 
-    // Draw bounding box with improved visibility
-    ctx.strokeStyle = '#2196F3'; // Brighter blue color
-    ctx.lineWidth = 2.5; // Thicker line
-    ctx.setLineDash([6, 4]); // Improved dash pattern
-    ctx.strokeRect(-object.width / 2, -object.height / 2, object.width, object.height);
-
-    // Draw control handles with improved visibility
-    const handleSize = 12; // Larger handles 
-
-    // Draw handles with shadow effect for better visibility
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-    ctx.shadowBlur = 5;
-    ctx.shadowOffsetX = 2;
-    ctx.shadowOffsetY = 2;
-
-    // Fill style for handles
-    ctx.fillStyle = '#FFFFFF';
-    ctx.strokeStyle = '#2196F3'; // Match bounding box color
-    ctx.lineWidth = 2; // Thicker border
-    ctx.setLineDash([]); // Solid line for handles
-
-    // Corner handles for scaling
-    // Top-left
-    ctx.beginPath();
-    ctx.rect(-object.width / 2 - handleSize / 2, -object.height / 2 - handleSize / 2, handleSize, handleSize);
-    ctx.fill();
-    ctx.stroke();
-
-    // Top-right
-    ctx.beginPath();
-    ctx.rect(object.width / 2 - handleSize / 2, -object.height / 2 - handleSize / 2, handleSize, handleSize);
-    ctx.fill();
-    ctx.stroke();
-
-    // Bottom-left
-    ctx.beginPath();
-    ctx.rect(-object.width / 2 - handleSize / 2, object.height / 2 - handleSize / 2, handleSize, handleSize);
-    ctx.fill();
-    ctx.stroke();
-
-    // Bottom-right
-    ctx.beginPath();
-    ctx.rect(object.width / 2 - handleSize / 2, object.height / 2 - handleSize / 2, handleSize, handleSize);
-    ctx.fill();
-    ctx.stroke();
-
-    // Rotation handle - make it more distinctive
-    const rotationHandleDistance = 30; // Increased distance
-
-    // Draw rotation icon - adjusting for the vertical flip
-    ctx.fillStyle = '#4CAF50'; // Green for rotation handle
-    ctx.beginPath();
-    ctx.arc(0, object.height / 2 + rotationHandleDistance, handleSize / 1.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // Add rotation arrow indicator inside the handle - also adjusted for flip
-    ctx.strokeStyle = '#FFFFFF';
+    // Draw selection outline
+    ctx.strokeStyle = '#2196F3';
     ctx.lineWidth = 2;
+    
+    // Different shape types require different selection outlines
+    if (object.type === 'image' || object.type === 'text' || (object.type === 'shape' && object.shape === 'rect')) {
+        // Draw rectangle selection with padding
+        const padding = 2;
+        ctx.strokeRect(
+            -object.width / 2 - padding,
+            -object.height / 2 - padding,
+            object.width + padding * 2,
+            object.height + padding * 2
+        );
+    } else if (object.type === 'shape' && object.shape === 'circle') {
+        // Draw circle selection with padding
+        const padding = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, object.width / 2 + padding, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    
+    // Draw transform control handles
+    const handleSize = 8;
+    ctx.fillStyle = '#2196F3';
+    
+    // Define control handle positions
+    const controlPositions = [
+        { x: -object.width / 2, y: -object.height / 2 }, // Top left
+        { x: object.width / 2, y: -object.height / 2 },  // Top right
+        { x: object.width / 2, y: object.height / 2 },   // Bottom right
+        { x: -object.width / 2, y: object.height / 2 }   // Bottom left
+    ];
+    
+    // Draw rotation handle
     ctx.beginPath();
-    ctx.arc(0, object.height / 2 + rotationHandleDistance, handleSize / 3, 0.5, Math.PI * 1.5, false);
-    ctx.stroke();
-
-    // Arrow head - adjusted for flip
+    ctx.arc(0, -object.height / 2 - 20, 5, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw line connecting rotation handle to object
     ctx.beginPath();
-    ctx.moveTo(handleSize / 3, object.height / 2 + rotationHandleDistance - handleSize / 6);
-    ctx.lineTo(handleSize / 2, object.height / 2 + rotationHandleDistance);
-    ctx.lineTo(handleSize / 3, object.height / 2 + rotationHandleDistance + handleSize / 6);
+    ctx.moveTo(0, -object.height / 2);
+    ctx.lineTo(0, -object.height / 2 - 15);
     ctx.stroke();
+    
+    // Draw the control handles
+    controlPositions.forEach(pos => {
+        ctx.fillRect(pos.x - handleSize / 2, pos.y - handleSize / 2, handleSize, handleSize);
+    });
+    
+    // Draw selection center
+    ctx.fillStyle = 'rgba(33, 150, 243, 0.3)';
+    ctx.beginPath();
+    ctx.arc(0, 0, 5, 0, Math.PI * 2);
+    ctx.fill();
 
     // Restore context state
     ctx.restore();
@@ -1378,55 +1290,57 @@ export function removeObject(object) {
  */
 export function addImage(imageUrl, options = {}) {
     return new Promise((resolve, reject) => {
-        // Create an image element to load the URL
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
+        // Get current view
+        const targetView = options.view || state.cameraView;
+        lastUsedView = targetView;
 
-        // Handle load event
+        // Create an image element to load the image
+        const img = new Image();
+        
+        // Enable CORS if the image is from a different domain
+        img.crossOrigin = 'Anonymous';
+        
+        // Handle successful load
         img.onload = () => {
-            // Create object with default properties
-            const imageWidth = options.width || img.width;
-            const imageHeight = options.height || img.height;
+            // Calculate optimal dimensions while maintaining aspect ratio
+            const maxWidth = canvasData.width * 0.4; // Limit initial size to 40% of canvas width
+            const maxHeight = canvasData.height * 0.4; // Limit initial size to 40% of canvas height
             
-            // Calculate aspect ratio to maintain proportions if needed
             const aspectRatio = img.width / img.height;
+            let defaultWidth, defaultHeight;
             
-            // Default size based on target view
-            let defaultWidth = 200;
-            let defaultHeight = defaultWidth / aspectRatio;
-            
-            // Get target view from options or use current view
-            const targetView = options.view || state.cameraView;
-            
-            // Check for the presence of transparency to auto-detect if it's a decal
-            let hasTransparency = false;
-            let isDecalType = false;
-            
-            // Check file extension to guess if it's likely a decal
-            if (imageUrl.toLowerCase().endsWith('.png') || 
-                imageUrl.toLowerCase().endsWith('.webp') || 
-                imageUrl.includes('data:image/png') ||
-                imageUrl.includes('data:image/webp')) {
-                // PNG and WebP likely have transparency - mark as potential decal
-                isDecalType = true;
+            if (img.width > img.height) {
+                defaultWidth = Math.min(img.width, maxWidth);
+                defaultHeight = defaultWidth / aspectRatio;
+                
+                if (defaultHeight > maxHeight) {
+                    defaultHeight = maxHeight;
+                    defaultWidth = defaultHeight * aspectRatio;
+                }
+            } else {
+                defaultHeight = Math.min(img.height, maxHeight);
+                defaultWidth = defaultHeight * aspectRatio;
+                
+                if (defaultWidth > maxWidth) {
+                    defaultWidth = maxWidth;
+                    defaultHeight = defaultWidth / aspectRatio;
+                }
             }
             
-            // Get decal information from the image if possible
+            // Check for transparency to auto-detect decals
+            let hasTransparency = false;
+            const isDecalType = /(png|svg|webp|gif)$/i.test(imageUrl);
+            
             try {
-                // Create a small canvas to check for transparency
+                // Create a temporary canvas to check for transparency
                 const tempCanvas = document.createElement('canvas');
                 const tempCtx = tempCanvas.getContext('2d');
-                const sampleSize = Math.min(img.width, img.height, 128); // Reasonable sample size
+                tempCanvas.width = Math.min(img.width, 100); // Sample at smaller size for efficiency
+                tempCanvas.height = Math.min(img.height, 100);
+                tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
                 
-                tempCanvas.width = sampleSize;
-                tempCanvas.height = sampleSize;
-                
-                // Draw image to temp canvas
-                tempCtx.drawImage(img, 0, 0, sampleSize, sampleSize);
-                
-                // Check for transparent pixels in the sample
-                const imageData = tempCtx.getImageData(0, 0, sampleSize, sampleSize);
-                const pixels = imageData.data;
+                // Sample pixels to check for transparency
+                const pixels = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height).data;
                 
                 // Check a reasonable number of pixels for transparency
                 for (let i = 3; i < pixels.length; i += 4) {
@@ -1446,13 +1360,53 @@ export function addImage(imageUrl, options = {}) {
                 options.isDecal = isDecalType;
             }
             
+            // Get current view's UV boundaries to ensure the image is placed within them
+            const viewConfig = modelConfig[state.currentModel].views[targetView];
+            if (!viewConfig) {
+                reject(new Error('Invalid view configuration'));
+                return;
+            }
+
+            const uvRect = viewConfig.uvRect;
+            
+            // Calculate safe placement area (with padding)
+            const minX = uvRect.u1 * canvasData.width;
+            const maxX = uvRect.u2 * canvasData.width;
+            const minY = uvRect.v1 * canvasData.height;
+            const maxY = uvRect.v2 * canvasData.height;
+            
+            // Apply padding (2% of area dimensions)
+            const paddingX = (maxX - minX) * 0.02;
+            const paddingY = (maxY - minY) * 0.02;
+            
+            const safeMinX = minX + paddingX;
+            const safeMaxX = maxX - paddingX;
+            const safeMinY = minY + paddingY;
+            const safeMaxY = maxY - paddingY;
+            
+            // Calculate center of safe area
+            const centerX = (safeMinX + safeMaxX) / 2;
+            const centerY = (safeMinY + safeMaxY) / 2;
+            
+            // Ensure the image fits within the safe area
+            let left, top;
+            if (options.left !== undefined && options.top !== undefined) {
+                // If position is specified, use it but constrain to safe area
+                left = Math.max(safeMinX, Math.min(safeMaxX - defaultWidth, options.left));
+                top = Math.max(safeMinY, Math.min(safeMaxY - defaultHeight, options.top));
+            } else {
+                // Otherwise center in the safe area
+                left = centerX - (defaultWidth / 2);
+                top = centerY - (defaultHeight / 2);
+            }
+            
             // Create the object with improved default properties for decals
             const obj = {
                 type: 'image',
                 img: img,
                 src: imageUrl,
-                left: options.left || (canvasData.width / 2 - defaultWidth / 2),
-                top: options.top || (canvasData.height / 2 - defaultHeight / 2),
+                left: left,
+                top: top,
                 width: options.width || defaultWidth,
                 height: options.height || defaultHeight,
                 angle: options.angle || 0,
@@ -1988,58 +1942,14 @@ export function isInEditMode() {
  * @param {string} mode - The mode to set (move, rotate, scale, none)
  */
 export function setTransformMode(mode) {
-    if (!['move', 'rotate', 'scale', 'none'].includes(mode)) {
-        console.error(`Invalid transform mode: ${mode}`);
-        return;
-    }
-
-    // If we don't have a selected object and we're setting to anything other than none,
-    // we need to check if there are any objects in the current editable area
-    if (!selectedObject && mode !== 'none' && currentEditableArea) {
-        // Find the first object in the current editable area
-        const objectsInArea = canvasData.objects.filter(obj => {
-            // Calculate object boundaries in UV space
-            const objLeft = obj.left / canvasData.width;
-            const objRight = (obj.left + obj.width) / canvasData.width;
-            const objTop = obj.top / canvasData.height;
-            const objBottom = (obj.top + obj.height) / canvasData.height;
-
-            // Check for intersection with editable area
-            const { u1, v1, u2, v2 } = currentEditableArea;
-
-            // Check if any part of the object is within the editable area
-            return !(objRight < u1 || objLeft > u2 || objBottom < v1 || objTop > v2);
-        });
-
-        // Select the first object if any
-        if (objectsInArea.length > 0) {
-            selectObject(objectsInArea[0]);
-        } else {
-            console.warn('No objects found in the editable area');
-            return;
-        }
-    }
-
-    // If we have a selected object, set the transform mode
+    // Only set mode if there's a selected object
     if (selectedObject) {
         transformMode = mode;
-
+        
         // Set appropriate cursor
-        if (mode === 'none') {
-            document.body.style.cursor = isEditingMode ? cursors.edit : cursors.default;
-        } else {
-            document.body.style.cursor = cursors[mode];
-        }
-
-        // Dispatch event for UI to update
-        window.dispatchEvent(new CustomEvent('transform-mode-changed', {
-            detail: { mode }
-        }));
-
-        return true;
-    } else {
-        console.warn('No object selected for transform mode');
-        return false;
+        document.body.style.cursor = cursors[mode] || cursors.default;
+        
+        Logger.log(`Set transform mode: ${mode}`);
     }
 }
 
@@ -2134,8 +2044,14 @@ function detectViewFromUV(uv) {
         const { uvRect } = viewConfig;
 
         // Check if UV is within this view's boundaries
-        if (uv.x >= uvRect.u1 && uv.x <= uvRect.u2 &&
-            uv.y >= uvRect.v1 && uv.y <= uvRect.v2) {
+        // Handle case where u1 > u2 or v1 > v2 due to inverted coordinates
+        const uMin = Math.min(uvRect.u1, uvRect.u2);
+        const uMax = Math.max(uvRect.u1, uvRect.u2);
+        const vMin = Math.min(uvRect.v1, uvRect.v2);
+        const vMax = Math.max(uvRect.v1, uvRect.v2);
+        
+        if (uv.x >= uMin && uv.x <= uMax && 
+            uv.y >= vMin && uv.y <= vMax) {
             return viewName;
         }
     }
@@ -2212,26 +2128,12 @@ function handleEditableAreaClick(uv, intersection) {
     const x = uv.x * canvasData.width;
     const y = uv.y * canvasData.height;
 
-    // Check if we're clicking on a transform handle
-    const handleClicked = detectTransformHandleClick();
-    if (handleClicked) {
-        transformMode = handleClicked;
-        document.body.style.cursor = cursors[transformMode];
-        return;
-    }
-
-    // If we have a selected object, check if we're clicking outside (to deselect)
+    // Check if we clicked on a transform handle of the selected object
     if (selectedObject) {
-        const intersectsObject = detectObjectIntersection(selectedObject);
-        if (!intersectsObject) {
-            deselectObject();
-            transformMode = 'none';
-            document.body.style.cursor = cursors.edit;
-            return;
-        } else {
-            // We're clicking on the selected object
-            transformMode = 'move';
-            document.body.style.cursor = cursors.move;
+        const handleMode = detectTransformHandleClick();
+        if (handleMode) {
+            transformMode = handleMode;
+            document.body.style.cursor = cursors[handleMode] || cursors.default;
             return;
         }
     }
@@ -2243,6 +2145,10 @@ function handleEditableAreaClick(uv, intersection) {
         transformMode = 'move';
         document.body.style.cursor = cursors.move;
     } else {
+        // Deselect if clicking on empty area
+        if (selectedObject) {
+            deselectObject();
+        }
         transformMode = 'none';
         document.body.style.cursor = cursors.edit;
     }
