@@ -477,7 +477,7 @@ function initializeScene() {
     // Fix deprecated properties warnings by using recommended new properties
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 0.9;  // Reduced from 1.1 for less brightness
 
     // Clear previous canvas if exists
     while (container.firstChild) {
@@ -534,12 +534,12 @@ function setupLighting() {
 
     // Create physically-based studio lighting for fabric rendering
 
-    // Ambient light for base illumination (increased intensity to compensate for disabled shadows)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    // Ambient light for base illumination (reduced intensity for more natural look)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);  // Reduced from 0.6
     scene.add(ambientLight);
 
     // Main key light (simulating window/studio key light)
-    const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);  // Reduced from 1.0
     mainLight.position.set(5, 10, 7);
     // Disable shadow casting completely to fix dark shadow issues
     mainLight.castShadow = false;
@@ -547,22 +547,22 @@ function setupLighting() {
     scene.add(mainLight);
 
     // Fill light (simulating bounce light from environment)
-    const fillLight = new THREE.DirectionalLight(0xe6f0ff, 0.5); // Slightly cool tone
+    const fillLight = new THREE.DirectionalLight(0xe6f0ff, 0.4);  // Reduced from 0.5
     fillLight.position.set(-6, 4, -5);
     scene.add(fillLight);
 
     // Add rim/back light for fabric highlighting
-    const rimLight = new THREE.DirectionalLight(0xfff0e6, 0.4); // Slightly warm tone
+    const rimLight = new THREE.DirectionalLight(0xfff0e6, 0.3);  // Reduced from 0.4
     rimLight.position.set(0, 6, -10);
     scene.add(rimLight);
 
     // Add a warm ground bounce light
-    const groundLight = new THREE.DirectionalLight(0xfff0db, 0.25);
+    const groundLight = new THREE.DirectionalLight(0xfff0db, 0.2);  // Reduced from 0.25
     groundLight.position.set(0, -5, 0);
     scene.add(groundLight);
 
     // Add very subtle hemisphere light for overall fill
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.2);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.15);  // Reduced from 0.2
     hemiLight.position.set(0, 10, 0);
     scene.add(hemiLight);
 
@@ -615,43 +615,43 @@ function createEnvironmentMap() {
         // Create a larger box for environment
         const envGeometry = new THREE.BoxGeometry(200, 200, 200);
 
-        // Create distinct materials for each face to simulate a photography studio environment - using brighter colors
+        // Create distinct materials for each face to simulate a photography studio environment - using less bright colors
         const materials = [
-            // Right side - bright light
+            // Right side - softer light
             new THREE.MeshBasicMaterial({
                 side: THREE.BackSide,
-                color: 0xffffff, // Brighter white
-                onBeforeCompile: (shader) => addGradientToShader(shader, 0xffffff, 0xf0f0f0, 'y')
+                color: 0xf0f0f0, // Dimmer white
+                onBeforeCompile: (shader) => addGradientToShader(shader, 0xf0f0f0, 0xe0e0e0, 'y')
             }),
-            // Left side - bright light
+            // Left side - softer light
             new THREE.MeshBasicMaterial({
                 side: THREE.BackSide,
-                color: 0xffffff, // Brighter white
-                onBeforeCompile: (shader) => addGradientToShader(shader, 0xffffff, 0xf0f0f0, 'y')
+                color: 0xf0f0f0, // Dimmer white
+                onBeforeCompile: (shader) => addGradientToShader(shader, 0xf0f0f0, 0xe0e0e0, 'y')
             }),
-            // Top - bright light
+            // Top - softer light
             new THREE.MeshBasicMaterial({
                 side: THREE.BackSide,
-                color: 0xffffff, // Bright white
-                onBeforeCompile: (shader) => addGradientToShader(shader, 0xffffff, 0xf8f8f8, 'z', true)
+                color: 0xf5f5f5, // Dimmer white
+                onBeforeCompile: (shader) => addGradientToShader(shader, 0xf5f5f5, 0xe8e8e8, 'z', true)
             }),
-            // Bottom - lighter floor
+            // Bottom - more gentle floor
             new THREE.MeshBasicMaterial({
                 side: THREE.BackSide,
-                color: 0xeeeeee, // Light gray
-                onBeforeCompile: (shader) => addGradientToShader(shader, 0xffffff, 0xdddddd, 'x')
+                color: 0xe0e0e0, // Dimmer gray
+                onBeforeCompile: (shader) => addGradientToShader(shader, 0xeeeeee, 0xd0d0d0, 'x')
             }),
-            // Back - bright backdrop
+            // Back - softer backdrop
             new THREE.MeshBasicMaterial({
                 side: THREE.BackSide,
-                color: 0xffffff, // Bright white
-                onBeforeCompile: (shader) => addGradientToShader(shader, 0xffffff, 0xf0f0f0, 'y')
+                color: 0xf0f0f0, // Dimmer white
+                onBeforeCompile: (shader) => addGradientToShader(shader, 0xf0f0f0, 0xe0e0e0, 'y')
             }),
-            // Front - bright
+            // Front - softer
             new THREE.MeshBasicMaterial({
                 side: THREE.BackSide,
-                color: 0xffffff, // Bright white
-                onBeforeCompile: (shader) => addGradientToShader(shader, 0xffffff, 0xf0f0f0, 'y')
+                color: 0xf0f0f0, // Dimmer white
+                onBeforeCompile: (shader) => addGradientToShader(shader, 0xf0f0f0, 0xe0e0e0, 'y')
             })
         ];
 
@@ -1328,14 +1328,17 @@ function processLoadedModel(gltf, settings, color) {
                 // Use a simple standard material with optimized properties for a base layer
                 const simpleMaterial = new THREE.MeshStandardMaterial({
                     color: color || 0xffffff,
-                    roughness: 0.7,
-                    metalness: 0.1,
+                    roughness: 0.9,  // Increased from 0.7 for more fabric-like appearance
+                    metalness: 0.0,   // Reduced from 0.1 since fabric has no metallic properties
                     side: THREE.DoubleSide,
                     // Set this to render first with proper depth writing
                     depthWrite: true,
                     depthTest: true,
                     // Set base render order
-                    renderOrder: 0
+                    renderOrder: 0,
+                    // Add subtle emissive color to prevent it from looking too dark
+                    emissive: 0x111111,
+                    emissiveIntensity: 0.05
                 });
                 
                 // Apply the simple material
@@ -1513,9 +1516,12 @@ export function updateShirtColor(color) {
     // Create a new simple material for the shirt
     const newMaterial = new THREE.MeshStandardMaterial({
         color: threeColor,
-        roughness: 0.7,
-        metalness: 0.1,
-        side: THREE.DoubleSide
+        roughness: 0.9,  // Increased from 0.7 for more fabric-like appearance
+        metalness: 0.0,  // Reduced from 0.1 since fabric has no metallic properties
+        side: THREE.DoubleSide,
+        // Add subtle emissive color to prevent it from looking too dark
+        emissive: 0x111111,
+        emissiveIntensity: 0.05
     });
     
     // Apply the material to the shirt
