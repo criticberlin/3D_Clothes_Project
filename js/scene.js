@@ -457,8 +457,16 @@ function initializeScene() {
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     
+    // Enable shadow mapping with high quality settings
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.autoUpdate = true;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+
     // Disable shadow mapping completely to fix dark shadow issues
-    renderer.shadowMap.enabled = false;
+    // renderer.shadowMap.enabled = false;
     // renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     // Apply saved theme preference if available
@@ -535,34 +543,37 @@ function setupLighting() {
     // Create physically-based studio lighting for fabric rendering
 
     // Ambient light for base illumination (reduced intensity for more natural look)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);  // Reduced from 0.6
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);  // Reduced for more contrast
     scene.add(ambientLight);
 
     // Main key light (simulating window/studio key light)
-    const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);  // Reduced from 1.0
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);  // Increased for better highlights
     mainLight.position.set(5, 10, 7);
-    // Disable shadow casting completely to fix dark shadow issues
-    mainLight.castShadow = false;
-
+    mainLight.castShadow = true;  // Enable shadows
+    mainLight.shadow.mapSize.width = 2048;  // Higher resolution shadows
+    mainLight.shadow.mapSize.height = 2048;
+    mainLight.shadow.camera.near = 0.5;
+    mainLight.shadow.camera.far = 50;
+    mainLight.shadow.bias = -0.0001;  // Reduce shadow acne
     scene.add(mainLight);
 
     // Fill light (simulating bounce light from environment)
-    const fillLight = new THREE.DirectionalLight(0xe6f0ff, 0.4);  // Reduced from 0.5
+    const fillLight = new THREE.DirectionalLight(0xe6f0ff, 0.5);  // Slightly increased
     fillLight.position.set(-6, 4, -5);
     scene.add(fillLight);
 
     // Add rim/back light for fabric highlighting
-    const rimLight = new THREE.DirectionalLight(0xfff0e6, 0.3);  // Reduced from 0.4
+    const rimLight = new THREE.DirectionalLight(0xfff0e6, 0.4);  // Increased for better edge highlights
     rimLight.position.set(0, 6, -10);
     scene.add(rimLight);
 
     // Add a warm ground bounce light
-    const groundLight = new THREE.DirectionalLight(0xfff0db, 0.2);  // Reduced from 0.25
+    const groundLight = new THREE.DirectionalLight(0xfff0db, 0.25);  // Slightly increased
     groundLight.position.set(0, -5, 0);
     scene.add(groundLight);
 
     // Add very subtle hemisphere light for overall fill
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.15);  // Reduced from 0.2
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.2);  // Increased for better fill
     hemiLight.position.set(0, 10, 0);
     scene.add(hemiLight);
 
@@ -1513,15 +1524,45 @@ export function updateShirtColor(color) {
     // Convert to THREE color
     const threeColor = new THREE.Color(color);
     
-    // Create a new simple material for the shirt
+    // Make black slightly lighter for better visibility
+    if (color.toUpperCase() === '#000000') {
+        threeColor.setHex(0x1a1a1a); // A very dark gray instead of pure black
+    }
+    
+    // Create a new material optimized for cotton fabric
     const newMaterial = new THREE.MeshStandardMaterial({
         color: threeColor,
-        roughness: 0.9,  // Increased from 0.7 for more fabric-like appearance
-        metalness: 0.0,  // Reduced from 0.1 since fabric has no metallic properties
+        // Cotton-specific properties
+        roughness: 0.85,  // Cotton has a medium-high roughness
+        metalness: 0.0,   // Cotton has no metallic properties
         side: THREE.DoubleSide,
+        // Add subtle fabric texture
+        normalScale: new THREE.Vector2(0.2, 0.2),  // Increased for more visible fabric texture
+        // Add subtle ambient occlusion for better depth
+        aoMapIntensity: 0.8,  // Increased for better fabric folds
+        // Add subtle environment map intensity for realistic reflections
+        envMapIntensity: 0.3,  // Slightly increased for better fabric sheen
         // Add subtle emissive color to prevent it from looking too dark
         emissive: 0x111111,
-        emissiveIntensity: 0.05
+        emissiveIntensity: 0.02,
+        // Add clearcoat for subtle sheen
+        clearcoat: 0.1,
+        clearcoatRoughness: 0.8,
+        // Add sheen for fabric-like appearance
+        sheen: 0.2,
+        sheenRoughness: 0.8,
+        // Add anisotropy for fabric-like reflections
+        anisotropy: 0.5,
+        anisotropyRotation: 0.5,
+        // Add subsurface scattering for better light penetration
+        subsurface: 0.1,
+        // Add transmission for better light interaction
+        transmission: 0.1,
+        // Add thickness for better light interaction
+        thickness: 0.5,
+        // Add attenuation for better light absorption
+        attenuationColor: threeColor,
+        attenuationDistance: 1.0
     });
     
     // Apply the material to the shirt

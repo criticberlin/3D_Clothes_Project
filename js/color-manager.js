@@ -89,7 +89,7 @@ function drawColorWheel(ctx, centerX, centerY, radius) {
         for (let r = 0; r < radius; r++) {
             const hue = angle;
             const saturation = r / radius;
-            const lightness = 0.5;
+            const lightness = 0.4;
             
             // Convert HSL to RGB
             ctx.fillStyle = `hsl(${hue}, ${saturation * 100}%, ${lightness * 100}%)`;
