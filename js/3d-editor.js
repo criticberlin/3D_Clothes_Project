@@ -51,11 +51,11 @@ let canvasData = {
 // Cursors for different modes
 const cursors = {
     default: 'default',
-    move: 'move',
-    rotate: 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'32\' viewBox=\'0 0 32 32\'><path d=\'M16 0 C16 32 16 32 16 32\' stroke=\'black\'/></svg>"), auto',
+    move: 'grab',
+    rotate: 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'><path d=\'M12 2 C12 22 12 22 12 22\' stroke=\'#2196F3\' stroke-width=\'2\'/></svg>"), auto',
     scale: 'nwse-resize',
-    // New: Add editing cursors
-    edit: 'crosshair'
+    edit: 'crosshair',
+    grabbing: 'grabbing'
 };
 
 // Add global variables for drag-and-drop and advanced features
@@ -180,6 +180,7 @@ function setupEventListeners() {
     canvas.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('mouseup', onMouseUp);
     canvas.addEventListener('click', onClick);
+    canvas.addEventListener('dblclick', onDoubleClick);
 
     // Keyboard events
     window.addEventListener('keydown', onKeyDown);
@@ -189,6 +190,18 @@ function setupEventListeners() {
     canvas.addEventListener('touchstart', onTouchStart);
     canvas.addEventListener('touchmove', onTouchMove);
     canvas.addEventListener('touchend', onTouchEnd);
+
+    // Add text button event listener
+    const addTextBtn = document.getElementById('add-text-btn');
+    if (addTextBtn) {
+        addTextBtn.addEventListener('click', handleAddText);
+    }
+
+    // Add shape button event listener
+    const addShapeBtn = document.querySelector('[data-action="add-shape"]');
+    if (addShapeBtn) {
+        addShapeBtn.addEventListener('click', handleAddShape);
+    }
 }
 
 /**
@@ -220,33 +233,66 @@ function onMouseDown(event) {
                 lockToView(hitView);
             }
 
-            // Handle object selection and transformation in the editable area
-            handleEditableAreaClick(uv, intersects[0]);
+            // Check if we clicked on a transform handle of the selected object first
+            if (selectedObject) {
+                const action = detectTransformHandleClick();
+                if (action) {
+                    // Lock t-shirt movement when interacting with decal controls
+                    toggleCameraControls(false);
+                    // Handle the control button click
+                    handleEditableAreaClick(uv, intersects[0]);
+                    return;
+                }
+            }
+
+            // Check if we clicked on an object
+            const clickedObject = detectObjectClick();
+            if (clickedObject) {
+                // Lock t-shirt movement when clicking on a decal
+                toggleCameraControls(false);
+                // If we clicked on an object, handle it
+                handleEditableAreaClick(uv, intersects[0]);
+                // Set transform mode to move only if we clicked directly on the object
+                if (!clickedObject.isPinned) {
+                    transformMode = 'move';
+                    document.body.style.cursor = cursors.grabbing;
+                }
+            } else {
+                // If we clicked on empty space, deselect current object and unlock t-shirt movement
+                if (selectedObject) {
+                    deselectObject();
+                }
+                selectedObject = null;
+                transformMode = 'none';
+                document.body.style.cursor = cursors.default;
+                toggleCameraControls(true); // Unlock t-shirt movement
+                updateShirt3DTexture();
+            }
         } else {
             // Clicked on shirt but outside any editable area
             if (isEditingLocked) {
-                // User clicked outside editable area, unlock
                 unlockFromView();
             }
-
-            // Regular shirt interaction (rotate model, etc.)
             if (selectedObject) {
                 deselectObject();
             }
             transformMode = 'none';
             document.body.style.cursor = cursors.default;
+            toggleCameraControls(true); // Unlock t-shirt movement
         }
     } else {
         // Clicked completely outside the shirt
         if (isEditingLocked) {
             unlockFromView();
         }
-
         if (selectedObject) {
             deselectObject();
         }
+        selectedObject = null;
         transformMode = 'none';
         document.body.style.cursor = cursors.default;
+        toggleCameraControls(true); // Unlock t-shirt movement
+        updateShirt3DTexture();
     }
 }
 
@@ -264,22 +310,33 @@ function onMouseMove(event) {
         return;
     }
 
-    // Store current point for transformations
-    currentPoint.x = mouse.x;
-    currentPoint.y = mouse.y;
-
-    // Calculate delta movement
-    const deltaX = currentPoint.x - startPoint.x;
-    const deltaY = currentPoint.y - startPoint.y;
-
-    // Apply transformation based on mode
+    // Only proceed with transformation if we have a selected object and we're in move mode
     if (selectedObject) {
-        if (transformMode === 'move') {
-            moveObject(selectedObject, deltaX, deltaY);
-        } else if (transformMode === 'rotate') {
-            rotateObject(selectedObject, deltaX, deltaY);
-        } else if (transformMode === 'scale') {
-            scaleObject(selectedObject, deltaX, deltaY);
+        // Store current point for transformations
+        currentPoint.x = mouse.x;
+        currentPoint.y = mouse.y;
+
+        // Calculate delta movement
+        const deltaX = currentPoint.x - startPoint.x;
+        const deltaY = currentPoint.y - startPoint.y;
+
+        // Handle different transform modes
+        switch (transformMode) {
+            case 'move':
+                if (!selectedObject.isPinned) {
+                    moveObject(selectedObject, deltaX, deltaY);
+                }
+                break;
+            case 'rotate':
+                if (selectedObject.isDecal || selectedObject.type === 'text') {
+                    rotateObject(selectedObject, deltaX, deltaY);
+                }
+                break;
+            case 'scale':
+                if (!selectedObject.isPinned) {
+                    scaleObject(selectedObject, deltaX, deltaY);
+                }
+                break;
         }
 
         // Update the texture
@@ -287,10 +344,10 @@ function onMouseMove(event) {
 
         // Update the transform controls
         updateTransformControls();
-    }
 
-    // Update the starting point for smooth transformations
-    startPoint.copy(currentPoint);
+        // Update the starting point for smooth transformations
+        startPoint.copy(currentPoint);
+    }
 }
 
 /**
@@ -306,13 +363,13 @@ function onMouseUp(event) {
         // Save the state for undo/redo
         saveCurrentState();
         
-        // Keep the transform mode active but change cursor back to move
-        if (selectedObject) {
-            document.body.style.cursor = cursors.move;
-        } else {
-            // Reset cursor and mode if no object is selected
-            document.body.style.cursor = cursors.default;
-            transformMode = 'none';
+        // Reset transform mode and cursor
+        transformMode = 'none';
+        document.body.style.cursor = cursors.default;
+        
+        // If no object is selected, unlock t-shirt movement
+        if (!selectedObject) {
+            toggleCameraControls(true);
         }
     }
 }
@@ -337,7 +394,7 @@ function updateMousePosition(event) {
 
 /**
  * Detect if user clicked on a transform handle
- * @returns {string} The transform mode or null
+ * @returns {string} The transform mode or action
  */
 function detectTransformHandleClick() {
     if (!selectedObject) return null;
@@ -358,12 +415,12 @@ function detectTransformHandleClick() {
     const centerX = object.left + width / 2;
     const centerY = object.top + height / 2;
 
-    // Handle size and rotation handle offset
-    const handleSize = 12; // Increased from 8 for easier interaction
-    const rotationHandleOffset = 20;
+    // Button size and padding
+    const buttonRadius = 12;
+    const buttonPadding = 5;
+    const hitRadius = buttonRadius * 1.5; // Slightly larger hit area for better UX
 
     // Convert mouse position to object-relative coordinates
-    // This accounts for object rotation
     const relX = (x - centerX);
     const relY = (y - centerY);
 
@@ -373,40 +430,70 @@ function detectTransformHandleClick() {
     const localX = relX * Math.cos(radians) - relY * Math.sin(radians);
     const localY = relX * Math.sin(radians) + relY * Math.cos(radians);
 
-    // Check if the rotation handle was clicked with increased tolerance
-    const rotationHandleDistanceToCenter = Math.sqrt(
-        Math.pow(localX, 2) +
-        Math.pow(localY + height / 2 + rotationHandleOffset, 2)
-    );
-
-    if (rotationHandleDistanceToCenter <= handleSize * 1.5) { // Increased hit area
-        return 'rotate';
-    }
-
-    // Check if any corner handles were clicked with increased tolerance
-
-    // Define the corners in local object space
-    const corners = [
-        { x: -width / 2, y: -height / 2, mode: 'scale' }, // Top-left
-        { x: width / 2, y: -height / 2, mode: 'scale' },  // Top-right
-        { x: -width / 2, y: height / 2, mode: 'scale' },  // Bottom-left
-        { x: width / 2, y: height / 2, mode: 'scale' }    // Bottom-right
+    // Check each button with increased hit area
+    const buttons = [
+        // Delete button (bottom left)
+        {
+            x: -width / 2 - buttonRadius - buttonPadding,
+            y: height / 2 + buttonRadius + buttonPadding,
+            action: 'delete'
+        },
+        // Layers button (top center, only check if there are overlapping decals)
+        {
+            x: 0,
+            y: -height / 2 - buttonRadius - buttonPadding,
+            action: 'layers',
+            condition: () => canvasData.objects.some(otherObj => 
+                otherObj !== object && 
+                otherObj.isDecal && 
+                isObjectsOverlapping(object, otherObj)
+            )
+        },
+        // Resize button (bottom right)
+        {
+            x: width / 2 + buttonRadius + buttonPadding,
+            y: height / 2 + buttonRadius + buttonPadding,
+            action: 'scale'
+        },
+        // Pin button (top left)
+        {
+            x: -width / 2 - buttonRadius - buttonPadding,
+            y: -height / 2 - buttonRadius - buttonPadding,
+            action: 'pin'
+        },
+        // Rotate button (top right)
+        {
+            x: width / 2 + buttonRadius + buttonPadding,
+            y: -height / 2 - buttonRadius - buttonPadding,
+            action: 'rotate'
+        },
+        // Duplicate button (bottom center)
+        {
+            x: 0,
+            y: height / 2 + buttonRadius + buttonPadding,
+            action: 'duplicate'
+        }
     ];
 
-    // Check each corner with increased tolerance
-    for (const corner of corners) {
-        const distanceToCorner = Math.sqrt(
-            Math.pow(localX - corner.x, 2) +
-            Math.pow(localY - corner.y, 2)
+    // Check each button
+    for (const button of buttons) {
+        // Skip checking layers button if condition is not met
+        if (button.action === 'layers' && !button.condition()) {
+            continue;
+        }
+
+        const distanceToButton = Math.sqrt(
+            Math.pow(localX - button.x, 2) +
+            Math.pow(localY - button.y, 2)
         );
 
-        if (distanceToCorner <= handleSize * 1.5) { // Increased hit area
-            return corner.mode;
+        if (distanceToButton <= hitRadius) {
+            return button.action;
         }
     }
 
-    // Check if we're inside the object (for move) with a slightly larger hit area
-    const padding = 5; // Add padding to make selection easier
+    // Check if we're inside the object (for move)
+    const padding = 5;
     if (
         localX >= -width / 2 - padding &&
         localX <= width / 2 + padding &&
@@ -504,12 +591,13 @@ function detectObjectIntersection(object) {
  */
 function selectObject(object) {
     selectedObject = object;
-
-    // Create transform controls for the object
-    createTransformControls(object);
+    transformControls.visible = true;
 
     // Set the object as active
     object.active = true;
+
+    // Update the texture to show selection overlay
+    updateShirt3DTexture();
 
     Logger.log('Selected object:', object);
 }
@@ -634,8 +722,9 @@ function moveObject(object, deltaX, deltaY) {
     }
 
     // Apply the final movement with all corrections
+    // Invert the Y-axis movement by negating deltaUV.y
     object.left += deltaUV.x * canvasData.width * distortionFactorX;
-    object.top += deltaUV.y * canvasData.height * distortionFactorY;
+    object.top -= deltaUV.y * canvasData.height * distortionFactorY;
 
     // Apply advanced constraints to keep object in valid UV space
     constrainObjectToUVBoundary(object);
@@ -664,7 +753,6 @@ function rotateObject(object, deltaX, deltaY) {
 
     if (intersects.length > 0) {
         const uv = intersects[0].uv;
-        const worldPoint = intersects[0].point;
         const x = uv.x * canvasData.width;
         const y = uv.y * canvasData.height;
 
@@ -685,7 +773,7 @@ function rotateObject(object, deltaX, deltaY) {
         if (angleDelta < -Math.PI) angleDelta += Math.PI * 2;
 
         // Convert to degrees and apply a rotation speed adjustment
-        const rotationSpeed = 1.0; // Adjust this value to change rotation sensitivity
+        const rotationSpeed = 1.5; // Increased from 1.0 to 1.5
         angleDelta *= (180 / Math.PI) * rotationSpeed;
 
         // Update the object's rotation with dampening
@@ -700,6 +788,9 @@ function rotateObject(object, deltaX, deltaY) {
         const rotationDelta = deltaX * rotationFactor;
         object.angle = (object.angle || 0) + rotationDelta;
     }
+
+    // Ensure the object stays within boundaries
+    constrainObjectToUVBoundary(object);
 
     Logger.log('Rotated object');
 }
@@ -729,7 +820,7 @@ function scaleObject(object, deltaX, deltaY) {
     // Calculate scale factor - positive delta = scale up, negative = scale down
     const movementMagnitude = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
     const scaleDirection = (deltaX + deltaY) > 0 ? 1 : -1;
-    const scaleFactor = 1 + (movementMagnitude * 0.05 * scaleDirection);
+    const scaleFactor = 1 + (movementMagnitude * 0.03 * scaleDirection); // Reduced from 0.05 to 0.03 for less sensitivity
 
     // Apply scaling with constraints
     const minDimension = 20; // Minimum size in pixels
@@ -739,8 +830,8 @@ function scaleObject(object, deltaX, deltaY) {
     let newWidth = Math.max(minDimension, Math.min(maxDimension, object.width * scaleFactor));
     let newHeight = Math.max(minDimension, Math.min(maxDimension, object.height * scaleFactor));
 
-    // Maintain aspect ratio for images
-    if (object.type === 'image' && object.preserveAspectRatio !== false) {
+    // Maintain aspect ratio for images and text
+    if ((object.type === 'image' && object.preserveAspectRatio !== false) || object.type === 'text') {
         const originalAspect = object.metadata?.originalWidth / object.metadata?.originalHeight || 
                                object.width / object.height;
         
@@ -1026,32 +1117,25 @@ export function updateShirt3DTexture() {
         drawObjectToCanvas(obj);
     }
 
-    // Draw editable areas if enabled
-    if (state.showEditableAreas) {
-        drawEditableAreas(canvasData.ctx);
-    }
-
-    // Draw selection if we have a selected object
-    if (selectedObject && transformControls.visible) {
-        drawSelectionOverlay(selectedObject);
-    }
-
-    // If in editing mode, highlight the current editable area
+    // Draw editable area if in editing mode and we have a current area
     if (isEditingMode && currentEditableArea) {
         highlightEditableArea(currentEditableArea);
     }
-    
-    console.log('Generating high-quality texture from editor canvas');
-    
-    // Create a texture from the canvas with enhanced properties for perfect rendering
+
+    // Draw selection if we have a selected object
+    if (selectedObject) {
+        drawSelectionOverlay(selectedObject);
+    }
+
+    // Create a texture from the canvas
     const canvasTexture = new THREE.CanvasTexture(canvasData.canvas);
     
     // Apply correct orientation settings for the texture
-    canvasTexture.flipY = false; // Prevent automatic Y-flip that THREE.js applies
-    canvasTexture.matrixAutoUpdate = false; // We'll set the matrix manually
-    canvasTexture.matrix.identity(); // Reset matrix
+    canvasTexture.flipY = false;
+    canvasTexture.matrixAutoUpdate = false;
+    canvasTexture.matrix.identity();
     
-    // If not found, request it from the scene module
+    // Update the texture on the model
     import('./scene.js').then(module => {
         if (typeof module.updateEditorCanvasTexture === 'function') {
             module.updateEditorCanvasTexture(canvasTexture);
@@ -1060,7 +1144,7 @@ export function updateShirt3DTexture() {
         console.error('Error updating editor canvas texture:', err);
     });
     
-    Logger.log('3D texture update requested with direct rendering technique');
+    Logger.log('3D texture updated');
 }
 
 /**
@@ -1076,9 +1160,6 @@ function drawObjectToCanvas(object) {
     // Apply transformations
     ctx.translate(object.left + object.width / 2, object.top + object.height / 2);
     
-    // We no longer need to flip the Y-axis because our uvRect coordinates are already adjusted
-    // ctx.scale(1, -1); // This line was causing the flipping issue
-    
     // Apply rotation if needed
     if (object.angle) ctx.rotate(object.angle * Math.PI / 180);
 
@@ -1091,13 +1172,13 @@ function drawObjectToCanvas(object) {
         
         // For decals with transparency, use the most direct rendering approach possible
         if (isDecal) {
-            // No transformations that might affect transparency
-            ctx.globalCompositeOperation = 'source-over';
-            ctx.globalAlpha = 1.0;
-            
             // Maximum quality settings for image drawing
             ctx.imageSmoothingEnabled = true;
             ctx.imageSmoothingQuality = 'high';
+            
+            // Use source-over for best quality with transparency
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.globalAlpha = 1.0;
             
             // Draw at original dimensions to maintain fine details
             ctx.drawImage(
@@ -1107,6 +1188,16 @@ function drawObjectToCanvas(object) {
                 object.width,
                 object.height
             );
+            
+            // Ensure crisp edges for decals
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+            
+            // Remove any stroke or outline
+            ctx.strokeStyle = 'transparent';
+            ctx.lineWidth = 0;
         } else {
             // For regular images, use standard rendering
             ctx.globalCompositeOperation = 'source-over';
@@ -1128,39 +1219,90 @@ function drawObjectToCanvas(object) {
             }
         }
     } else if (object.type === 'text') {
-        // Text no longer needs to be flipped since we removed the Y-axis flip
-        // ctx.scale(1, -1);
+        // Load and apply the font
+        const fontFamily = object.fontFamily || 'Arial';
+        const fontSize = object.fontSize || 20;
         
-        ctx.font = `${object.fontSize || 20}px ${object.fontFamily || 'Arial'}`;
+        // Create a temporary canvas to measure text
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.font = `${fontSize}px "${fontFamily}"`;
+        
+        // Set the main canvas font
+        ctx.font = `${fontSize}px "${fontFamily}"`;
         ctx.fillStyle = object.color || '#000000';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
+        
+        // Draw text with outline for better visibility
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.lineWidth = fontSize / 10;
+        ctx.strokeText(object.text, 0, 0);
+        
+        // Draw the main text
         ctx.fillText(object.text, 0, 0);
     } else if (object.type === 'shape') {
-        if (object.shape === 'rect') {
-            ctx.fillStyle = object.fill || '#000000';
-            ctx.strokeStyle = object.stroke || '#000000';
-            ctx.lineWidth = object.strokeWidth || 1;
+        if (object.shapeType === 'rectangle') {
+            ctx.fillStyle = object.color || '#000000';
+            ctx.strokeStyle = object.color || '#000000';
+            ctx.lineWidth = 1;
             
             // Draw rectangle with proper dimensions
             ctx.fillRect(-object.width / 2, -object.height / 2, object.width, object.height);
-            
-            if (object.strokeWidth > 0) {
-                ctx.strokeRect(-object.width / 2, -object.height / 2, object.width, object.height);
-            }
-        } else if (object.shape === 'circle') {
-            ctx.fillStyle = object.fill || '#000000';
-            ctx.strokeStyle = object.stroke || '#000000';
-            ctx.lineWidth = object.strokeWidth || 1;
+            ctx.strokeRect(-object.width / 2, -object.height / 2, object.width, object.height);
+        } else if (object.shapeType === 'circle') {
+            ctx.fillStyle = object.color || '#000000';
+            ctx.strokeStyle = object.color || '#000000';
+            ctx.lineWidth = 1;
             
             // Draw circle with proper radius
             ctx.beginPath();
             ctx.arc(0, 0, object.width / 2, 0, Math.PI * 2);
             ctx.fill();
+            ctx.stroke();
+        } else if (object.shapeType === 'triangle') {
+            ctx.fillStyle = object.color || '#000000';
+            ctx.strokeStyle = object.color || '#000000';
+            ctx.lineWidth = 1;
             
-            if (object.strokeWidth > 0) {
-                ctx.stroke();
+            // Draw triangle
+            ctx.beginPath();
+            ctx.moveTo(0, -object.height / 2); // Top point
+            ctx.lineTo(object.width / 2, object.height / 2); // Bottom right
+            ctx.lineTo(-object.width / 2, object.height / 2); // Bottom left
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        } else if (object.shapeType === 'star') {
+            ctx.fillStyle = object.color || '#000000';
+            ctx.strokeStyle = object.color || '#000000';
+            ctx.lineWidth = 1;
+            
+            // Draw 5-pointed star
+            const radius = object.width / 2;
+            const innerRadius = radius * 0.4; // Inner radius for star points
+            
+            ctx.beginPath();
+            for (let i = 0; i < 5; i++) {
+                const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+                const x = radius * Math.cos(angle);
+                const y = radius * Math.sin(angle);
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+                
+                // Inner points
+                const innerAngle = angle + Math.PI / 5;
+                const innerX = innerRadius * Math.cos(innerAngle);
+                const innerY = innerRadius * Math.sin(innerAngle);
+                ctx.lineTo(innerX, innerY);
             }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
         }
     }
 
@@ -1173,77 +1315,217 @@ function drawObjectToCanvas(object) {
  * @param {Object} object 
  */
 function drawSelectionOverlay(object) {
+    if (!object) return;
+
     const ctx = canvasData.ctx;
 
     // Save context state
     ctx.save();
 
-    // Apply transformations
+    // Apply transformations for position only (no rotation for controls)
     ctx.translate(object.left + object.width / 2, object.top + object.height / 2);
-    
-    // Remove vertical flip to match changes in drawObjectToCanvas
-    // ctx.scale(1, -1);
-    
-    if (object.angle) ctx.rotate(object.angle * Math.PI / 180);
 
-    // Draw selection outline
-    ctx.strokeStyle = '#2196F3';
+    // Calculate the rotated bounding box dimensions
+    let borderWidth = object.width;
+    let borderHeight = object.height;
+    let borderOffsetX = 0;
+    let borderOffsetY = 0;
+
+    if (object.angle && Math.abs(object.angle) > 0.1) {
+        const angleRad = object.angle * Math.PI / 180;
+        const halfWidth = object.width / 2;
+        const halfHeight = object.height / 2;
+
+        // Calculate the four corners of the unrotated box
+        const corners = [
+            { x: -halfWidth, y: -halfHeight },  // Top-left
+            { x: halfWidth, y: -halfHeight },   // Top-right
+            { x: halfWidth, y: halfHeight },    // Bottom-right
+            { x: -halfWidth, y: halfHeight }    // Bottom-left
+        ];
+
+        // Rotate each corner and find the extreme points
+        let minRotX = Number.MAX_VALUE;
+        let maxRotX = -Number.MAX_VALUE;
+        let minRotY = Number.MAX_VALUE;
+        let maxRotY = -Number.MAX_VALUE;
+
+        corners.forEach(corner => {
+            // Apply rotation transformation
+            const rotX = corner.x * Math.cos(angleRad) - corner.y * Math.sin(angleRad);
+            const rotY = corner.x * Math.sin(angleRad) + corner.y * Math.cos(angleRad);
+
+            // Update extreme points
+            minRotX = Math.min(minRotX, rotX);
+            maxRotX = Math.max(maxRotX, rotX);
+            minRotY = Math.min(minRotY, rotY);
+            maxRotY = Math.max(maxRotY, rotY);
+        });
+
+        // Calculate the new border dimensions
+        borderWidth = maxRotX - minRotX;
+        borderHeight = maxRotY - minRotY;
+        borderOffsetX = (minRotX + maxRotX) / 2;
+        borderOffsetY = (minRotY + maxRotY) / 2;
+    }
+
+    // Draw selection outline with modern style
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
     ctx.lineWidth = 2;
+    ctx.setLineDash([6, 6]);
     
-    // Different shape types require different selection outlines
-    if (object.type === 'image' || object.type === 'text' || (object.type === 'shape' && object.shape === 'rect')) {
-        // Draw rectangle selection with padding
-        const padding = 2;
-        ctx.strokeRect(
-            -object.width / 2 - padding,
-            -object.height / 2 - padding,
-            object.width + padding * 2,
-            object.height + padding * 2
-        );
-    } else if (object.type === 'shape' && object.shape === 'circle') {
-        // Draw circle selection with padding
-        const padding = 2;
+    // Draw rectangle selection with padding
+    const padding = 2;
+    ctx.strokeRect(
+        -borderWidth / 2 - padding + borderOffsetX,
+        -borderHeight / 2 - padding + borderOffsetY,
+        borderWidth + padding * 2,
+        borderHeight + padding * 2
+    );
+    
+    // Draw modern control buttons
+    const buttonRadius = 12;
+    const buttonPadding = 5;
+    
+    // Function to draw a control button with improved colors
+    const drawControlButton = (x, y, icon, color = '#2196F3', backgroundColor = '#FFFFFF') => {
         ctx.beginPath();
-        ctx.arc(0, 0, object.width / 2 + padding, 0, Math.PI * 2);
+        ctx.arc(x, y, buttonRadius, 0, Math.PI * 2);
+        ctx.fillStyle = backgroundColor;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = color;
         ctx.stroke();
+        
+        // Draw icon with improved contrast
+        ctx.fillStyle = color;
+        ctx.font = '14px FontAwesome';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(icon, x, y);
+    };
+
+    // Check if we should show the layers button (when there are overlapping decals)
+    const hasOverlappingDecals = canvasData.objects.some(otherObj => 
+        otherObj !== object && 
+        otherObj.isDecal && 
+        isObjectsOverlapping(object, otherObj)
+    );
+    
+    // Draw delete button (bottom left) - Red color scheme
+    drawControlButton(
+        -borderWidth / 2 - buttonRadius - buttonPadding + borderOffsetX,
+        borderHeight / 2 + buttonRadius + buttonPadding + borderOffsetY,
+        '🗑',
+        '#FF4444',
+        '#FFF5F5'
+    );
+    
+    // Draw layers button (top center, only if there are overlapping decals)
+    if (hasOverlappingDecals) {
+        drawControlButton(
+            borderOffsetX,
+            -borderHeight / 2 - buttonRadius - buttonPadding + borderOffsetY,
+            '⎘',
+            '#4CAF50',
+            '#F1F8E9'
+        );
     }
     
-    // Draw transform control handles
-    const handleSize = 8;
-    ctx.fillStyle = '#2196F3';
+    // Draw resize button (bottom right) - Blue color scheme
+    drawControlButton(
+        borderWidth / 2 + buttonRadius + buttonPadding + borderOffsetX,
+        borderHeight / 2 + buttonRadius + buttonPadding + borderOffsetY,
+        '↔',
+        '#2196F3',
+        '#E3F2FD'
+    );
     
-    // Define control handle positions
-    const controlPositions = [
-        { x: -object.width / 2, y: -object.height / 2 }, // Top left
-        { x: object.width / 2, y: -object.height / 2 },  // Top right
-        { x: object.width / 2, y: object.height / 2 },   // Bottom right
-        { x: -object.width / 2, y: object.height / 2 }   // Bottom left
-    ];
+    // Draw pin button (top left) - Green color scheme when pinned
+    drawControlButton(
+        -borderWidth / 2 - buttonRadius - buttonPadding + borderOffsetX,
+        -borderHeight / 2 - buttonRadius - buttonPadding + borderOffsetY,
+        object.isPinned ? '📌' : '📍',
+        object.isPinned ? '#4CAF50' : '#2196F3',
+        object.isPinned ? '#F1F8E9' : '#E3F2FD'
+    );
     
-    // Draw rotation handle
-    ctx.beginPath();
-    ctx.arc(0, -object.height / 2 - 20, 5, 0, Math.PI * 2);
-    ctx.fill();
+    // Draw rotate button (top right) - Purple color scheme
+    drawControlButton(
+        borderWidth / 2 + buttonRadius + buttonPadding + borderOffsetX,
+        -borderHeight / 2 - buttonRadius - buttonPadding + borderOffsetY,
+        '↻',
+        '#9C27B0',
+        '#F3E5F5'
+    );
     
-    // Draw line connecting rotation handle to object
-    ctx.beginPath();
-    ctx.moveTo(0, -object.height / 2);
-    ctx.lineTo(0, -object.height / 2 - 15);
-    ctx.stroke();
-    
-    // Draw the control handles
-    controlPositions.forEach(pos => {
-        ctx.fillRect(pos.x - handleSize / 2, pos.y - handleSize / 2, handleSize, handleSize);
-    });
-    
-    // Draw selection center
-    ctx.fillStyle = 'rgba(33, 150, 243, 0.3)';
-    ctx.beginPath();
-    ctx.arc(0, 0, 5, 0, Math.PI * 2);
-    ctx.fill();
+    // Draw duplicate button (bottom center) - Orange color scheme
+    drawControlButton(
+        borderOffsetX,
+        borderHeight / 2 + buttonRadius + buttonPadding + borderOffsetY,
+        'x2',
+        '#FF9800',
+        '#FFF3E0'
+    );
 
     // Restore context state
     ctx.restore();
+}
+
+// Helper function to check if two objects are overlapping
+function isObjectsOverlapping(obj1, obj2) {
+    // Get the bounding boxes of both objects
+    const rect1 = getRotatedBoundingBox(obj1);
+    const rect2 = getRotatedBoundingBox(obj2);
+    
+    // Check for overlap with a small tolerance
+    const tolerance = 2; // 2 pixels tolerance
+    
+    // Check if any edge of obj1 touches or overlaps with obj2
+    return !(rect1.right + tolerance < rect2.left || 
+             rect1.left - tolerance > rect2.right || 
+             rect1.bottom + tolerance < rect2.top || 
+             rect1.top - tolerance > rect2.bottom);
+}
+
+// Helper function to get rotated bounding box
+function getRotatedBoundingBox(obj) {
+    if (!obj.angle || Math.abs(obj.angle) < 0.1) {
+        return {
+            left: obj.left,
+            right: obj.left + obj.width,
+            top: obj.top,
+            bottom: obj.top + obj.height
+        };
+    }
+
+    const angleRad = obj.angle * Math.PI / 180;
+    const centerX = obj.left + obj.width / 2;
+    const centerY = obj.top + obj.height / 2;
+    const halfWidth = obj.width / 2;
+    const halfHeight = obj.height / 2;
+
+    // Calculate corners
+    const corners = [
+        { x: -halfWidth, y: -halfHeight },
+        { x: halfWidth, y: -halfHeight },
+        { x: halfWidth, y: halfHeight },
+        { x: -halfWidth, y: halfHeight }
+    ];
+
+    // Rotate corners
+    const rotatedCorners = corners.map(corner => ({
+        x: centerX + (corner.x * Math.cos(angleRad) - corner.y * Math.sin(angleRad)),
+        y: centerY + (corner.x * Math.sin(angleRad) + corner.y * Math.cos(angleRad))
+    }));
+
+    // Find bounds
+    return {
+        left: Math.min(...rotatedCorners.map(c => c.x)),
+        right: Math.max(...rotatedCorners.map(c => c.x)),
+        top: Math.min(...rotatedCorners.map(c => c.y)),
+        bottom: Math.max(...rotatedCorners.map(c => c.y))
+    };
 }
 
 /**
@@ -1303,8 +1585,8 @@ export function addImage(imageUrl, options = {}) {
         // Handle successful load
         img.onload = () => {
             // Calculate optimal dimensions while maintaining aspect ratio
-            const maxWidth = canvasData.width * 0.4; // Limit initial size to 40% of canvas width
-            const maxHeight = canvasData.height * 0.4; // Limit initial size to 40% of canvas height
+            const maxWidth = canvasData.width * 0.25; // Reduced from 0.3 to 0.25 (25% of canvas width)
+            const maxHeight = canvasData.height * 0.25; // Reduced from 0.3 to 0.25 (25% of canvas height)
             
             const aspectRatio = img.width / img.height;
             let defaultWidth, defaultHeight;
@@ -1447,76 +1729,352 @@ export function addImage(imageUrl, options = {}) {
     });
 }
 
-/**
- * Add text to the canvas
- * @param {string} text - The text to add
- * @param {Object} options - Options for text styling and positioning
- * @returns {Object} The added text object
- */
-export function addText(text, options = {}) {
-    // Get current view's UV boundaries
-    const viewConfig = modelConfig[state.currentModel].views[state.cameraView];
+// Define text colors
+const TEXT_COLORS = [
+    '#000000', // Black
+    '#FFFFFF', // White
+    '#FF0000', // Red
+    '#00FF00', // Green
+    '#0000FF', // Blue
+    '#FFFF00', // Yellow
+    '#FF00FF', // Magenta
+    '#00FFFF', // Cyan
+    '#FFA500', // Orange
+    '#800080', // Purple
+    '#A52A2A', // Brown
+    '#808080', // Gray
+    '#FFB6C1', // Pink
+    '#90EE90', // Light Green
+    '#ADD8E6', // Light Blue
+    '#D3D3D3'  // Light Gray
+];
 
-    // Calculate position in canvas space
-    const left = options.left || (viewConfig.uvRect.u1 + viewConfig.uvRect.u2) / 2 * canvasData.width - 100;
-    const top = options.top || (viewConfig.uvRect.v1 + viewConfig.uvRect.v2) / 2 * canvasData.height - 20;
+// Define available fonts
+const AVAILABLE_FONTS = [
+    { name: 'Arial', value: 'Arial' },
+    { name: 'Times New Roman', value: 'Times New Roman' },
+    { name: 'Helvetica', value: 'Helvetica' },
+    { name: 'Verdana', value: 'Verdana' },
+    { name: 'Georgia', value: 'Georgia' },
+    { name: 'Courier New', value: 'Courier New' },
+    { name: 'Tahoma', value: 'Tahoma' },
+    { name: 'Trebuchet MS', value: 'Trebuchet MS' },
+    { name: 'Impact', value: 'Impact' },
+    { name: 'Comic Sans MS', value: 'Comic Sans MS' }
+];
 
-    // Create text object
-    const textObj = {
-        type: 'text',
-        text: text,
-        left: left,
-        top: top,
-        width: options.width || 200,
-        height: options.height || 40,
-        fontSize: options.fontSize || 30,
-        fontFamily: options.fontFamily || 'Arial',
-        color: options.color || '#000000',
-        angle: options.angle || 0,
-        active: false
+function createTextEditOverlay(existingText = '', existingColor = '#000000', existingFont = 'Arial') {
+    const overlay = document.createElement('div');
+    overlay.className = 'text-edit-overlay';
+    
+    const colorButtons = TEXT_COLORS.map(color => `
+        <div class="color-option ${color === existingColor ? 'active' : ''}" 
+             style="background-color: ${color}" 
+             data-color="${color}">
+        </div>
+    `).join('');
+
+    const fontOptions = AVAILABLE_FONTS.map(font => `
+        <option value="${font.value}" ${font.value === existingFont ? 'selected' : ''}>
+            ${font.name}
+        </option>
+    `).join('');
+
+    overlay.innerHTML = `
+        <div class="text-edit-container">
+            <div class="text-edit-header">
+                <h3>${existingText ? 'Edit Text' : 'Add Text'}</h3>
+                <p>Enter your text and choose a color</p>
+            </div>
+            <textarea class="text-edit-input" placeholder="Enter your text here...">${existingText}</textarea>
+            <div class="text-edit-options">
+                <div class="font-select-container">
+                    <label for="font-select">Font:</label>
+                    <select id="font-select" class="font-select">
+                        ${fontOptions}
+                    </select>
+                </div>
+                <div class="text-edit-colors">
+                    ${colorButtons}
+                </div>
+            </div>
+            <div class="text-edit-buttons">
+                <button class="text-edit-cancel">Cancel</button>
+                <button class="text-edit-save">Save</button>
+            </div>
+        </div>
+    `;
+
+    // Apply the selected font to the textarea
+    const textarea = overlay.querySelector('.text-edit-input');
+    const fontSelect = overlay.querySelector('#font-select');
+    
+    const updateTextareaFont = () => {
+        textarea.style.fontFamily = fontSelect.value;
     };
+    
+    fontSelect.addEventListener('change', updateTextareaFont);
+    updateTextareaFont(); // Set initial font
 
-    // Add to canvas
-    addObject(textObj);
-
-    // Return the created object
-    return textObj;
+    return overlay;
 }
 
-/**
- * Add a shape to the canvas
- * @param {string} shapeType - Type of shape ('rect', 'circle', etc.)
- * @param {Object} options - Options for shape styling and positioning
- * @returns {Object} The added shape object
- */
-export function addShape(shapeType, options = {}) {
-    // Get current view's UV boundaries
-    const viewConfig = modelConfig[state.currentModel].views[state.cameraView];
+export async function addText(text = '', options = {}) {
+    try {
+        // Get current view's UV boundaries
+        const viewConfig = modelConfig[state.currentModel].views[state.cameraView];
+        
+        // Show text editor and wait for result
+        const overlay = createTextEditOverlay(text, options.color || '#000000', options.fontFamily || 'Arial');
+        document.body.appendChild(overlay);
 
-    // Calculate position in canvas space
-    const left = options.left || (viewConfig.uvRect.u1 + viewConfig.uvRect.u2) / 2 * canvasData.width - 50;
-    const top = options.top || (viewConfig.uvRect.v1 + viewConfig.uvRect.v2) / 2 * canvasData.height - 50;
+        const result = await new Promise((resolve, reject) => {
+            const textarea = overlay.querySelector('.text-edit-input');
+            const colorOptions = overlay.querySelectorAll('.color-option');
+            const fontSelect = overlay.querySelector('#font-select');
+            let selectedColor = options.color || '#000000';
+            let selectedFont = options.fontFamily || 'Arial';
 
-    // Create shape object
-    const shapeObj = {
-        type: 'shape',
-        shape: shapeType,
-        left: left,
-        top: top,
-        width: options.width || 100,
-        height: options.height || 100,
-        fill: options.fill || '#000000',
-        stroke: options.stroke,
-        strokeWidth: options.strokeWidth || 0,
-        angle: options.angle || 0,
-        active: false
-    };
+            // Focus the textarea
+            textarea.focus();
+            textarea.select();
 
-    // Add to canvas
-    addObject(shapeObj);
+            // Handle color selection
+            colorOptions.forEach(option => {
+                option.addEventListener('click', () => {
+                    colorOptions.forEach(opt => opt.classList.remove('active'));
+                    option.classList.add('active');
+                    selectedColor = option.dataset.color;
+                });
+            });
 
-    // Return the created object
-    return shapeObj;
+            // Handle save
+            overlay.querySelector('.text-edit-save').addEventListener('click', () => {
+                const newText = textarea.value.trim();
+                if (newText) {
+                    resolve({ text: newText, color: selectedColor, fontFamily: selectedFont });
+                }
+                overlay.remove();
+            });
+
+            // Handle cancel
+            overlay.querySelector('.text-edit-cancel').addEventListener('click', () => {
+                overlay.remove();
+                reject('cancelled');
+            });
+
+            // Handle enter key
+            textarea.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    const newText = textarea.value.trim();
+                    if (newText) {
+                        resolve({ text: newText, color: selectedColor, fontFamily: selectedFont });
+                    }
+                    overlay.remove();
+                }
+            });
+
+            // Handle escape key
+            textarea.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    overlay.remove();
+                    reject('cancelled');
+                }
+            });
+
+            // Handle click outside
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    overlay.remove();
+                    reject('cancelled');
+                }
+            });
+        });
+
+        // Calculate position in canvas space
+        const left = options.left || (viewConfig.uvRect.u1 + viewConfig.uvRect.u2) / 2 * canvasData.width - 100;
+        const top = options.top || (viewConfig.uvRect.v1 + viewConfig.uvRect.v2) / 2 * canvasData.height - 20;
+
+        // Create text object
+        const textObj = {
+            type: 'text',
+            text: result.text,
+            left: left,
+            top: top,
+            width: 200,
+            height: 40,
+            fontSize: 30,
+            fontFamily: result.fontFamily || 'Arial',
+            color: result.color,
+            angle: 0,
+            active: false
+        };
+
+        // Add to canvas
+        addObject(textObj);
+
+        // Return the created object
+        return textObj;
+    } catch (error) {
+        if (error !== 'cancelled') {
+            console.error('Error adding text:', error);
+        }
+        return null;
+    }
+}
+
+// Define shape types and their default properties
+const SHAPE_TYPES = {
+    rectangle: { name: 'Rectangle', icon: 'fa-square' },
+    circle: { name: 'Circle', icon: 'fa-circle' },
+    triangle: { name: 'Triangle', icon: 'fa-play' },
+    star: { name: 'Star', icon: 'fa-star' }
+};
+
+function createShapeEditOverlay(existingShape = null) {
+    const overlay = document.createElement('div');
+    overlay.className = 'text-edit-overlay';
+    
+    const shapeButtons = Object.entries(SHAPE_TYPES).map(([type, info]) => `
+        <div class="shape-option ${existingShape?.type === type ? 'active' : ''}" 
+             data-shape="${type}">
+            <i class="fas ${info.icon}"></i>
+            <span>${info.name}</span>
+        </div>
+    `).join('');
+
+    const colorButtons = TEXT_COLORS.map(color => `
+        <div class="color-option ${existingShape?.color === color ? 'active' : ''}" 
+             style="background-color: ${color}" 
+             data-color="${color}">
+        </div>
+    `).join('');
+
+    overlay.innerHTML = `
+        <div class="text-edit-container">
+            <div class="text-edit-header">
+                <h3>${existingShape ? 'Edit Shape' : 'Add Shape'}</h3>
+                <p>Choose a shape and color</p>
+            </div>
+            <div class="text-edit-options">
+                <div class="shape-options">
+                    ${shapeButtons}
+                </div>
+                <div class="text-edit-colors">
+                    ${colorButtons}
+                </div>
+            </div>
+            <div class="text-edit-buttons">
+                <button class="text-edit-cancel">Cancel</button>
+                <button class="text-edit-save">Save</button>
+            </div>
+        </div>
+    `;
+
+    return overlay;
+}
+
+export async function addShape(shapeType = '', options = {}) {
+    try {
+        // Get current view's UV boundaries
+        const viewConfig = modelConfig[state.currentModel].views[state.cameraView];
+        
+        // Show shape editor and wait for result
+        const overlay = createShapeEditOverlay();
+        document.body.appendChild(overlay);
+
+        const result = await new Promise((resolve, reject) => {
+            const shapeOptions = overlay.querySelectorAll('.shape-option');
+            const colorOptions = overlay.querySelectorAll('.color-option');
+            let selectedShape = shapeType || 'rectangle';
+            let selectedColor = options.color || '#000000';
+
+            // Handle shape selection
+            shapeOptions.forEach(option => {
+                if (option.dataset.shape === selectedShape) {
+                    option.classList.add('active');
+                }
+                option.addEventListener('click', () => {
+                    shapeOptions.forEach(opt => opt.classList.remove('active'));
+                    option.classList.add('active');
+                    selectedShape = option.dataset.shape;
+                });
+            });
+
+            // Handle color selection
+            colorOptions.forEach(option => {
+                option.addEventListener('click', () => {
+                    colorOptions.forEach(opt => opt.classList.remove('active'));
+                    option.classList.add('active');
+                    selectedColor = option.dataset.color;
+                });
+            });
+
+            // Handle save
+            overlay.querySelector('.text-edit-save').addEventListener('click', () => {
+                resolve({ type: selectedShape, color: selectedColor });
+                overlay.remove();
+            });
+
+            // Handle cancel
+            overlay.querySelector('.text-edit-cancel').addEventListener('click', () => {
+                overlay.remove();
+                reject('cancelled');
+            });
+
+            // Handle click outside
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    overlay.remove();
+                    reject('cancelled');
+                }
+            });
+        });
+
+        if (result) {
+            // Calculate position in canvas space
+            const left = (viewConfig.uvRect.u1 + viewConfig.uvRect.u2) / 2 * canvasData.width - 50;
+            const top = (viewConfig.uvRect.v1 + viewConfig.uvRect.v2) / 2 * canvasData.height - 50;
+
+            // Create shape object
+            const shapeObj = {
+                type: 'shape',
+                shapeType: result.type,
+                left: left,
+                top: top,
+                width: 100,
+                height: 100,
+                color: result.color,
+                angle: 0,
+                active: false
+            };
+
+            // Add to canvas
+            addObject(shapeObj);
+            
+            // Update the texture
+            updateShirt3DTexture();
+
+            return shapeObj;
+        }
+    } catch (error) {
+        if (error !== 'cancelled') {
+            console.error('Error adding shape:', error);
+        }
+        return null;
+    }
+}
+
+// Handle adding shape from the UI
+async function handleAddShape() {
+    try {
+        await addShape();
+    } catch (error) {
+        if (error !== 'cancelled') {
+            console.error('Error handling shape addition:', error);
+        }
+    }
 }
 
 /**
@@ -1788,40 +2346,20 @@ function highlightEditableArea(area) {
     const width = (u2 - u1) * canvasData.width;
     const height = (v2 - v1) * canvasData.height;
 
-    // Draw a more visible highlight for the active editable area
+    // Draw a visible highlight for the active editable area
     ctx.save();
-    
-    // Apply the same vertical flip transformation for consistency with other drawing operations
-    ctx.translate(x + width/2, y + height/2);
-    ctx.scale(1, -1);
-    ctx.translate(-(x + width/2), -(y + height/2));
 
     // Create highlight effect with animated dash
-    const dashOffset = (Date.now() / 100) % 16;
-    ctx.strokeStyle = 'rgba(76, 149, 175, 0.7)';  // Fixed color format and increased opacity
-    ctx.lineWidth = 3;
-    ctx.setLineDash([8, 8]);
-    ctx.lineDashOffset = dashOffset;
-    ctx.strokeRect(x, y, width, height);
-
-    // Add a label for the current view
-    const viewName = currentLockedView ?
-        (modelConfig[state.currentModel].views[currentLockedView].name || currentLockedView) :
-        'Editing Area';
-
-    // Flip text back to be readable (scale back vertically)
-    ctx.translate(x + width/2, y - 10);
-    ctx.scale(1, -1);
-    ctx.translate(-(x + width/2), -(y - 10));
-    
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-    ctx.strokeStyle = 'rgb(76, 149, 175)';  // Fixed color format for text stroke
+    ctx.strokeStyle = 'rgb(64, 127, 255)'; // Fixed bright blue
     ctx.lineWidth = 2;
-    ctx.font = 'bold 16px Arial';
-    const textWidth = ctx.measureText(viewName).width;
-    const labelX = x + (width - textWidth) / 2;
-    ctx.fillText(viewName, labelX, y - 10);
-    ctx.strokeText(viewName, labelX, y - 10);
+    ctx.setLineDash([5, 5]);
+    ctx.lineDashOffset = (Date.now() / 100) % 10;
+    
+    // Use composite operation that ensures the line is always visible
+    ctx.globalCompositeOperation = 'source-over';
+    
+    // Draw the rectangle
+    ctx.strokeRect(x, y, width, height);
 
     ctx.restore();
 }
@@ -1911,16 +2449,18 @@ export function toggleCameraControls(enabled) {
 
     // Use scene.js's lockCameraToView if available
     import('./scene.js').then(scene => {
-        if (currentLockedView && !enabled) {
-            // If we have a locked view and we're disabling controls, ensure the camera stays locked
-            if (typeof scene.lockCameraToView === 'function') {
-                scene.lockCameraToView(mapViewNameToCameraView(currentLockedView), true);
+        if (typeof scene.lockCameraToView === 'function') {
+            if (enabled) {
+                // If enabling controls, unlock the camera
+                scene.lockCameraToView(null, false);
+            } else {
+                // If disabling controls, lock to current view
+                scene.lockCameraToView(mapViewNameToCameraView(currentLockedView || 'front'), true);
             }
-        } else if (enabled) {
-            // If enabling controls, unlock the camera
-            if (typeof scene.lockCameraToView === 'function') {
-                scene.lockCameraToView(mapViewNameToCameraView(currentLockedView || 'front'), false);
-            }
+        }
+        // Also disable OrbitControls directly
+        if (window.controls) {
+            window.controls.enabled = enabled;
         }
     }).catch(err => {
         console.error('Failed to toggle camera controls:', err);
@@ -1974,9 +2514,6 @@ export function showEditableAreas(show = true) {
 function drawEditableAreas(ctx) {
     if (!canvasData || !ctx) return;
 
-    // Clear any previous outlines
-    ctx.clearRect(0, 0, canvasData.width, canvasData.height);
-
     const views = modelConfig[state.currentModel].views;
     if (!views) return;
 
@@ -1990,42 +2527,23 @@ function drawEditableAreas(ctx) {
         const width = (uvRect.u2 - uvRect.u1) * canvasData.width;
         const height = (uvRect.v2 - uvRect.v1) * canvasData.height;
 
-        // Draw a subtle outline with fixed color (not affected by shirt color)
+        // Draw a subtle outline
         ctx.save();
         
-        // Apply vertical flip transformation for consistency
-        ctx.translate(x + width/2, y + height/2);
-        ctx.scale(1, -1);
-        ctx.translate(-(x + width/2), -(y + height/2));
-        
-        // Use a solid fixed color that won't be affected by shirt color
-        ctx.strokeStyle = 'rgb(64, 127, 255)'; // Fixed bright blue
+        // Set up the style for the border
+        ctx.strokeStyle = 'rgba(33, 150, 243, 0.5)'; // Semi-transparent blue
         ctx.lineWidth = 2;
         ctx.setLineDash([5, 5]);
+        ctx.lineDashOffset = (Date.now() / 100) % 10; // Animated dash
         
-        // Use composite operation that ensures the line is always visible
-        ctx.globalCompositeOperation = 'source-over';
-        
+        // Draw the rectangle
         ctx.strokeRect(x, y, width, height);
-
-        // Add view name label with solid background to ensure visibility
-        const labelText = viewConfig.name || viewName;
         
-        // Flip text back to be readable
-        ctx.translate(x + width/2, y + 15);
-        ctx.scale(1, -1);
-        ctx.translate(-(x + width/2), -(y + 15));
-        
-        ctx.font = '14px Arial';
-        
-        // Draw text background
-        const textWidth = ctx.measureText(labelText).width;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.fillRect(x + 10, y + 6, textWidth + 10, 20);
-        
-        // Draw text on top
-        ctx.fillStyle = 'rgb(0, 85, 255)'; // Fixed blue color for text
-        ctx.fillText(labelText, x + 15, y + 20);
+        // Add a subtle highlight
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([]);
+        ctx.strokeRect(x - 1, y - 1, width + 2, height + 2);
         
         ctx.restore();
     }
@@ -2124,33 +2642,135 @@ function unlockFromView() {
  * @param {Object} intersection - The ray intersection data
  */
 function handleEditableAreaClick(uv, intersection) {
-    // Convert UV to canvas coordinates
     const x = uv.x * canvasData.width;
     const y = uv.y * canvasData.height;
 
-    // Check if we clicked on a transform handle of the selected object
+    // Get the current view from UV coordinates
+    const hitView = detectViewFromUV(uv);
+    if (hitView) {
+        // Update current editable area
+        currentEditableArea = modelConfig[state.currentModel].views[hitView].uvRect;
+        isEditingMode = true;
+        updateShirt3DTexture(); // Update to show the new editable area
+    }
+
+    // First check if we clicked on a transform handle of the selected object
     if (selectedObject) {
-        const handleMode = detectTransformHandleClick();
-        if (handleMode) {
-            transformMode = handleMode;
-            document.body.style.cursor = cursors[handleMode] || cursors.default;
+        const action = detectTransformHandleClick();
+        if (action) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            // Lock t-shirt movement when using any control
+            toggleCameraControls(false);
+
+            switch (action) {
+                case 'move':
+                    if (!selectedObject.isPinned) {
+                        transformMode = 'move';
+                        document.body.style.cursor = cursors.grabbing;
+                    }
+                    break;
+
+                case 'rotate':
+                    if (selectedObject.isDecal) {
+                        transformMode = 'rotate';
+                        document.body.style.cursor = cursors.rotate;
+                        // Initialize rotation tracking
+                        selectedObject._lastRotationAngle = undefined;
+                    }
+                    break;
+
+                case 'scale':
+                    if (!selectedObject.isPinned) {
+                        transformMode = 'scale';
+                        document.body.style.cursor = cursors.scale;
+                    }
+                    break;
+
+                case 'delete':
+                    // Delete the selected object
+                    const index = canvasData.objects.indexOf(selectedObject);
+                    if (index > -1) {
+                        canvasData.objects.splice(index, 1);
+                        selectedObject = null;
+                        transformMode = 'none';
+                        document.body.style.cursor = cursors.default;
+                        toggleCameraControls(true); // Unlock t-shirt movement after deletion
+                        updateShirt3DTexture();
+                    }
+                    break;
+
+                case 'pin':
+                    // Toggle pin state
+                    selectedObject.isPinned = !selectedObject.isPinned;
+                    transformMode = 'none';
+                    document.body.style.cursor = cursors.default;
+                    updateShirt3DTexture();
+                    break;
+
+                case 'duplicate':
+                    // Create a copy of the selected object
+                    const clone = { ...selectedObject };
+                    // Offset the clone slightly
+                    clone.left += 20;
+                    clone.top += 20;
+                    canvasData.objects.push(clone);
+                    selectObject(clone);
+                    transformMode = 'move';
+                    document.body.style.cursor = cursors.grabbing;
+                    break;
+
+                case 'layers':
+                    // Find overlapping objects with improved detection
+                    const overlappingObjects = canvasData.objects.filter(obj => 
+                        obj !== selectedObject && 
+                        obj.isDecal && 
+                        isObjectsOverlapping(selectedObject, obj)
+                    );
+                    
+                    if (overlappingObjects.length > 0) {
+                        // Move selected object to top
+                        const currentIndex = canvasData.objects.indexOf(selectedObject);
+                        if (currentIndex > -1) {
+                            canvasData.objects.splice(currentIndex, 1);
+                            canvasData.objects.push(selectedObject);
+                            updateShirt3DTexture();
+                        }
+                    }
+                    break;
+            }
             return;
         }
     }
 
-    // Try to select an object
-    const objectClicked = detectObjectClick();
-    if (objectClicked) {
-        selectObject(objectClicked);
-        transformMode = 'move';
-        document.body.style.cursor = cursors.move;
+    // If we didn't click a handle, check if we clicked an object
+    const clickedObject = detectObjectClick();
+    
+    if (clickedObject) {
+        // Lock t-shirt movement when selecting an object
+        toggleCameraControls(false);
+        // Allow selecting pinned objects
+        selectObject(clickedObject);
+        if (!clickedObject.isPinned) {
+            transformMode = 'move';
+            document.body.style.cursor = cursors.grabbing;
+        } else {
+            transformMode = 'none';
+            document.body.style.cursor = cursors.default;
+        }
+        // Update texture to show control buttons
+        updateShirt3DTexture();
     } else {
-        // Deselect if clicking on empty area
+        // Clicked empty space
         if (selectedObject) {
             deselectObject();
         }
+        selectedObject = null;
         transformMode = 'none';
-        document.body.style.cursor = cursors.edit;
+        document.body.style.cursor = cursors.default;
+        toggleCameraControls(true); // Unlock t-shirt movement
+        updateShirt3DTexture();
     }
 }
 
@@ -2760,6 +3380,78 @@ export function getLastUsedView() {
     return lastUsedView;
 }
 
+/**
+ * Handle double click events for text editing
+ * @param {MouseEvent} event 
+ */
+function onDoubleClick(event) {
+    if (!selectedObject || selectedObject.type !== 'text') return;
+
+    const overlay = createTextEditOverlay(selectedObject.text, selectedObject.color);
+    document.body.appendChild(overlay);
+
+    const textarea = overlay.querySelector('.text-edit-input');
+    const colorOptions = overlay.querySelectorAll('.color-option');
+    let selectedColor = selectedObject.color;
+
+    // Focus the textarea
+    textarea.focus();
+    textarea.select();
+
+    // Handle color selection
+    colorOptions.forEach(option => {
+        option.addEventListener('click', () => {
+            colorOptions.forEach(opt => opt.classList.remove('active'));
+            option.classList.add('active');
+            selectedColor = option.dataset.color;
+        });
+    });
+
+    // Handle save
+    overlay.querySelector('.text-edit-save').addEventListener('click', () => {
+        const newText = textarea.value.trim();
+        if (newText) {
+            selectedObject.text = newText;
+            selectedObject.color = selectedColor;
+            updateShirt3DTexture();
+        }
+        overlay.remove();
+    });
+
+    // Handle cancel
+    overlay.querySelector('.text-edit-cancel').addEventListener('click', () => {
+        overlay.remove();
+    });
+
+    // Handle enter key
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            const newText = textarea.value.trim();
+            if (newText) {
+                selectedObject.text = newText;
+                selectedObject.color = selectedColor;
+                updateShirt3DTexture();
+            }
+            overlay.remove();
+        }
+    });
+
+    // Handle escape key
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            overlay.remove();
+        }
+    });
+
+    // Handle click outside
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+            overlay.remove();
+        }
+    });
+}
+
 // Export the enhanced 3D editor
 export default {
     init3DEditor,
@@ -2788,3 +3480,45 @@ export default {
     undo,
     redo
 }; 
+
+// Handle adding text from the UI
+async function handleAddText() {
+    try {
+        // Get current view's UV boundaries
+        const viewConfig = modelConfig[state.currentModel].views[state.cameraView];
+        
+        // Show text editor and wait for result
+        const result = await addText();
+        
+        if (result) {
+            // Calculate position in canvas space
+            const left = (viewConfig.uvRect.u1 + viewConfig.uvRect.u2) / 2 * canvasData.width - 100;
+            const top = (viewConfig.uvRect.v1 + viewConfig.uvRect.v2) / 2 * canvasData.height - 20;
+
+            // Create text object
+            const textObj = {
+                type: 'text',
+                text: result.text,
+                left: left,
+                top: top,
+                width: 200,
+                height: 40,
+                fontSize: 30,
+                fontFamily: result.fontFamily || 'Arial',
+                color: result.color,
+                angle: 0,
+                active: false
+            };
+
+            // Add to canvas
+            addObject(textObj);
+            
+            // Update the texture
+            updateShirt3DTexture();
+        }
+    } catch (error) {
+        if (error !== 'cancelled') {
+            console.error('Error adding text:', error);
+        }
+    }
+}

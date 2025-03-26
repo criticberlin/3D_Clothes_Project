@@ -49,33 +49,9 @@ export function initializeTabs() {
 // Setup camera view buttons to show appropriate bounding boxes
 export function setupCameraViewButtons() {
     const viewButtons = document.querySelectorAll('.camera-view-btn');
-    if (!viewButtons.length) return;
 
     viewButtons.forEach(button => {
         // Store reference to original click handler
-        const originalClickHandler = button.onclick;
-
-        // Replace with new handler that also updates bounding boxes
-        button.onclick = function (e) {
-            // Call original handler if it exists
-            if (originalClickHandler) {
-                originalClickHandler.call(this, e);
-            }
-
-            // Get view from data attribute
-            const view = this.dataset.view;
-            if (view) {
-                // Update state
-                updateState({ cameraView: view });
-
-                // Show appropriate bounding boxes for this view
-                showBoundingBoxesForCameraView(view);
-
-                // Update active state on buttons
-                viewButtons.forEach(btn => btn.classList.remove('active'));
-                this.classList.add('active');
-            }
-        };
 
         // Add double-click handler to toggle edit mode
         button.addEventListener('dblclick', function (e) {
@@ -100,43 +76,6 @@ export function setupCameraViewButtons() {
 
                     // Show a helpful tooltip
                     showToast(`Double-click again to exit editing ${view} area`);
-                }
-            });
-        });
-
-        // Add edit button to each view button
-        const editButton = document.createElement('button');
-        editButton.className = 'edit-toggle-btn';
-        editButton.innerHTML = '<i class="fas fa-edit"></i>';
-        editButton.title = `Edit ${button.dataset.view || ''} area`;
-        editButton.setAttribute('aria-label', `Edit ${button.dataset.view || ''} area`);
-
-        // Add the edit button next to the view button
-        button.parentNode.insertBefore(editButton, button.nextSibling);
-
-        // Add click handler for the edit button
-        editButton.addEventListener('click', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-
-            const viewButton = this.previousElementSibling;
-            const view = viewButton.dataset.view;
-            if (!view) return;
-
-            const isCurrentlyEditing = viewButton.classList.contains('editing');
-
-            // Toggle edit mode
-            import('./scene.js').then(scene => {
-                scene.toggleEditorMode(!isCurrentlyEditing, view);
-
-                // If entering edit mode, make sure this view is selected first
-                if (!isCurrentlyEditing) {
-                    // Update active state on buttons
-                    viewButtons.forEach(btn => btn.classList.remove('active'));
-                    viewButton.classList.add('active');
-
-                    // Change to this camera view
-                    scene.changeCameraView(view);
                 }
             });
         });

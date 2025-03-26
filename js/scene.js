@@ -1987,14 +1987,6 @@ export function changeCameraView(view) {
                 // Update state to reflect current view
                 updateState({ cameraView: view });
 
-                // Update the active camera view button in the UI
-                document.querySelectorAll('.camera-view-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                    if (btn.dataset.view === view) {
-                        btn.classList.add('active');
-                    }
-                });
-
                 console.log(`Camera view transition to ${view} complete`);
             }
         }
@@ -2069,25 +2061,6 @@ function setupCameraControls() {
         // Set initial state based on manualRotationActive
         rotateView.classList.toggle('active', manualRotationActive);
     }
-
-    // Camera view buttons
-    const viewButtons = document.querySelectorAll('.camera-view-btn');
-    viewButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            // Only handle click if rotation is not active
-            if (!window.GLOBAL_ROTATION_ENABLED) {
-                // Update active status
-                viewButtons.forEach(btn => btn.classList.remove('active'));
-                button.classList.add('active');
-
-                // Get the view and dispatch event
-                const view = button.dataset.view;
-                if (view) {
-                    window.dispatchEvent(new CustomEvent('camera-view-change', { detail: { view } }));
-                }
-            }
-        });
-    });
 }
 
 // Helper to create camera controls if they don't exist
@@ -2107,7 +2080,7 @@ function ensureCameraControlsExist() {
         }
     }
 
-    // Check if zoom-in button exists, create it if not
+    // Check for zoom and reset buttons and create if missing
     if (!document.getElementById('zoom-in')) {
         console.log('Creating missing zoom-in button');
         const zoomInBtn = document.createElement('button');
@@ -2115,15 +2088,14 @@ function ensureCameraControlsExist() {
         zoomInBtn.className = 'control-btn';
         zoomInBtn.setAttribute('aria-label', 'Zoom In');
         zoomInBtn.setAttribute('title', 'Zoom In');
-
+        
         const icon = document.createElement('i');
         icon.className = 'fas fa-plus';
         zoomInBtn.appendChild(icon);
-
+        
         container.appendChild(zoomInBtn);
     }
 
-    // Check if zoom-out button exists, create it if not
     if (!document.getElementById('zoom-out')) {
         console.log('Creating missing zoom-out button');
         const zoomOutBtn = document.createElement('button');
@@ -2131,15 +2103,14 @@ function ensureCameraControlsExist() {
         zoomOutBtn.className = 'control-btn';
         zoomOutBtn.setAttribute('aria-label', 'Zoom Out');
         zoomOutBtn.setAttribute('title', 'Zoom Out');
-
+        
         const icon = document.createElement('i');
         icon.className = 'fas fa-minus';
         zoomOutBtn.appendChild(icon);
-
+        
         container.appendChild(zoomOutBtn);
     }
 
-    // Check if reset-camera button exists, create it if not
     if (!document.getElementById('reset-camera')) {
         console.log('Creating missing reset-camera button');
         const resetBtn = document.createElement('button');
@@ -2147,15 +2118,14 @@ function ensureCameraControlsExist() {
         resetBtn.className = 'control-btn';
         resetBtn.setAttribute('aria-label', 'Reset Camera');
         resetBtn.setAttribute('title', 'Reset Camera');
-
+        
         const icon = document.createElement('i');
         icon.className = 'fas fa-sync-alt';
         resetBtn.appendChild(icon);
-
+        
         container.appendChild(resetBtn);
     }
 
-    // Check if rotate-view button exists, create it if not
     if (!document.getElementById('rotate-view')) {
         console.log('Creating missing rotate-view button');
         const rotateBtn = document.createElement('button');
@@ -2163,51 +2133,13 @@ function ensureCameraControlsExist() {
         rotateBtn.className = 'control-btn';
         rotateBtn.setAttribute('aria-label', 'Auto Rotate');
         rotateBtn.setAttribute('title', 'Auto Rotate');
-
+        
         const icon = document.createElement('i');
         icon.className = 'fas fa-redo';
         rotateBtn.appendChild(icon);
-
+        
         container.appendChild(rotateBtn);
     }
-
-    // Ensure camera view controls container exists
-    let viewContainer = document.querySelector('.camera-view-controls');
-    if (!viewContainer) {
-        console.log('Creating missing camera view controls container');
-        const canvasContainer = document.querySelector('.canvas-container');
-        if (canvasContainer) {
-            viewContainer = document.createElement('div');
-            viewContainer.className = 'camera-view-controls';
-            canvasContainer.appendChild(viewContainer);
-        } else {
-            return;
-        }
-    }
-
-    // Check for view buttons and create if missing
-    const views = ['front', 'back', 'left', 'right'];
-    views.forEach(view => {
-        const id = `${view}-view`;
-        if (!document.getElementById(id)) {
-            console.log(`Creating missing ${view} view button`);
-            const viewBtn = document.createElement('button');
-            viewBtn.id = id;
-            viewBtn.className = view === 'front' ? 'camera-view-btn active' : 'camera-view-btn';
-            viewBtn.setAttribute('data-view', view);
-            viewBtn.setAttribute('aria-label', `${view.charAt(0).toUpperCase() + view.slice(1)} View`);
-
-            const icon = document.createElement('i');
-            icon.className = 'fas fa-eye';
-            viewBtn.appendChild(icon);
-
-            const span = document.createElement('span');
-            span.textContent = view.charAt(0).toUpperCase() + view.slice(1);
-            viewBtn.appendChild(span);
-
-            viewContainer.appendChild(viewBtn);
-        }
-    });
 }
 
 // ============================================================================
@@ -2545,14 +2477,6 @@ function resetCameraPosition() {
             } else {
                 console.log('Camera reset complete');
                 lastRotationView = 'front';
-
-                // Update the active camera view button in the UI
-                document.querySelectorAll('.camera-view-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                    if (btn.dataset.view === 'front') {
-                        btn.classList.add('active');
-                    }
-                });
 
                 // Update state to reflect front view
                 updateState({ cameraView: 'front' });
@@ -2969,16 +2893,6 @@ export function toggleEditorMode(active, view = null) {
 
     // Notify the system of editor mode change
     updateState({ editorMode: active });
-
-    // Additional UI feedback
-    const viewArea = document.querySelector(`.camera-view-btn[data-view="${currentView}"]`);
-    if (viewArea) {
-        if (active) {
-            viewArea.classList.add('editing');
-        } else {
-            viewArea.classList.remove('editing');
-        }
-    }
 
     // Dispatch event for UI components to respond to editor mode change
     window.dispatchEvent(new CustomEvent('editor-mode-changed', {

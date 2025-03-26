@@ -6,28 +6,233 @@ import {
   addShape as add3DShape,
 } from "./3d-editor.js";
 
-// Global variables
-let currentMode = "select";
-let selectedColor = "#000000";
-let selectedFontSize = 30;
-let editorTools; // Add this variable to store the editor tools container
-let use3DEditor = true; // Flag to determine if we should use the 3D editor
+
 
 /**
- * Initialize the 3D editor mode (no longer initializes a Fabric.js canvas)
- * Kept for backward compatibility
+ * Initialize the 3D editor mode
  */
 export function initFabricCanvas() {
-  // Always use 3D editor
   use3DEditor = true;
-
-  // Setup editor tools for 3D editor only
-  setupEditorTools();
-
-  // Enable 3D editor mode in scene.js
+  setupNewUI();
   updateState({ editorMode: true });
-
   return null;
+}
+
+/**
+ * Setup new simplified UI elements
+ */
+function setupNewUI() {
+  // Create right-side buttons container
+  const rightButtons = document.createElement('div');
+  rightButtons.className = 'right-side-buttons';
+  rightButtons.style.cssText = `
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 1000;
+  `;
+
+  // Add right-side buttons
+  const addPhotoBtn = createButton('Add Photo', 'fa-image', () => {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          // Create a view selection modal
+          const viewSelectionModal = document.createElement('div');
+          viewSelectionModal.className = 'view-selection-modal';
+          viewSelectionModal.innerHTML = `
+            <div class="view-selection-container">
+              <h3>Choose where to add the photo</h3>
+              <div class="view-options">
+                <button class="view-option" data-view="front">
+                  <i class="fas fa-tshirt"></i>
+                  <span>Front</span>
+                </button>
+                <button class="view-option" data-view="back">
+                  <i class="fas fa-tshirt"></i>
+                  <span>Back</span>
+                </button>
+                <button class="view-option" data-view="left">
+                  <i class="fas fa-tshirt"></i>
+                  <span>Left</span>
+                </button>
+                <button class="view-option" data-view="right">
+                  <i class="fas fa-tshirt"></i>
+                  <span>Right</span>
+                </button>
+              </div>
+              <button class="cancel-view-selection">Cancel</button>
+            </div>
+          `;
+          
+          // Style the modal
+          viewSelectionModal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+          `;
+          
+          // Add the modal to the document
+          document.body.appendChild(viewSelectionModal);
+          
+          // Style the container and buttons
+          const styleSheet = document.createElement('style');
+          styleSheet.textContent = `
+            .view-selection-container {
+              background-color: white;
+              border-radius: 8px;
+              padding: 20px;
+              max-width: 90%;
+              width: 400px;
+              text-align: center;
+            }
+            .view-options {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 15px;
+              margin: 20px 0;
+            }
+            .view-option {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              padding: 15px;
+              border: 2px solid #ddd;
+              border-radius: 8px;
+              background-color: #f8f8f8;
+              cursor: pointer;
+              transition: all 0.3s ease;
+            }
+            .view-option:hover {
+              border-color: #007bff;
+              background-color: #e6f2ff;
+            }
+            .view-option i {
+              font-size: 36px;
+              margin-bottom: 8px;
+            }
+            .cancel-view-selection {
+              background-color: #f44336;
+              color: white;
+              border: none;
+              padding: 8px 16px;
+              border-radius: 4px;
+              cursor: pointer;
+              margin-top: 10px;
+            }
+          `;
+          document.head.appendChild(styleSheet);
+          
+          // Handle view option selection
+          const viewOptions = viewSelectionModal.querySelectorAll('.view-option');
+          viewOptions.forEach(option => {
+            option.addEventListener('click', function() {
+              const selectedView = this.dataset.view;
+              
+              // Import and use the 3D editor to:
+              // 1. Change to selected view
+              // 2. Add the image to that view
+              import("./3d-editor.js")
+                .then((editor) => {
+                  // First change the camera view
+                  import("./scene.js")
+                    .then((scene) => {
+                      if (scene.changeCameraView) {
+                        scene.changeCameraView(selectedView);
+                      }
+                      
+                      // Then add the image to the selected view
+                      if (editor.addImage) {
+                        editor.addImage(event.target.result, {
+                          view: selectedView,
+                          center: true
+                        }).then(() => {
+                          showNotification(`Image added to ${selectedView} view`, "success");
+                        });
+                      }
+                    });
+                })
+                .catch(error => {
+                  console.error("Error adding image:", error);
+                  showNotification("Error adding image", "error");
+                });
+              
+              // Remove the modal
+              document.body.removeChild(viewSelectionModal);
+              document.head.removeChild(styleSheet);
+            });
+          });
+          
+          // Handle cancel button
+          const cancelButton = viewSelectionModal.querySelector('.cancel-view-selection');
+          cancelButton.addEventListener('click', function() {
+            document.body.removeChild(viewSelectionModal);
+            document.head.removeChild(styleSheet);
+          });
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    fileInput.click();
+  });
+
+  const addTextBtn = createButton('Add Text', 'fa-font', () => {
+    add3DText();
+  });
+
+  const addShapeBtn = createButton('Add Shape', 'fa-shapes', () => {
+    add3DShape();
+  });
+
+  rightButtons.appendChild(addPhotoBtn);
+  rightButtons.appendChild(addTextBtn);
+  rightButtons.appendChild(addShapeBtn);
+
+  // Add container to document
+  document.body.appendChild(rightButtons);
+}
+
+/**
+ * Create a styled button element
+ */
+function createButton(text, icon, onClick) {
+  const button = document.createElement('button');
+  button.className = 'model-control-btn';
+  button.innerHTML = `<i class="fas ${icon}"></i>`;
+  button.title = text; // Add tooltip
+  button.style.cssText = `
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: background 0.3s ease;
+  `;
+  button.onmouseover = () => button.style.background = 'rgba(0, 0, 0, 0.9)';
+  button.onmouseout = () => button.style.background = 'rgba(0, 0, 0, 0.7)';
+  button.onclick = onClick;
+  return button;
 }
 
 /**
@@ -240,182 +445,17 @@ export function downloadDesign() {
     });
 }
 
-/**
- * Setup editor tools for 3D editing
- */
-function setupEditorTools() {
-  // Create editor tools container if it doesn't exist
-  if (!document.querySelector(".editor-tools")) {
-    editorTools = document.createElement("div");
-    editorTools.className = "editor-tools";
-    editorTools.innerHTML = `
-            <div class="tool-group">
-                <button class="tool-btn" data-tool="select" title="Select"><i class="fas fa-mouse-pointer"></i></button>
-                <button class="tool-btn" data-tool="text" title="Add Text"><i class="fas fa-font"></i></button>
-                <button class="tool-btn" data-tool="image" title="Add Image"><i class="fas fa-image"></i></button>
-                <button class="tool-btn" data-tool="shape" title="Add Shape"><i class="fas fa-shapes"></i></button>
-            </div>
-            <div class="tool-group">
-                <input type="color" id="color-picker" value="${selectedColor}" title="Color">
-                <select id="font-size" title="Size">
-                    <option value="20">20</option>
-                    <option value="24">24</option>
-                    <option value="30" selected>30</option>
-                    <option value="36">36</option>
-                    <option value="48">48</option>
-                    <option value="60">60</option>
-                </select>
-            </div>
-            <div class="tool-group">
-                <button class="tool-btn" data-tool="delete" title="Delete Selected"><i class="fas fa-trash"></i></button>
-                <button class="tool-btn" data-tool="clear" title="Clear All"><i class="fas fa-trash-alt"></i></button>
-            </div>
-        `;
-
-    // Add to document
-    document.body.appendChild(editorTools);
-
-    // Add event listeners
-    setupEditorToolListeners();
-  }
-}
-
-/**
- * Setup event listeners for editor tools
- */
-function setupEditorToolListeners() {
-  if (!editorTools) return;
-
-  // Tool buttons
-  const toolButtons = editorTools.querySelectorAll("[data-tool]");
-  toolButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      // Remove active class from all buttons
-      toolButtons.forEach((btn) => btn.classList.remove("active"));
-      // Add active class to clicked button
-      button.classList.add("active");
-
-      // Set current mode
-      currentMode = button.dataset.tool;
-
-      // Handle tool action
-      handleToolAction(currentMode);
-    });
-  });
-
-  // Color picker
-  const colorPicker = editorTools.querySelector("#color-picker");
-  if (colorPicker) {
-    colorPicker.addEventListener("change", (e) => {
-      selectedColor = e.target.value;
-      setColor(selectedColor);
-    });
-  }
-
-  // Font size
-  const fontSize = editorTools.querySelector("#font-size");
-  if (fontSize) {
-    fontSize.addEventListener("change", (e) => {
-      selectedFontSize = parseInt(e.target.value);
-      updateSelectedObjectProperty("fontSize", selectedFontSize);
-    });
-  }
-}
-
-/**
- * Handle tool action based on selected mode
- * @param {string} tool - The selected tool
- */
-function handleToolAction(tool) {
-  // Handle action in 3D editor
-  switch (tool) {
-    case "select":
-      // Select mode is the default, no action needed
-      break;
-    case "text":
-      // Add text in 3D
-      const text = prompt("Enter text:", "Your text here");
-      if (text) {
-        add3DText(text, {
-          fontSize: selectedFontSize,
-          color: selectedColor,
-        });
-      }
-      break;
-    case "image":
-      // Trigger file input for image upload
-      const fileInput = document.createElement("input");
-      fileInput.type = "file";
-      fileInput.accept = "image/*";
-      fileInput.onchange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = (event) => {
-            addImage(event.target.result);
-          };
-          reader.readAsDataURL(file);
-        }
-      };
-      fileInput.click();
-      break;
-    case "shape":
-      // Show shape options
-      const shape = prompt("Enter shape type (rect, circle):", "rect");
-      if (shape === "rect" || shape === "circle") {
-        add3DShape(shape, {
-          fill: selectedColor,
-        });
-      }
-      break;
-    case "delete":
-      // Handled by 3D editor's keydown event
-      break;
-    case "clear":
-      if (confirm("Are you sure you want to clear all elements?")) {
-        // Import clearCanvas function from 3d-editor
-        import("./3d-editor.js").then((module) => {
-          if (module.clearCanvas) {
-            module.clearCanvas();
-          }
-        });
-      }
-      break;
-  }
-}
-
-/**
- * Update property of selected object
- * @param {string} property - The property to update
- * @param {any} value - The new value
- */
-function updateSelectedObjectProperty(property, value) {
-  // This will be handled by the 3D editor internally
-  import("./3d-editor.js")
-    .then((module) => {
-      if (module.updateSelectedObjectProperty) {
-        module.updateSelectedObjectProperty(property, value);
-      }
-    })
-    .catch((error) => {
-      console.error("Error updating property in 3D editor:", error);
-    });
-}
-
 // Initialize 3D editor when the window loads
 window.addEventListener("load", () => {
   console.log("Window loaded - initializing 3D editor");
 
-  // Initialize the 3D editor
   try {
-    // Call initFabricCanvas which now only sets up 3D editor
     initFabricCanvas();
     console.log("3D editor initialized successfully");
   } catch (error) {
     console.error("Error initializing 3D editor:", error);
   }
 
-  // Apply initial design if needed
   if (window.initialDesign) {
     console.log("Applying initial design");
     setTimeout(() => {
