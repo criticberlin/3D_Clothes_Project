@@ -9,7 +9,6 @@ import { showToast } from './ui.js';
 import {
     addImage,
     clearObjectsByView,
-    toggleDragAndDrop,
     toggleSmartPlacement,
     toggleAutoAdjustment
 } from './3d-editor.js';
@@ -149,7 +148,6 @@ export function initTextureMapper(modelType = 'tshirt') {
     console.log('Texture mapper initialized - 3D Editor Mode');
 
     // Enable advanced features by default
-    toggleDragAndDrop(true);
     toggleSmartPlacement(true);
     toggleAutoAdjustment(true);
 

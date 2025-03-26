@@ -4,9 +4,33 @@ import { state, updateState, subscribe } from './state.js';
 import { Logger, Performance } from './utils.js';
 import { initFabricCanvas} from './fabric-integration.js';
 import { initColorManager } from './color-manager.js';
+import { addText, addShape } from './3d-editor.js';
 
-// Initialize the application
-document.addEventListener('DOMContentLoaded', () => {
+// Expose essential functions to window object for UI integration
+window.add3DText = addText;
+window.addShape = addShape;
+
+// Update the main container structure for our new UI layout
+function updateLayoutForFloatingUI() {
+    const mainContainer = document.querySelector('.main-container');
+    if (mainContainer) {
+        // Remove the customization-panel class from any elements
+        const oldPanel = document.querySelector('.customization-panel');
+        if (oldPanel) {
+            oldPanel.remove();
+        }
+        
+        // Ensure canvas container takes full width
+        const canvasContainer = document.querySelector('.canvas-container');
+        if (canvasContainer) {
+            canvasContainer.style.flex = '1';
+            canvasContainer.style.width = '100%';
+        }
+    }
+}
+
+// Add window aliases for key objects
+window.addEventListener('DOMContentLoaded', () => {
     // Start measuring initialization time
     Performance.start('app-initialization');
 
@@ -63,8 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // List essential elements
         const essentialElements = [
             document.querySelector('.app'),
-            document.querySelector('.canvas-container'),
-            document.querySelector('.customization-panel')
+            document.querySelector('.canvas-container')
         ];
 
         // Check if all essential elements exist
@@ -77,6 +100,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return; // Exit if elements aren't available yet
         }
 
+        // Update the layout for our new floating UI
+        updateLayoutForFloatingUI();
+        
         // Set default state (match original project)
         updateState({
             intro: true,
@@ -87,7 +113,6 @@ document.addEventListener('DOMContentLoaded', () => {
             cameraView: 'front', // Default camera view
             autoRotate: false, // Auto-rotation disabled by default
             darkMode: true, // Default to dark mode
-            textureStyle: 'plain', // Default texture style
             autoApplyDesign: true, // Automatically apply design changes to the shirt
             editorMode: true // Default to editor mode
         });
@@ -101,14 +126,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Initialize the 3D scene
         setupScene().then(() => {
             Logger.info('Scene loaded successfully');
-
-            // Initialize 3D editor (previously Fabric.js integration)
-            window.addEventListener('load', () => {
-                // Initialize 3D editor
-                initFabricCanvas();
-
-                Logger.log('3D editor initialized');
-            });
 
             // Connect fabric type selection
             subscribe('fabricType', (fabricType) => {
@@ -128,6 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setupCameraViewButtons();
         setupAIPicker();
         setupMobileUI();
+        initializeFloatingUI();
 
         // Set up download button
         const downloadBtn = document.getElementById('download-btn');
@@ -179,6 +197,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// Initialize 3D editor when the window loads
+window.addEventListener('load', () => {
+    console.log("Window loaded - initializing 3D editor");
+    try {
+        initFabricCanvas();
+        console.log("3D editor initialized successfully");
+    } catch (error) {
+        console.error("Error initializing 3D editor:", error);
+    }
+});
+
 // Welcome animation for tabs and sections
 function animateWelcome() {
     const elements = [
@@ -191,13 +220,11 @@ function animateWelcome() {
     elements.forEach((selector, index) => {
         const element = document.querySelector(selector);
         if (element) {
-            element.style.opacity = '0';
-            element.style.transform = 'translateY(20px)';
-            element.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-
+            // Add a utility class for animations instead of inline styles
+            element.classList.add('animate-element');
+            
             setTimeout(() => {
-                element.style.opacity = '1';
-                element.style.transform = 'translateY(0)';
+                element.classList.add('animate-visible');
             }, 100 + (index * 100));
         }
     });
@@ -285,10 +312,6 @@ function setupModelSelector() {
     });
 }
 
-
-
-
-
 // Setup filter buttons
 const filterButtons = document.querySelectorAll('.filter-btn[data-filter]');
 filterButtons.forEach(btn => {
@@ -364,15 +387,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!loadingMessage) {
             loadingMessage = document.createElement('div');
             loadingMessage.id = 'loading-message';
-            loadingMessage.style.position = 'fixed';
-            loadingMessage.style.top = '50%';
-            loadingMessage.style.left = '50%';
-            loadingMessage.style.transform = 'translate(-50%, -50%)';
-            loadingMessage.style.background = 'rgba(0, 0, 0, 0.7)';
-            loadingMessage.style.color = 'white';
-            loadingMessage.style.padding = '15px';
-            loadingMessage.style.borderRadius = '5px';
-            loadingMessage.style.zIndex = '9999';
+            loadingMessage.classList.add('error-message');
             document.body.appendChild(loadingMessage);
         }
         
@@ -413,15 +428,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!loadingMessage) {
             loadingMessage = document.createElement('div');
             loadingMessage.id = 'loading-message';
-            loadingMessage.style.position = 'fixed';
-            loadingMessage.style.top = '50%';
-            loadingMessage.style.left = '50%';
-            loadingMessage.style.transform = 'translate(-50%, -50%)';
-            loadingMessage.style.background = 'rgba(0, 0, 0, 0.7)';
-            loadingMessage.style.color = 'white';
-            loadingMessage.style.padding = '15px';
-            loadingMessage.style.borderRadius = '5px';
-            loadingMessage.style.zIndex = '9999';
+            loadingMessage.classList.add('error-message');
             document.body.appendChild(loadingMessage);
         }
         
@@ -503,16 +510,16 @@ function setupDirectThemeToggle() {
         // Update UI with a smooth transition
         document.documentElement.classList.toggle('light-theme', !newDarkMode);
 
-        // Update button icon with a smooth transition
-        newThemeToggle.style.transition = 'transform 0.3s ease, background-color 0.3s ease';
-        newThemeToggle.style.transform = 'rotate(180deg)';
-
+        // Update button icon with animation
+        newThemeToggle.classList.add('rotating');
+        
         setTimeout(() => {
             newThemeToggle.innerHTML = newDarkMode
                 ? '<i class="fas fa-sun"></i>'
                 : '<i class="fas fa-moon"></i>';
-
-            newThemeToggle.style.transform = 'rotate(0deg)';
+            
+            // Remove the rotation class after the icon has changed
+            newThemeToggle.classList.remove('rotating');
         }, 150);
 
         // Update 3D scene background
@@ -539,11 +546,11 @@ function setupEditorModeToggle() {
         const editorControls = document.querySelectorAll('.editor-controls');
 
         standardControls.forEach(el => {
-            el.style.display = isEditorMode ? 'none' : 'flex';
+            el.classList.toggle('hidden', isEditorMode);
         });
 
         editorControls.forEach(el => {
-            el.style.display = isEditorMode ? 'flex' : 'none';
+            el.classList.toggle('hidden', !isEditorMode);
         });
 
         // Toggle editor mode in scene.js
@@ -583,177 +590,4 @@ function setupEditorModeToggle() {
 
     // Initialize with current state
     updateState({ editorMode: state.editorMode || true });
-}
-
-// Add window aliases for key objects
-window.addEventListener('DOMContentLoaded', () => {
-    // Start measuring initialization time
-    Performance.start('app-initialization');
-
-    Logger.info('Initializing 3D Shirt Studio...');
-
-    // Detect and handle mobile devices
-    const isMobile = window.innerWidth < 768;
-    if (isMobile) {
-        document.body.classList.add('mobile');
-    }
-
-    // Add direct event listeners for zoom buttons as a fail-safe
-    setTimeout(() => {
-        Logger.info('Setting up fail-safe zoom button handlers');
-
-        const zoomInBtn = document.getElementById('zoom-in');
-        const zoomOutBtn = document.getElementById('zoom-out');
-
-        if (zoomInBtn) {
-            zoomInBtn.addEventListener('click', function () {
-                Logger.info('Zoom in clicked from fail-safe handler');
-                // Try the window method first
-                if (window.directZoomCamera) {
-                    window.directZoomCamera('in');
-                }
-                // If that fails, try to dispatch the event manually
-                else {
-                    window.dispatchEvent(new CustomEvent('camera-zoom', {
-                        detail: { direction: 'in' }
-                    }));
-                }
-            });
-        }
-
-        if (zoomOutBtn) {
-            zoomOutBtn.addEventListener('click', function () {
-                Logger.info('Zoom out clicked from fail-safe handler');
-                // Try the window method first
-                if (window.directZoomCamera) {
-                    window.directZoomCamera('out');
-                }
-                // If that fails, try to dispatch the event manually
-                else {
-                    window.dispatchEvent(new CustomEvent('camera-zoom', {
-                        detail: { direction: 'out' }
-                    }));
-                }
-            });
-        }
-    }, 500);
-
-    // Function to check if DOM elements are ready
-    function checkDOMElements() {
-        // List essential elements
-        const essentialElements = [
-            document.querySelector('.app'),
-            document.querySelector('.canvas-container'),
-            document.querySelector('.customization-panel')
-        ];
-
-        // Check if all essential elements exist
-        return essentialElements.every(el => el !== null);
-    }
-
-    // Main initialization function
-    function initializeApp() {
-        if (!checkDOMElements()) {
-            return; // Exit if elements aren't available yet
-        }
-
-        // Set default state (match original project)
-        updateState({
-            intro: true,
-            isFullTexture: false,
-            fullDecal: null,
-            stylish: false, // For the toggle button
-            currentModel: 'tshirt', // Default model is t-shirt
-            cameraView: 'front', // Default camera view
-            autoRotate: false, // Auto-rotation disabled by default
-            darkMode: true, // Default to dark mode
-            autoApplyDesign: true, // Automatically apply design changes to the shirt
-            editorMode: true // Default to editor mode
-        });
-
-        // Set up theme toggle directly here instead of relying on other functions
-        setupDirectThemeToggle();
-
-        // Set up the 3D editor mode toggle
-        setupEditorModeToggle();
-
-        // Initialize the 3D scene
-        setupScene().then(() => {
-            Logger.info('Scene loaded successfully');
-
-            // Initialize 3D editor (previously Fabric.js integration)
-            window.addEventListener('load', () => {
-                // Initialize 3D editor
-                initFabricCanvas();
-
-                Logger.log('3D editor initialized');
-            });
-
-            // Connect fabric type selection
-            subscribe('fabricType', (fabricType) => {
-                // Update the 3D model material only
-                setFabricType(fabricType);
-            });
-
-            // Set up fabric type selector
-            setupFabricTypeSelector();
-        }).catch(error => {
-            Logger.error('Error setting up scene:', error);
-        });
-
-        // Initialize tabs, file picker, and camera buttons
-        initializeTabs();
-        setupFilePicker();
-        setupCameraViewButtons();
-        setupAIPicker();
-        setupMobileUI();
-
-        // Set up download button
-        const downloadBtn = document.getElementById('download-btn');
-        if (downloadBtn) {
-            downloadBtn.addEventListener('click', downloadCanvas);
-        }
-
-        // Set up auto-rotate toggle
-        const autoRotateToggle = document.getElementById('auto-rotate-toggle');
-        if (autoRotateToggle) {
-            autoRotateToggle.addEventListener('change', (e) => {
-                toggleAutoRotate(e.target.checked);
-                updateState({ autoRotate: e.target.checked });
-            });
-        }
-
-        // Connect rotation control based on state
-        subscribe('autoRotate', (autoRotate) => {
-            toggleAutoRotate(autoRotate);
-            // Update checkbox if it exists
-            const checkbox = document.getElementById('auto-rotate-toggle');
-            if (checkbox) checkbox.checked = autoRotate;
-        });
-
-        // Set up model selector
-        setupModelSelector();
-        
-        // Initialize color manager
-        // We'll delay initializing the color manager until after a delay to ensure model is loaded
-        setTimeout(() => {
-            console.log("Delayed initialization of color manager to ensure model is loaded");
-            initColorManager();
-        }, 2000); // Wait for scene and model to be fully loaded
-
-        // Welcome animation
-        setTimeout(animateWelcome, 500);
-
-        // End performance measurement
-        Performance.end('app-initialization');
-        console.log('Initialization time:', Performance.getTime('app-initialization') + 'ms');
-    }
-
-    // Try to initialize, or wait for DOM to be more ready
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        initializeApp();
-    } else {
-        // Fallback if DOMContentLoaded might have already fired
-        window.addEventListener('load', initializeApp);
-    }
-}); 
+} 

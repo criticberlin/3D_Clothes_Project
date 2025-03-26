@@ -7,11 +7,10 @@
 		<!-- Empty favicon to prevent 404 requests -->
 		<link
 			rel="icon"
-			href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+			href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
 			type="image/x-icon"
 		/>
 		<link rel="stylesheet" href="css/style.css" />
-		<link rel="stylesheet" href="css/3d-editor.css" />
 		<link
 			rel="stylesheet"
 			href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
@@ -120,9 +119,6 @@
 					>
 						<i class="fas fa-sun"></i>
 					</button>
-					<button class="menu-toggle" aria-label="Toggle Menu">
-						<i class="fas fa-sliders-h"></i>
-					</button>
 				</div>
 			</header>
 
@@ -187,20 +183,293 @@
 						</button>
 					</div>
 
-					<!-- Editor Controls -->
-					<div class="editor-controls">
-						<button class="control-button" id="add-text-btn" data-action="add-text">
+					<!-- New Floating Canvas Controls -->
+					<div class="floating-controls">
+						<!-- Model Selection Button -->
+						<button class="floating-btn" id="model-selector-btn">
+							<i class="fas fa-tshirt"></i>
+							<span>Choose Model</span>
+						</button>
+						
+						<!-- Color Selection Button -->
+						<button class="floating-btn" id="color-selector-btn">
+							<i class="fas fa-palette"></i>
+							<span>Change Color</span>
+						</button>
+						
+						<!-- Photo Upload Button -->
+						<button class="floating-btn" id="photo-upload-btn">
+							<i class="fas fa-image"></i>
+							<span>Add Photo</span>
+						</button>
+						
+						<!-- Text Upload Button -->
+						<button class="floating-btn" id="text-upload-btn">
 							<i class="fas fa-font"></i>
 							<span>Add Text</span>
 						</button>
-						<button class="control-button" data-action="add-image">
-							<i class="fas fa-image"></i>
-							<span>Add Image</span>
-						</button>
-						<button class="control-button" data-action="add-shape">
+						
+						<!-- Shape Upload Button -->
+						<button class="floating-btn" id="shape-upload-btn">
 							<i class="fas fa-shapes"></i>
 							<span>Add Shape</span>
 						</button>
+						
+						<!-- AI Generator Button -->
+						<button class="floating-btn" id="ai-generator-btn">
+							<i class="fas fa-magic"></i>
+							<span>AI Design</span>
+						</button>
+						
+						<!-- Download Button -->
+						<button class="floating-btn" id="download-btn">
+							<i class="fas fa-download"></i>
+							<span>Save</span>
+						</button>
+					</div>
+					
+					<!-- Floating Panels - Each panel corresponds to a floating button -->
+					<!-- Model Selection Panel -->
+					<div class="floating-panel" id="model-panel">
+						<div class="panel-header">
+							<h3>Choose Model Type</h3>
+							<button class="panel-close" aria-label="Close Panel">
+								<i class="fas fa-times"></i>
+							</button>
+						</div>
+						<div class="panel-content">
+							<div class="model-options">
+								<label class="model-option">
+									<input
+										type="radio"
+										name="model-type"
+										value="tshirt"
+										checked
+									/>
+									<span class="model-thumbnail tshirt-thumb">
+										<i class="fas fa-tshirt"></i>
+										<span>T-Shirt</span>
+									</span>
+								</label>
+								<label class="model-option">
+									<input type="radio" name="model-type" value="hoodie" />
+									<span class="model-thumbnail hoodie-thumb">
+										<i class="fas fa-mitten"></i>
+										<span>Hoodie</span>
+									</span>
+								</label>
+							</div>
+						</div>
+					</div>
+					
+					<!-- Color Selection Panel -->
+					<div class="floating-panel" id="color-panel">
+						<div class="panel-header">
+							<h3>Change T-Shirt Color</h3>
+							<button class="panel-close" aria-label="Close Panel">
+								<i class="fas fa-times"></i>
+							</button>
+						</div>
+						<div class="panel-content">
+							<!-- Color Wheel -->
+							<div class="color-wheel-container">
+								<div class="color-wheel-wrapper">
+									<canvas id="color-wheel" width="200" height="200"></canvas>
+								</div>
+								<div class="color-info">
+									<div class="color-name" id="color-name">White</div>
+									<div class="color-code" id="color-hex">#FFFFFF</div>
+								</div>
+							</div>
+							
+							<!-- Preset Colors -->
+							<div class="preset-colors">
+								<h4>Preset Colors</h4>
+								<div class="colors">
+									<button class="color-btn active" data-color="#FFFFFF" style="background-color: #FFFFFF;" title="White"></button>
+									<button class="color-btn" data-color="#000000" style="background-color: #000000;" title="Black"></button>
+									<button class="color-btn" data-color="#4A4A4A" style="background-color: #4A4A4A;" title="Charcoal"></button>
+									<button class="color-btn" data-color="#162955" style="background-color: #162955;" title="Navy Blue"></button>
+									<button class="color-btn" data-color="#E1C699" style="background-color: #E1C699;" title="Beige"></button>
+									<button class="color-btn" data-color="#556B2F" style="background-color: #556B2F;" title="Olive Green"></button>
+									<button class="color-btn" data-color="#654321" style="background-color: #654321;" title="Brown"></button>
+									<button class="color-btn" data-color="#800020" style="background-color: #800020;" title="Burgundy"></button>
+								</div>
+							</div>
+						</div>
+					</div>
+					
+					<!-- Photo Upload Panel -->
+					<div class="floating-panel" id="photo-panel">
+						<div class="panel-header">
+							<h3>Add Photo</h3>
+							<button class="panel-close" aria-label="Close Panel">
+								<i class="fas fa-times"></i>
+							</button>
+						</div>
+						<div class="panel-content">
+							<div class="section-title">
+								<h3>Upload an Image</h3>
+								<p>Add your own image to the design</p>
+							</div>
+							<div class="drag-area">
+								<div class="icon"><i class="fas fa-cloud-upload-alt"></i></div>
+								<p>Drag & Drop to Upload File</p>
+								<p>OR</p>
+								<button class="upload-button">Browse Files</button>
+								<input type="file" id="file-upload" accept="image/*" hidden>
+							</div>
+						</div>
+					</div>
+					
+					<!-- Text Upload Panel -->
+					<div class="floating-panel" id="text-panel">
+						<div class="panel-header">
+							<h3>Add Text</h3>
+							<button class="panel-close" aria-label="Close Panel">
+								<i class="fas fa-times"></i>
+							</button>
+						</div>
+						<div class="panel-content">
+							<div class="section-title">
+								<h3>Add Text to Design</h3>
+								<p>Customize your text style</p>
+							</div>
+							<div class="text-edit-options">
+								<input type="text" class="text-edit-input" placeholder="Enter your text here" />
+								<div class="font-select-container">
+									<label for="font-select">Font</label>
+									<select id="font-select" class="font-select">
+										<option value="Arial">Arial</option>
+										<option value="Verdana">Verdana</option>
+										<option value="Helvetica">Helvetica</option>
+										<option value="Times New Roman">Times New Roman</option>
+										<option value="Courier New">Courier New</option>
+									</select>
+								</div>
+								<div class="text-edit-colors">
+									<div class="color-option active" style="background-color: #000000" data-color="#000000"></div>
+									<div class="color-option" style="background-color: #FFFFFF" data-color="#FFFFFF"></div>
+									<div class="color-option" style="background-color: #FF0000" data-color="#FF0000"></div>
+									<div class="color-option" style="background-color: #00FF00" data-color="#00FF00"></div>
+									<div class="color-option" style="background-color: #0000FF" data-color="#0000FF"></div>
+									<div class="color-option" style="background-color: #FFFF00" data-color="#FFFF00"></div>
+								</div>
+								<div class="text-edit-buttons">
+									<button class="text-edit-cancel">Cancel</button>
+									<button class="text-edit-save">Add Text</button>
+								</div>
+							</div>
+						</div>
+					</div>
+					
+					<!-- Shape Upload Panel -->
+					<div class="floating-panel" id="shape-panel">
+						<div class="panel-header">
+							<h3>Add Shape</h3>
+							<button class="panel-close" aria-label="Close Panel">
+								<i class="fas fa-times"></i>
+							</button>
+						</div>
+						<div class="panel-content">
+							<div class="section-title">
+								<h3>Add Shape to Design</h3>
+								<p>Choose a shape and customize its appearance</p>
+							</div>
+							<div class="text-edit-options">
+								<div class="shape-options">
+									<div class="shape-option active" data-shape="rectangle">
+										<i class="fas fa-square"></i>
+										<span>Rectangle</span>
+									</div>
+									<div class="shape-option" data-shape="circle">
+										<i class="fas fa-circle"></i>
+										<span>Circle</span>
+									</div>
+									<div class="shape-option" data-shape="triangle">
+										<i class="fas fa-triangle"></i>
+										<span>Triangle</span>
+									</div>
+									<div class="shape-option" data-shape="star">
+										<i class="fas fa-star"></i>
+										<span>Star</span>
+									</div>
+								</div>
+								<div class="text-edit-colors">
+									<div class="color-option active" style="background-color: #000000" data-color="#000000"></div>
+									<div class="color-option" style="background-color: #FFFFFF" data-color="#FFFFFF"></div>
+									<div class="color-option" style="background-color: #FF0000" data-color="#FF0000"></div>
+									<div class="color-option" style="background-color: #00FF00" data-color="#00FF00"></div>
+									<div class="color-option" style="background-color: #0000FF" data-color="#0000FF"></div>
+									<div class="color-option" style="background-color: #FFFF00" data-color="#FFFF00"></div>
+								</div>
+							</div>
+							<div class="text-edit-buttons">
+								<button class="text-edit-cancel">Cancel</button>
+								<button class="text-edit-save">Add Shape</button>
+							</div>
+						</div>
+					</div>
+					
+					<!-- AI Design Panel -->
+					<div class="floating-panel" id="ai-panel">
+						<div class="panel-header">
+							<h3>AI Design Generator</h3>
+							<button class="panel-close" aria-label="Close Panel">
+								<i class="fas fa-times"></i>
+							</button>
+						</div>
+						<div class="panel-content">
+							<div class="section-title">
+								<h3>Create unique designs with AI</h3>
+								<p>Describe what you'd like to generate</p>
+							</div>
+
+							<div class="ai-input-container">
+								<textarea
+									id="ai-prompt"
+									placeholder="Describe your design idea... (e.g. 'A cosmic astronaut floating in space with stars and nebulae')"
+									aria-label="AI Prompt"
+								></textarea>
+								<button id="ai-generate" class="button primary">
+									<i class="fas fa-wand-magic-sparkles"></i>
+									Generate
+								</button>
+							</div>
+
+							<div class="ai-preview">
+								<div class="empty-state">
+									<i class="fas fa-robot"></i>
+									<p>AI generated designs will appear here</p>
+								</div>
+							</div>
+						</div>
+					</div>
+					
+					<!-- Download Panel -->
+					<div class="floating-panel" id="download-panel">
+						<div class="panel-header">
+							<h3>Save Your Design</h3>
+							<button class="panel-close" aria-label="Close Panel">
+								<i class="fas fa-times"></i>
+							</button>
+						</div>
+						<div class="panel-content">
+							<div class="download-options">
+								<button id="take-photo" class="button primary">
+									<i class="fas fa-camera"></i>
+									Take Photo
+								</button>
+								<button id="download-model" class="button primary">
+									<i class="fas fa-download"></i>
+									Download 3D Model
+								</button>
+								<button id="reset" class="button secondary">
+									<i class="fas fa-undo"></i>
+									Reset Design
+								</button>
+							</div>
+						</div>
 					</div>
 
 					<!-- Loading Overlay -->
@@ -209,174 +478,8 @@
 						<p id="loading-message">Loading 3D model...</p>
 					</div>
 				</div>
-
-				<!-- Customization Panel -->
-				<div class="customization-panel">
-					<!-- Panel Header with Close Button for Mobile -->
-					<div class="panel-header">
-						<h2>Customize Your Shirt</h2>
-						<button class="panel-close" aria-label="Close Panel">
-							<i class="fas fa-times"></i>
-						</button>
-					</div>
-
-					<!-- Panel Content -->
-					<div class="panel-content">
-						<!-- Model Selection Section -->
-						<div class="customization-section">
-							<div class="section-header">
-								<i class="fas fa-tshirt"></i>
-								<h3>Choose Model Type</h3>
-							</div>
-
-							<div class="model-selector">
-								<div class="model-options">
-									<label class="model-option">
-										<input
-											type="radio"
-											name="model-type"
-											value="tshirt"
-											checked
-										/>
-										<span class="model-thumbnail tshirt-thumb">
-											<i class="fas fa-tshirt"></i>
-											<span>T-Shirt</span>
-										</span>
-									</label>
-									<label class="model-option">
-										<input type="radio" name="model-type" value="hoodie" />
-										<span class="model-thumbnail hoodie-thumb">
-											<i class="fas fa-mitten"></i>
-											<span>Hoodie</span>
-										</span>
-									</label>
-								</div>
-							</div>
-						</div>
-
-						<div class="section-divider"></div>
-
-						<!-- Colors Section -->
-						<div class="customization-section">
-							<div class="section-header">
-								<i class="fas fa-palette"></i>
-								<h3>Colors</h3>
-							</div>
-							
-							<div class="color-section">
-								<!-- Color Wheel -->
-								<div class="color-wheel-container">
-									<div class="color-wheel-wrapper">
-										<canvas id="color-wheel" width="200" height="200"></canvas>
-									</div>
-									<div class="color-info">
-										<div class="color-name" id="color-name">White</div>
-										<div class="color-code" id="color-hex">#FFFFFF</div>
-									</div>
-								</div>
-								
-								<!-- Preset Colors -->
-								<div class="preset-colors">
-									<h4>Preset Colors</h4>
-									<div class="colors">
-										<button class="color-btn active" data-color="#FFFFFF" style="background-color: #FFFFFF;" title="White"></button>
-										<button class="color-btn" data-color="#000000" style="background-color: #000000;" title="Black"></button>
-										<button class="color-btn" data-color="#4A4A4A" style="background-color: #4A4A4A;" title="Charcoal"></button>
-										<button class="color-btn" data-color="#162955" style="background-color: #162955;" title="Navy Blue"></button>
-										<button class="color-btn" data-color="#E1C699" style="background-color: #E1C699;" title="Beige"></button>
-										<button class="color-btn" data-color="#556B2F" style="background-color: #556B2F;" title="Olive Green"></button>
-										<button class="color-btn" data-color="#654321" style="background-color: #654321;" title="Brown"></button>
-										<button class="color-btn" data-color="#800020" style="background-color: #800020;" title="Burgundy"></button>
-									</div>
-								</div>
-							</div>
-						</div>
-
-						<div class="section-divider"></div>
-
-						<!-- Design Options Section -->
-						<div class="customization-section">
-							<div class="section-header">
-								<i class="fas fa-palette"></i>
-								<h3>Design Options</h3>
-							</div>
-
-							<!-- Tab Navigation -->
-							<div class="tab-navigation">
-								<button
-									class="tab-btn active"
-									data-tab="ai"
-									aria-label="AI Design Tab"
-								>
-									<i class="fas fa-magic"></i>
-									<span>AI Design</span>
-								</button>
-							</div>
-
-							<!-- Tab Content -->
-							<div class="tab-content">
-								<!-- Hidden file input to maintain upload functionality -->
-								<input
-									type="file"
-									accept="image/*"
-									id="file-upload"
-									aria-label="File Upload"
-									style="display: none"
-								/>
-
-								<!-- AI Generator -->
-								<div id="ai-picker" class="tab-panel active">
-									<div class="section-title">
-										<h3>AI Design Generator</h3>
-										<p>Create unique designs with AI</p>
-									</div>
-
-									<div class="ai-input-container">
-										<textarea
-											id="ai-prompt"
-											placeholder="Describe your design idea... (e.g. 'A cosmic astronaut floating in space with stars and nebulae')"
-											aria-label="AI Prompt"
-										></textarea>
-										<button id="ai-generate" class="button primary">
-											<i class="fas fa-wand-magic-sparkles"></i>
-											Generate
-										</button>
-									</div>
-
-									<div class="ai-preview">
-										<div class="empty-state">
-											<i class="fas fa-robot"></i>
-											<p>AI generated designs will appear here</p>
-										</div>
-									</div>
-								</div>
-							</div>
-						</div>
-
-						<div class="section-divider"></div>
-
-						<!-- Action Buttons Section -->
-						<div class="customization-section">
-							<div class="section-header">
-								<i class="fas fa-cogs"></i>
-								<h3>Actions</h3>
-							</div>
-
-							<div class="action-buttons">
-								<button id="download" class="button primary">
-									<i class="fas fa-download"></i>
-									Download
-								</button>
-								<button id="reset" class="button secondary">
-									<i class="fas fa-undo"></i>
-									Reset
-								</button>
-							</div>
-						</div>
-					</div>
-				</div>
 			</div>
-
+			
 			<!-- Bottom Action Bar for Mobile -->
 			<div class="mobile-action-bar">
 				<button id="mobile-color" class="action-btn active">

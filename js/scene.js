@@ -371,7 +371,7 @@ export function setupScene() {
                     // Remove loading overlay after scene is fully set up
                     const loadingOverlay = document.querySelector('.loading-overlay');
                     if (loadingOverlay) {
-                        loadingOverlay.style.display = 'none';
+                        loadingOverlay.classList.add('hidden');
                     } else {
                         console.warn("Loading overlay element not found in the DOM");
                     }
@@ -399,31 +399,36 @@ export function setupScene() {
 
 // Helper to ensure loading overlay exists
 function ensureLoadingOverlayExists() {
-    if (!document.querySelector('.loading-overlay')) {
-        console.log('Creating missing loading overlay element');
-        const container = document.querySelector('.canvas-container');
-        if (container) {
-            const loadingOverlay = document.createElement('div');
-            loadingOverlay.className = 'loading-overlay';
+    const loadingOverlay = document.querySelector('.loading-overlay');
+    if (!loadingOverlay) {
+        const overlay = document.createElement('div');
+        overlay.className = 'loading-overlay';
 
-            // Create spinner
-            const spinner = document.createElement('div');
-            spinner.className = 'spinner';
-            loadingOverlay.appendChild(spinner);
+        const spinner = document.createElement('div');
+        spinner.className = 'spinner';
+        overlay.appendChild(spinner);
 
-            // Create loading text
-            const loadingText = document.createElement('p');
-            loadingText.textContent = 'Loading 3D model...';
-            loadingOverlay.appendChild(loadingText);
+        const message = document.createElement('p');
+        message.id = 'loading-message';
+        message.className = 'error-message';
+        message.textContent = 'Loading 3D model...';
+        overlay.appendChild(message);
 
-            container.appendChild(loadingOverlay);
-        } else {
-            console.error('Canvas container not found, cannot create loading overlay');
-        }
+        document.body.appendChild(overlay);
     }
 }
 
 function initializeScene() {
+    const canvasContainer = document.querySelector('.canvas-container');
+    if (canvasContainer) {
+        canvasContainer.classList.add('full-width');
+    }
+
+    const themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle) {
+        themeToggle.classList.add('rotating');
+    }
+
     scene = new THREE.Scene();
 
     // Initialize scene userData
@@ -3012,3 +3017,16 @@ export function isCameraLocked() {
 export function getLockedCameraView() {
     return lockedCameraView;
 }
+
+// Expose loadModel function to window
+window.loadModel = function (modelType) {
+    console.log(`Loading model via window.loadModel: ${modelType}`);
+    const modelPath = modelType === 'hoodie' ? './models/hoodie.glb' : './models/tshirt.glb';
+    return loadModel(modelPath);
+};
+
+// Expose downloadCanvas function to window
+window.exportScene = function() {
+    console.log('Exporting scene via window.exportScene');
+    downloadCanvas();
+};

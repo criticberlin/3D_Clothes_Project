@@ -125,9 +125,6 @@ export function init3DEditor(threeScene, threeCamera, threeRenderer, targetMesh)
     // Setup event listeners for 3D interaction
     setupEventListeners();
 
-    // Setup drag and drop directly on the 3D view
-    setupDragAndDropOn3DView();
-
     // Initial texture update
     updateShirt3DTexture();
 
@@ -1764,15 +1761,29 @@ const AVAILABLE_FONTS = [
 ];
 
 function createTextEditOverlay(existingText = '', existingColor = '#000000', existingFont = 'Arial') {
-    const overlay = document.createElement('div');
-    overlay.className = 'text-edit-overlay';
+    // Create a floating panel
+    const panel = document.createElement('div');
+    panel.className = 'floating-panel';
+    panel.id = 'text-edit-panel';
     
-    const colorButtons = TEXT_COLORS.map(color => `
-        <div class="color-option ${color === existingColor ? 'active' : ''}" 
-             style="background-color: ${color}" 
-             data-color="${color}">
-        </div>
-    `).join('');
+    // Add panel header
+    const header = document.createElement('div');
+    header.className = 'panel-header';
+    
+    const headerTitle = document.createElement('h3');
+    headerTitle.textContent = existingText ? 'Edit Text' : 'Add Text';
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'panel-close';
+    closeBtn.setAttribute('aria-label', 'Close Panel');
+    closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+    
+    header.appendChild(headerTitle);
+    header.appendChild(closeBtn);
+    
+    // Create panel content
+    const content = document.createElement('div');
+    content.className = 'panel-content';
 
     const fontOptions = AVAILABLE_FONTS.map(font => `
         <option value="${font.value}" ${font.value === existingFont ? 'selected' : ''}>
@@ -1780,11 +1791,17 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
         </option>
     `).join('');
 
-    overlay.innerHTML = `
-        <div class="text-edit-container">
-            <div class="text-edit-header">
-                <h3>${existingText ? 'Edit Text' : 'Add Text'}</h3>
-                <p>Enter your text and choose a color</p>
+    const colorButtons = TEXT_COLORS.map(color => `
+        <div class="color-option ${color === existingColor ? 'active' : ''}" 
+             style="background-color: ${color}" 
+             data-color="${color}">
+        </div>
+    `).join('');
+
+    content.innerHTML = `
+        <div class="section-title">
+            <h3>${existingText ? 'Edit Your Text' : 'Add Text to Design'}</h3>
+            <p>Enter your text and customize its appearance</p>
             </div>
             <textarea class="text-edit-input" placeholder="Enter your text here...">${existingText}</textarea>
             <div class="text-edit-options">
@@ -1801,37 +1818,37 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
             <div class="text-edit-buttons">
                 <button class="text-edit-cancel">Cancel</button>
                 <button class="text-edit-save">Save</button>
-            </div>
         </div>
     `;
-
-    // Apply the selected font to the textarea
-    const textarea = overlay.querySelector('.text-edit-input');
-    const fontSelect = overlay.querySelector('#font-select');
     
-    const updateTextareaFont = () => {
-        textarea.style.fontFamily = fontSelect.value;
-    };
+    // Add to panel
+    panel.appendChild(header);
+    panel.appendChild(content);
     
-    fontSelect.addEventListener('change', updateTextareaFont);
-    updateTextareaFont(); // Set initial font
-
-    return overlay;
+    // Add to document body
+    document.body.appendChild(panel);
+    
+    return panel;
 }
 
 export async function addText(text = '', options = {}) {
     try {
-        // Get current view's UV boundaries
-        const viewConfig = modelConfig[state.currentModel].views[state.cameraView];
+        // Get the position if this is called from a button click
+        const position = options.fromButton ? getButtonPosition('add-text-btn') : null;
         
         // Show text editor and wait for result
-        const overlay = createTextEditOverlay(text, options.color || '#000000', options.fontFamily || 'Arial');
-        document.body.appendChild(overlay);
+        const panel = createTextEditOverlay(text, options.color || '#000000', options.fontFamily || 'Arial');
+        
+        // Position the panel
+        positionFloatingPanel(panel, position);
+        
+        // Add active class to show the panel
+        panel.classList.add('active');
 
-        const result = await new Promise((resolve, reject) => {
-            const textarea = overlay.querySelector('.text-edit-input');
-            const colorOptions = overlay.querySelectorAll('.color-option');
-            const fontSelect = overlay.querySelector('#font-select');
+        const textResult = await new Promise((resolve, reject) => {
+            const textarea = panel.querySelector('.text-edit-input');
+            const colorOptions = panel.querySelectorAll('.color-option');
+            const fontSelect = panel.querySelector('#font-select');
             let selectedColor = options.color || '#000000';
             let selectedFont = options.fontFamily || 'Arial';
 
@@ -1847,19 +1864,25 @@ export async function addText(text = '', options = {}) {
                     selectedColor = option.dataset.color;
                 });
             });
+            
+            // Handle close button
+            panel.querySelector('.panel-close').addEventListener('click', () => {
+                panel.remove();
+                reject('cancelled');
+            });
 
             // Handle save
-            overlay.querySelector('.text-edit-save').addEventListener('click', () => {
+            panel.querySelector('.text-edit-save').addEventListener('click', () => {
                 const newText = textarea.value.trim();
                 if (newText) {
-                    resolve({ text: newText, color: selectedColor, fontFamily: selectedFont });
+                    resolve({ text: newText, color: selectedColor, fontFamily: fontSelect.value });
                 }
-                overlay.remove();
+                panel.remove();
             });
 
             // Handle cancel
-            overlay.querySelector('.text-edit-cancel').addEventListener('click', () => {
-                overlay.remove();
+            panel.querySelector('.text-edit-cancel').addEventListener('click', () => {
+                panel.remove();
                 reject('cancelled');
             });
 
@@ -1869,58 +1892,92 @@ export async function addText(text = '', options = {}) {
                     e.preventDefault();
                     const newText = textarea.value.trim();
                     if (newText) {
-                        resolve({ text: newText, color: selectedColor, fontFamily: selectedFont });
+                        resolve({ text: newText, color: selectedColor, fontFamily: fontSelect.value });
                     }
-                    overlay.remove();
+                    panel.remove();
                 }
             });
 
             // Handle escape key
             textarea.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') {
-                    overlay.remove();
-                    reject('cancelled');
-                }
-            });
-
-            // Handle click outside
-            overlay.addEventListener('click', (e) => {
-                if (e.target === overlay) {
-                    overlay.remove();
+                    panel.remove();
                     reject('cancelled');
                 }
             });
         });
 
-        // Calculate position in canvas space
-        const left = options.left || (viewConfig.uvRect.u1 + viewConfig.uvRect.u2) / 2 * canvasData.width - 100;
-        const top = options.top || (viewConfig.uvRect.v1 + viewConfig.uvRect.v2) / 2 * canvasData.height - 20;
+        // After getting text details, show view selection modal
+        return new Promise((resolve, reject) => {
+            import('./ui.js').then(ui => {
+                // Generate a preview image of the text
+                const previewCanvas = document.createElement('canvas');
+                previewCanvas.width = 400;
+                previewCanvas.height = 100;
+                const ctx = previewCanvas.getContext('2d');
+                
+                // Draw background
+                ctx.fillStyle = '#f5f5f5';
+                ctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+                
+                // Draw text
+                ctx.font = `30px ${textResult.fontFamily}`;
+                ctx.fillStyle = textResult.color;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(textResult.text, previewCanvas.width / 2, previewCanvas.height / 2);
+                
+                // Get data URL for preview
+                const previewImage = previewCanvas.toDataURL('image/png');
+                
+                // Show the view selection modal
+                ui.showViewSelectionModal(previewImage, (selectedView) => {
+                    if (selectedView) {
+                        // Get view config for the selected view
+                        const viewConfig = modelConfig[state.currentModel].views[selectedView];
+                        
+                        // Calculate position in canvas space for the selected view
+                        const left = (viewConfig.uvRect.u1 + viewConfig.uvRect.u2) / 2 * canvasData.width - 100;
+                        const top = (viewConfig.uvRect.v1 + viewConfig.uvRect.v2) / 2 * canvasData.height - 20;
 
         // Create text object
         const textObj = {
             type: 'text',
-            text: result.text,
+                            text: textResult.text,
             left: left,
             top: top,
             width: 200,
             height: 40,
             fontSize: 30,
-            fontFamily: result.fontFamily || 'Arial',
-            color: result.color,
+                            fontFamily: textResult.fontFamily || 'Arial',
+                            color: textResult.color,
             angle: 0,
-            active: false
+                            active: false,
+                            view: selectedView
         };
 
         // Add to canvas
         addObject(textObj);
 
-        // Return the created object
-        return textObj;
+                        // Update the texture
+                        updateShirt3DTexture();
+                        
+                        // Switch to the selected view
+                        import('./scene.js').then(scene => {
+                            scene.changeCameraView(selectedView);
+                        });
+                        
+                        ui.showToast(`Text added to ${selectedView} view`);
+                        resolve(textObj);
+                    } else {
+                        reject('cancelled');
+                    }
+                }, 'Choose Where to Add Text');
+            });
+        });
     } catch (error) {
-        if (error !== 'cancelled') {
-            console.error('Error adding text:', error);
-        }
-        return null;
+        console.error('Error in addText:', error);
+        throw error;
     }
 }
 
@@ -1932,9 +1989,30 @@ const SHAPE_TYPES = {
     star: { name: 'Star', icon: 'fa-star' }
 };
 
-function createShapeEditOverlay(existingShape = null) {
-    const overlay = document.createElement('div');
-    overlay.className = 'text-edit-overlay';
+function createShapeEditOverlay(existingShape = null, position = null) {
+    // Create a floating panel instead of an overlay
+    const panel = document.createElement('div');
+    panel.className = 'floating-panel';
+    panel.id = 'shape-edit-panel';
+    
+    // Add panel header
+    const header = document.createElement('div');
+    header.className = 'panel-header';
+    
+    const headerTitle = document.createElement('h3');
+    headerTitle.textContent = existingShape ? 'Edit Shape' : 'Add Shape';
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'panel-close';
+    closeBtn.setAttribute('aria-label', 'Close Panel');
+    closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+    
+    header.appendChild(headerTitle);
+    header.appendChild(closeBtn);
+    
+    // Create panel content
+    const content = document.createElement('div');
+    content.className = 'panel-content';
     
     const shapeButtons = Object.entries(SHAPE_TYPES).map(([type, info]) => `
         <div class="shape-option ${existingShape?.type === type ? 'active' : ''}" 
@@ -1951,11 +2029,10 @@ function createShapeEditOverlay(existingShape = null) {
         </div>
     `).join('');
 
-    overlay.innerHTML = `
-        <div class="text-edit-container">
-            <div class="text-edit-header">
-                <h3>${existingShape ? 'Edit Shape' : 'Add Shape'}</h3>
-                <p>Choose a shape and color</p>
+    content.innerHTML = `
+        <div class="section-title">
+            <h3>${existingShape ? 'Edit Your Shape' : 'Add Shape to Design'}</h3>
+            <p>Choose a shape and customize its appearance</p>
             </div>
             <div class="text-edit-options">
                 <div class="shape-options">
@@ -1968,25 +2045,51 @@ function createShapeEditOverlay(existingShape = null) {
             <div class="text-edit-buttons">
                 <button class="text-edit-cancel">Cancel</button>
                 <button class="text-edit-save">Save</button>
-            </div>
         </div>
     `;
 
-    return overlay;
+    // Add to panel
+    panel.appendChild(header);
+    panel.appendChild(content);
+    
+    // Position panel in the middle of the screen
+    const canvasContainer = document.querySelector('.canvas-container');
+    if (canvasContainer && !position) {
+        canvasContainer.appendChild(panel);
+    } else if (position) {
+        // If position is provided, position it accordingly
+        panel.style.position = 'absolute';
+        panel.style.top = `${position.top}px`;
+        panel.style.left = `${position.left}px`;
+        panel.style.transform = 'translateY(0)';
+        document.body.appendChild(panel);
+    } else {
+        document.body.appendChild(panel);
+    }
+    
+    // Show the panel
+    panel.classList.add('active');
+    
+    return panel;
 }
 
 export async function addShape(shapeType = '', options = {}) {
     try {
-        // Get current view's UV boundaries
-        const viewConfig = modelConfig[state.currentModel].views[state.cameraView];
+        // Get the position if this is called from a button click
+        const position = options.fromButton ? getButtonPosition('add-shape-btn') : null;
         
         // Show shape editor and wait for result
-        const overlay = createShapeEditOverlay();
-        document.body.appendChild(overlay);
+        const panel = createShapeEditOverlay(null);
+        
+        // Position the panel
+        positionFloatingPanel(panel, position);
+        
+        // Add active class to show the panel
+        panel.classList.add('active');
 
-        const result = await new Promise((resolve, reject) => {
-            const shapeOptions = overlay.querySelectorAll('.shape-option');
-            const colorOptions = overlay.querySelectorAll('.color-option');
+        const shapeResult = await new Promise((resolve, reject) => {
+            const shapeOptions = panel.querySelectorAll('.shape-option');
+            const colorOptions = panel.querySelectorAll('.color-option');
             let selectedShape = shapeType || 'rectangle';
             let selectedColor = options.color || '#000000';
 
@@ -2010,44 +2113,122 @@ export async function addShape(shapeType = '', options = {}) {
                     selectedColor = option.dataset.color;
                 });
             });
-
-            // Handle save
-            overlay.querySelector('.text-edit-save').addEventListener('click', () => {
-                resolve({ type: selectedShape, color: selectedColor });
-                overlay.remove();
-            });
-
-            // Handle cancel
-            overlay.querySelector('.text-edit-cancel').addEventListener('click', () => {
-                overlay.remove();
+            
+            // Handle close button
+            panel.querySelector('.panel-close').addEventListener('click', () => {
+                panel.remove();
                 reject('cancelled');
             });
 
-            // Handle click outside
-            overlay.addEventListener('click', (e) => {
-                if (e.target === overlay) {
-                    overlay.remove();
+            // Handle save
+            panel.querySelector('.text-edit-save').addEventListener('click', () => {
+                resolve({ type: selectedShape, color: selectedColor });
+                panel.remove();
+            });
+
+            // Handle cancel
+            panel.querySelector('.text-edit-cancel').addEventListener('click', () => {
+                panel.remove();
+                reject('cancelled');
+            });
+
+            // Handle escape key
+            document.addEventListener('keydown', function handleEscape(e) {
+                if (e.key === 'Escape') {
+                    document.removeEventListener('keydown', handleEscape);
+                    panel.remove();
                     reject('cancelled');
                 }
             });
         });
 
-        if (result) {
-            // Calculate position in canvas space
+        if (shapeResult) {
+            // After getting shape details, show view selection modal
+            return new Promise((resolve, reject) => {
+                import('./ui.js').then(ui => {
+                    // Generate a preview image of the shape
+                    const previewCanvas = document.createElement('canvas');
+                    previewCanvas.width = 200;
+                    previewCanvas.height = 200;
+                    const ctx = previewCanvas.getContext('2d');
+                    
+                    // Draw background
+                    ctx.fillStyle = '#f5f5f5';
+                    ctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+                    
+                    // Draw shape based on type
+                    ctx.fillStyle = shapeResult.color;
+                    ctx.strokeStyle = '#333333';
+                    ctx.lineWidth = 2;
+                    
+                    const centerX = previewCanvas.width / 2;
+                    const centerY = previewCanvas.height / 2;
+                    const size = Math.min(previewCanvas.width, previewCanvas.height) * 0.6;
+                    
+                    ctx.beginPath();
+                    
+                    switch (shapeResult.type) {
+                        case 'rectangle':
+                            ctx.rect(centerX - size/2, centerY - size/2, size, size);
+                            break;
+                        case 'circle':
+                            ctx.arc(centerX, centerY, size/2, 0, Math.PI * 2);
+                            break;
+                        case 'triangle':
+                            ctx.moveTo(centerX, centerY - size/2);
+                            ctx.lineTo(centerX - size/2, centerY + size/2);
+                            ctx.lineTo(centerX + size/2, centerY + size/2);
+                            ctx.closePath();
+                            break;
+                        case 'star':
+                            // Draw a 5-point star
+                            const outerRadius = size/2;
+                            const innerRadius = outerRadius * 0.4;
+                            
+                            for (let i = 0; i < 10; i++) {
+                                const radius = i % 2 === 0 ? outerRadius : innerRadius;
+                                const angle = Math.PI * 2 * i / 10 - Math.PI / 2;
+                                const x = centerX + radius * Math.cos(angle);
+                                const y = centerY + radius * Math.sin(angle);
+                                
+                                if (i === 0) {
+                                    ctx.moveTo(x, y);
+                                } else {
+                                    ctx.lineTo(x, y);
+                                }
+                            }
+                            ctx.closePath();
+                            break;
+                    }
+                    
+                    ctx.fill();
+                    ctx.stroke();
+                    
+                    // Get data URL for preview
+                    const previewImage = previewCanvas.toDataURL('image/png');
+                    
+                    // Show the view selection modal
+                    ui.showViewSelectionModal(previewImage, (selectedView) => {
+                        if (selectedView) {
+                            // Get view config for the selected view
+                            const viewConfig = modelConfig[state.currentModel].views[selectedView];
+                            
+                            // Calculate position in canvas space for the selected view
             const left = (viewConfig.uvRect.u1 + viewConfig.uvRect.u2) / 2 * canvasData.width - 50;
             const top = (viewConfig.uvRect.v1 + viewConfig.uvRect.v2) / 2 * canvasData.height - 50;
 
             // Create shape object
             const shapeObj = {
                 type: 'shape',
-                shapeType: result.type,
+                                shapeType: shapeResult.type,
                 left: left,
                 top: top,
                 width: 100,
                 height: 100,
-                color: result.color,
+                                color: shapeResult.color,
                 angle: 0,
-                active: false
+                                active: false,
+                                view: selectedView
             };
 
             // Add to canvas
@@ -2056,20 +2237,30 @@ export async function addShape(shapeType = '', options = {}) {
             // Update the texture
             updateShirt3DTexture();
 
-            return shapeObj;
+                            // Switch to the selected view
+                            import('./scene.js').then(scene => {
+                                scene.changeCameraView(selectedView);
+                            });
+                            
+                            ui.showToast(`Shape added to ${selectedView} view`);
+                            resolve(shapeObj);
+                        } else {
+                            reject('cancelled');
+                        }
+                    }, 'Choose Where to Add Shape');
+                });
+            });
         }
     } catch (error) {
-        if (error !== 'cancelled') {
-            console.error('Error adding shape:', error);
-        }
-        return null;
+        console.error('Error in addShape:', error);
+        throw error;
     }
 }
 
 // Handle adding shape from the UI
 async function handleAddShape() {
     try {
-        await addShape();
+        await addShape('', { fromButton: true });
     } catch (error) {
         if (error !== 'cancelled') {
             console.error('Error handling shape addition:', error);
@@ -3468,7 +3659,6 @@ export default {
     isInEditMode: () => isEditingMode,
     isEditorLocked: () => isEditingLocked,
     getCurrentLockedView: () => currentLockedView,
-    toggleDragAndDrop,
     toggleSmartPlacement,
     toggleAutoAdjustment,
     getLastUsedView,
@@ -3484,41 +3674,53 @@ export default {
 // Handle adding text from the UI
 async function handleAddText() {
     try {
-        // Get current view's UV boundaries
-        const viewConfig = modelConfig[state.currentModel].views[state.cameraView];
-        
-        // Show text editor and wait for result
-        const result = await addText();
-        
-        if (result) {
-            // Calculate position in canvas space
-            const left = (viewConfig.uvRect.u1 + viewConfig.uvRect.u2) / 2 * canvasData.width - 100;
-            const top = (viewConfig.uvRect.v1 + viewConfig.uvRect.v2) / 2 * canvasData.height - 20;
-
-            // Create text object
-            const textObj = {
-                type: 'text',
-                text: result.text,
-                left: left,
-                top: top,
-                width: 200,
-                height: 40,
-                fontSize: 30,
-                fontFamily: result.fontFamily || 'Arial',
-                color: result.color,
-                angle: 0,
-                active: false
-            };
-
-            // Add to canvas
-            addObject(textObj);
-            
-            // Update the texture
-            updateShirt3DTexture();
-        }
+        await add3DText('', { fromButton: true });
     } catch (error) {
         if (error !== 'cancelled') {
-            console.error('Error adding text:', error);
+            console.error('Error handling text addition:', error);
         }
     }
+}
+
+// Add helper function to get button position
+function getButtonPosition(buttonSelector) {
+    let button;
+    
+    // Try to find by ID first
+    button = document.getElementById(buttonSelector);
+    
+    // If not found, try by class
+    if (!button) {
+        const buttons = document.querySelectorAll('.model-control-btn');
+        for (const btn of buttons) {
+            if (buttonSelector === 'add-text-btn' && btn.title === 'Add Text') {
+                button = btn;
+                break;
+            } else if (buttonSelector === 'add-shape-btn' && btn.title === 'Add Shape') {
+                button = btn;
+                break;
+            }
+        }
+    }
+    
+    if (!button) return null;
+    
+    const rect = button.getBoundingClientRect();
+    
+    // Position the panel to the left of the right-side buttons with some offset
+    return {
+        top: rect.top,
+        left: rect.left - 320, // Position panel 320px to the left of the button
+    };
+}
+
+// Add this function to handle panel positioning
+function positionFloatingPanel(panel, position) {
+    if (!panel || !position) return;
+    
+    panel.style.position = 'fixed';
+    panel.style.top = `${position.top}px`;
+    panel.style.left = `${position.left}px`;
+    panel.style.transform = 'none'; // Remove default transform
+    panel.style.zIndex = '1000'; // Ensure panel appears above other elements
 }
