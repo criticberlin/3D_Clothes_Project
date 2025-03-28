@@ -333,6 +333,79 @@
 							</div>
 						</div>
 					</div>
+
+					<!-- Photo Edit Panel -->
+					<div class="floating-panel" id="photo-edit-panel">
+						<div class="panel-header">
+							<h3>Edit Photo</h3>
+							<button class="panel-close" aria-label="Close Panel">
+								<i class="fas fa-times"></i>
+							</button>
+						</div>
+						<div class="panel-content">
+							<div class="section-title">
+								<h3>Photo Editor</h3>
+								<p>Customize your photo appearance</p>
+							</div>
+							<div class="preview-container">
+								<img id="photo-preview" alt="Photo Preview">
+							</div>
+							<div class="photo-edit-options">
+								<div class="crop-container">
+									<button class="crop-button">
+										<i class="fas fa-crop"></i> Crop Photo
+									</button>
+								</div>
+								<div class="adjustment-controls">
+									<div class="adjustment-dropdown">
+										<button class="adjustment-toggle">
+											<i class="fas fa-sliders-h"></i> Adjust <i class="fas fa-chevron-down toggle-icon"></i>
+										</button>
+										<div class="adjustment-content">
+											<div class="slider-container">
+												<label>Brightness</label>
+												<input type="range" min="0" max="200" value="100" class="brightness-slider">
+												<span class="slider-value">100%</span>
+											</div>
+											<div class="slider-container">
+												<label>Contrast</label>
+												<input type="range" min="0" max="200" value="100" class="contrast-slider">
+												<span class="slider-value">100%</span>
+											</div>
+											<div class="slider-container">
+												<label>Saturation</label>
+												<input type="range" min="0" max="200" value="100" class="saturation-slider">
+												<span class="slider-value">100%</span>
+											</div>
+											<div class="slider-container">
+												<label>Shadows</label>
+												<input type="range" min="0" max="200" value="100" class="shadows-slider">
+												<span class="slider-value">100%</span>
+											</div>
+											<div class="slider-container">
+												<label>Highlights</label>
+												<input type="range" min="0" max="200" value="100" class="highlights-slider">
+												<span class="slider-value">100%</span>
+											</div>
+										</div>
+									</div>
+								</div>
+								<div class="enhancement-buttons">
+									<button class="enhance-resolution">
+										<i class="fas fa-magic"></i> Enhance Resolution
+									</button>
+									<button class="remove-background">
+										<i class="fas fa-cut"></i> Remove Background
+									</button>
+								</div>
+								<div class="photo-edit-buttons">
+									<button class="photo-edit-reset">Reset</button>
+									<button class="photo-edit-cancel">Cancel</button>
+									<button class="photo-edit-save">Save Changes</button>
+								</div>
+							</div>
+						</div>
+					</div>
 					
 					<!-- Text Upload Panel -->
 					<div class="floating-panel" id="text-panel">

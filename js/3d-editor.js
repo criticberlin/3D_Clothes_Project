@@ -173,20 +173,25 @@ function setupEventListeners() {
     const canvas = renderer.domElement;
 
     // Mouse events
-    canvas.addEventListener('mousedown', onMouseDown);
-    canvas.addEventListener('mousemove', onMouseMove);
-    canvas.addEventListener('mouseup', onMouseUp);
-    canvas.addEventListener('click', onClick);
-    canvas.addEventListener('dblclick', onDoubleClick);
+    canvas.addEventListener('mousedown', onMouseDown, { passive: false });
+    canvas.addEventListener('mousemove', onMouseMove, { passive: false });
+    canvas.addEventListener('mouseup', onMouseUp, { passive: false });
+    canvas.addEventListener('click', onClick, { passive: false });
+    
+    // Add double-click event listener with capture phase to ensure it runs before other handlers
+    canvas.addEventListener('dblclick', onDoubleClick, { 
+        passive: false,
+        capture: true 
+    });
 
     // Keyboard events
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
     // Touch events for mobile
-    canvas.addEventListener('touchstart', onTouchStart);
-    canvas.addEventListener('touchmove', onTouchMove);
-    canvas.addEventListener('touchend', onTouchEnd);
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
 
     // Add text button event listener
     const addTextBtn = document.getElementById('add-text-btn');
@@ -508,21 +513,29 @@ function detectTransformHandleClick() {
  * @returns {Object} The clicked object or null
  */
 function detectObjectClick() {
+    console.log('Detecting object click');
+    console.log('Mouse position:', mouse);
+    
     raycaster.setFromCamera(mouse, camera);
 
     // Check UV position on the model
     const intersects = raycaster.intersectObject(shirtMesh);
+    console.log('Intersects:', intersects.length);
+    
     if (intersects.length > 0) {
         const uv = intersects[0].uv;
+        console.log('UV coordinates:', uv);
 
         // Find which element is at this UV position
         for (const obj of canvasData.objects) {
             if (isPointInObject(uv, obj)) {
+                console.log('Found object:', obj);
                 return obj;
             }
         }
     }
 
+    console.log('No object found at click position');
     return null;
 }
 
@@ -545,7 +558,11 @@ function isPointInObject(uv, object) {
     
     // Handle non-rotated objects simply
     if (!object.angle || object.angle === 0) {
-        return x >= left && x <= right && y >= top && y <= bottom;
+        const isInside = x >= left && x <= right && y >= top && y <= bottom;
+        if (isInside) {
+            console.log('Point inside non-rotated object:', object);
+        }
+        return isInside;
     }
     
     // For rotated objects, need to check using rotation math
@@ -562,7 +579,11 @@ function isPointInObject(uv, object) {
     const rotY = relX * Math.sin(-angle) + relY * Math.cos(-angle);
     
     // Check if rotated point is inside object bounds
-    return Math.abs(rotX) <= object.width / 2 && Math.abs(rotY) <= object.height / 2;
+    const isInside = Math.abs(rotX) <= object.width / 2 && Math.abs(rotY) <= object.height / 2;
+    if (isInside) {
+        console.log('Point inside rotated object:', object);
+    }
+    return isInside;
 }
 
 /**
@@ -1111,28 +1132,10 @@ export function updateShirt3DTexture() {
 
     // Draw all objects
     for (const obj of canvasData.objects) {
-        // For images, ensure we're using the correct image source
-        if (obj.type === 'image' && obj.img) {
-            // If we have current filters, apply them
-            if (obj.currentFilters) {
-                // Create or reuse the filter canvas
-                if (!obj.filterCanvas) {
-                    obj.filterCanvas = document.createElement('canvas');
-                    obj.filterCtx = obj.filterCanvas.getContext('2d');
-                    obj.filterCanvas.width = obj.img.naturalWidth || obj.img.width;
-                    obj.filterCanvas.height = obj.img.naturalHeight || obj.img.height;
-                }
-
-                // Apply filters to the context
-                obj.filterCtx.filter = obj.currentFilters;
-                
-                // Draw the original image with filters
-                obj.filterCtx.drawImage(obj.originalImg || obj.img, 0, 0);
-
-                // Update the image source
-                obj.img.src = obj.filterCanvas.toDataURL();
-            }
-        }
+        // Reset filter
+        canvasData.ctx.filter = 'none';
+        
+        // Draw the object to canvas - filters will be applied in drawObjectToCanvas
         drawObjectToCanvas(obj);
     }
 
@@ -1189,6 +1192,22 @@ function drawObjectToCanvas(object) {
                        (object.metadata && object.metadata.hasTransparency) ||
                        object.src?.toLowerCase().endsWith('.png');
         
+        // Create a temporary canvas for applying filters
+        let sourceImage = object.img;
+        
+        // If the object has temporary filters being previewed or permanent filters
+        if (object._tempFilters || object.currentFilters) {
+            // Use temporary filters for preview while editing, or permanent filters otherwise
+            const currentFilter = object._tempFilters || object.currentFilters;
+            
+            // Apply filters directly to the context
+            // This is the most reliable method that works across browsers
+            ctx.filter = currentFilter;
+            
+            // No need to modify the source image
+            sourceImage = object.img;
+        }
+        
         // For decals with transparency, use the most direct rendering approach possible
         if (isDecal) {
             // Maximum quality settings for image drawing
@@ -1201,7 +1220,7 @@ function drawObjectToCanvas(object) {
             
             // Draw at original dimensions to maintain fine details
             ctx.drawImage(
-                object.img,
+                sourceImage,
                 -object.width / 2,
                 -object.height / 2,
                 object.width,
@@ -1223,7 +1242,7 @@ function drawObjectToCanvas(object) {
             
             // Draw the image
             ctx.drawImage(
-                object.img,
+                sourceImage,
                 -object.width / 2,
                 -object.height / 2,
                 object.width,
@@ -3599,83 +3618,441 @@ export function getLastUsedView() {
  * @param {MouseEvent} event 
  */
 function onDoubleClick(event) {
-    if (!selectedObject) return;
-
-    if (selectedObject.type === 'text') {
-        const overlay = createTextEditOverlay(selectedObject.text, selectedObject.color, selectedObject.fontFamily);
-        document.body.appendChild(overlay);
-
-        const textarea = overlay.querySelector('.text-edit-input');
-        const colorOptions = overlay.querySelectorAll('.color-option');
-        const fontSelect = overlay.querySelector('#font-select');
+    event.preventDefault();
+    event.stopPropagation();
+    
+    updateMousePosition(event);
+    const clickedObject = detectObjectClick();
+    
+    if (clickedObject && clickedObject.type === 'text') {
+        const textEditOverlay = createTextEditOverlay(
+            clickedObject.text,
+            clickedObject.color,
+            clickedObject.font
+        );
         
-        // Store original values
-        const originalText = selectedObject.text;
-        const originalColor = selectedObject.color;
-        const originalFont = selectedObject.fontFamily;
-
-        // Real-time text update
-        textarea.addEventListener('input', () => {
-            selectedObject.text = textarea.value;
-            updateShirt3DTexture();
-        });
-
-        // Real-time color update
-        colorOptions.forEach(option => {
-            option.addEventListener('click', () => {
-                colorOptions.forEach(opt => opt.classList.remove('active'));
-                option.classList.add('active');
-                selectedObject.color = option.dataset.color;
+        if (textEditOverlay) {
+            const textInput = textEditOverlay.querySelector('.text-edit-input');
+            const fontSelect = textEditOverlay.querySelector('.font-select');
+            const colorOptions = textEditOverlay.querySelectorAll('.color-option');
+            const saveBtn = textEditOverlay.querySelector('.text-edit-save');
+            const cancelBtn = textEditOverlay.querySelector('.text-edit-cancel');
+            const closeBtn = textEditOverlay.querySelector('.panel-close');
+            
+            // Store original values
+            const originalText = clickedObject.text;
+            const originalColor = clickedObject.color;
+            const originalFont = clickedObject.font;
+            
+            // Handle text changes
+            textInput.addEventListener('input', () => {
+                clickedObject.text = textInput.value;
                 updateShirt3DTexture();
             });
-        });
-
-        // Real-time font update
-        fontSelect.addEventListener('change', () => {
-            selectedObject.fontFamily = fontSelect.value;
-            updateShirt3DTexture();
-        });
-
-        // Handle cancel
-        overlay.querySelector('.text-edit-cancel').addEventListener('click', () => {
-            // Restore original values
-            selectedObject.text = originalText;
-            selectedObject.color = originalColor;
-            selectedObject.fontFamily = originalFont;
-            updateShirt3DTexture();
-            overlay.remove();
-        });
-
-        // Handle escape key
-        textarea.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                // Restore original values
-                selectedObject.text = originalText;
-                selectedObject.color = originalColor;
-                selectedObject.fontFamily = originalFont;
+            
+            // Handle font changes
+            fontSelect.addEventListener('change', () => {
+                clickedObject.font = fontSelect.value;
                 updateShirt3DTexture();
-                overlay.remove();
-            }
-        });
-    } else if (selectedObject.type === 'image') {
-        // Store original image if not already stored
-        if (!selectedObject.originalImg) {
-            selectedObject.originalImg = new Image();
-            selectedObject.originalImg.src = selectedObject.img.src;
+            });
+            
+            // Handle color changes
+            colorOptions.forEach(option => {
+                option.addEventListener('click', () => {
+                    colorOptions.forEach(opt => opt.classList.remove('active'));
+                    option.classList.add('active');
+                    clickedObject.color = option.dataset.color;
+                    updateShirt3DTexture();
+                });
+            });
+            
+            // Handle save
+            saveBtn.addEventListener('click', () => {
+                textEditOverlay.remove();
+            });
+            
+            // Handle cancel
+            cancelBtn.addEventListener('click', () => {
+                clickedObject.text = originalText;
+                clickedObject.color = originalColor;
+                clickedObject.font = originalFont;
+                updateShirt3DTexture();
+                textEditOverlay.remove();
+            });
+            
+            // Handle close button
+            closeBtn.addEventListener('click', () => {
+                clickedObject.text = originalText;
+                clickedObject.color = originalColor;
+                clickedObject.font = originalFont;
+                updateShirt3DTexture();
+                textEditOverlay.remove();
+            });
+            
+            // Handle escape key
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') {
+                    clickedObject.text = originalText;
+                    clickedObject.color = originalColor;
+                    clickedObject.font = originalFont;
+                    updateShirt3DTexture();
+                    textEditOverlay.remove();
+                }
+            };
+            document.addEventListener('keydown', handleEscape);
+            
+            // Clean up event listener when panel is removed
+            textEditOverlay.addEventListener('remove', () => {
+                document.removeEventListener('keydown', handleEscape);
+            });
         }
-
-        // Create and show the photo edit panel
-        const panel = createPhotoEditOverlay(selectedObject);
-        document.body.appendChild(panel);
-        
-        // Position the panel
-        positionFloatingPanel(panel, { left: 100 });
-        
-        // Add event listener to prevent panel from closing when clicking inside
-        panel.addEventListener('click', (e) => {
-            e.stopPropagation();
-        });
+    } else if (clickedObject && clickedObject.type === 'image') {
+        const photoEditOverlay = createPhotoEditOverlay(clickedObject);
+        if (photoEditOverlay) {
+            photoEditOverlay.classList.add('active');
+        }
     }
+}
+
+/**
+ * Create photo edit overlay for the selected photo
+ * @param {Object} photoObject - The photo object to edit
+ */
+function createPhotoEditOverlay(photoObject) {
+    // Create a floating panel
+    const panel = document.createElement('div');
+    panel.id = 'photo-edit-panel';
+    panel.className = 'floating-panel';
+
+    // Create header
+    const header = document.createElement('div');
+    header.className = 'panel-header';
+    header.innerHTML = `
+        <h3>Edit Photo</h3>
+        <button class="panel-close" aria-label="Close Panel">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+
+    // Create content
+    const content = document.createElement('div');
+    content.className = 'panel-content';
+    content.innerHTML = `
+        <div class="section-title">
+            <h3>Photo Editor</h3>
+            <p>Customize your photo appearance</p>
+        </div>
+        <div class="preview-container">
+            <img id="photo-preview" alt="Photo Preview">
+        </div>
+        <div class="photo-edit-options">
+            <div class="crop-container">
+                <button class="crop-button">
+                    <i class="fas fa-crop"></i> Crop Photo
+                </button>
+            </div>
+            <div class="adjustment-controls">
+                <div class="adjustment-dropdown">
+                    <button class="adjustment-toggle">
+                        <i class="fas fa-sliders-h"></i> Adjust <i class="fas fa-chevron-down toggle-icon"></i>
+                    </button>
+                    <div class="adjustment-content">
+                        <div class="slider-container">
+                            <label>Brightness</label>
+                            <input type="range" min="0" max="200" value="100" class="brightness-slider">
+                            <span class="slider-value">100%</span>
+                        </div>
+                        <div class="slider-container">
+                            <label>Contrast</label>
+                            <input type="range" min="0" max="200" value="100" class="contrast-slider">
+                            <span class="slider-value">100%</span>
+                        </div>
+                        <div class="slider-container">
+                            <label>Saturation</label>
+                            <input type="range" min="0" max="200" value="100" class="saturation-slider">
+                            <span class="slider-value">100%</span>
+                        </div>
+                        <div class="slider-container">
+                            <label>Shadows</label>
+                            <input type="range" min="0" max="200" value="100" class="shadows-slider">
+                            <span class="slider-value">100%</span>
+                        </div>
+                        <div class="slider-container">
+                            <label>Highlights</label>
+                            <input type="range" min="0" max="200" value="100" class="highlights-slider">
+                            <span class="slider-value">100%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="enhancement-buttons">
+                <button class="enhance-resolution">
+                    <i class="fas fa-magic"></i> Enhance Resolution
+                </button>
+                <button class="remove-background">
+                    <i class="fas fa-cut"></i> Remove Background
+                </button>
+            </div>
+            <div class="photo-edit-buttons">
+                <button class="photo-edit-reset">Reset</button>
+                <button class="photo-edit-cancel">Cancel</button>
+                <button class="photo-edit-save">Save Changes</button>
+            </div>
+        </div>
+    `;
+
+    // Add to panel
+    panel.appendChild(header);
+    panel.appendChild(content);
+
+    // Add to document body
+    document.body.appendChild(panel);
+
+    // Position the panel
+    positionFloatingPanel(panel, { left: 100 });
+
+    // Store original values
+    const originalFilters = photoObject.currentFilters || '';
+    const originalImg = photoObject.img;
+
+    // Setup preview
+    const previewImg = panel.querySelector('#photo-preview');
+    previewImg.src = photoObject.img.src;
+    
+    // If the image already has filters, apply them to the preview
+    if (photoObject.currentFilters) {
+        previewImg.style.filter = photoObject.currentFilters;
+        
+        // Parse existing filter values to set slider positions
+        // This will handle cases where the image already has filters applied
+        try {
+            const filterValues = {};
+            const filterRegex = /(brightness|contrast|saturate|drop-shadow|)\(([^)]+)\)/g;
+            let match;
+            
+            while ((match = filterRegex.exec(photoObject.currentFilters)) !== null) {
+                if (match[1] === 'brightness') {
+                    const value = parseInt(match[2]);
+                    if (!isNaN(value)) filterValues.brightness = value;
+                } else if (match[1] === 'contrast') {
+                    const value = parseInt(match[2]);
+                    if (!isNaN(value)) filterValues.contrast = value;
+                } else if (match[1] === 'saturate') {
+                    const value = parseInt(match[2]);
+                    if (!isNaN(value)) filterValues.saturation = value;
+                } else if (match[1] === 'drop-shadow') {
+                    // Parse shadow value - this is complex but we'll try a simple approach
+                    const shadowParts = match[2].split(' ');
+                    if (shadowParts.length >= 3) {
+                        const shadowSize = parseInt(shadowParts[2]);
+                        if (!isNaN(shadowSize)) filterValues.shadows = shadowSize;
+                    }
+                }
+            }
+            
+            // Apply parsed values to sliders
+            if (filterValues.brightness !== undefined) {
+                const slider = panel.querySelector('.brightness-slider');
+                slider.value = filterValues.brightness;
+                slider.nextElementSibling.textContent = `${filterValues.brightness}%`;
+            }
+            
+            if (filterValues.contrast !== undefined) {
+                const slider = panel.querySelector('.contrast-slider');
+                slider.value = filterValues.contrast;
+                slider.nextElementSibling.textContent = `${filterValues.contrast}%`;
+            }
+            
+            if (filterValues.saturation !== undefined) {
+                const slider = panel.querySelector('.saturation-slider');
+                slider.value = filterValues.saturation;
+                slider.nextElementSibling.textContent = `${filterValues.saturation}%`;
+            }
+            
+            if (filterValues.shadows !== undefined) {
+                const slider = panel.querySelector('.shadows-slider');
+                slider.value = filterValues.shadows;
+                slider.nextElementSibling.textContent = `${filterValues.shadows}%`;
+            }
+            
+            // Highlights is trickier as it's the second brightness filter, default to 100 if we can't parse
+        } catch (e) {
+            console.error('Error parsing existing filters:', e);
+        }
+    }
+
+    // Setup adjustment dropdown toggle
+    const adjustmentToggle = panel.querySelector('.adjustment-toggle');
+    const adjustmentContent = panel.querySelector('.adjustment-content');
+    
+    adjustmentToggle.addEventListener('click', () => {
+        adjustmentToggle.classList.toggle('open');
+        adjustmentContent.classList.toggle('open');
+    });
+    
+    // Open the adjustment panel by default
+    adjustmentToggle.classList.add('open');
+    adjustmentContent.classList.add('open');
+
+    // Setup sliders
+    const sliders = panel.querySelectorAll('.slider-container input[type="range"]');
+    sliders.forEach(slider => {
+        const valueDisplay = slider.nextElementSibling;
+        slider.addEventListener('input', () => {
+            valueDisplay.textContent = `${slider.value}%`;
+            updatePhotoFilters(photoObject, panel);
+        });
+    });
+
+    // Setup buttons
+    const closeBtn = panel.querySelector('.panel-close');
+    const cancelBtn = panel.querySelector('.photo-edit-cancel');
+    const resetBtn = panel.querySelector('.photo-edit-reset');
+    const saveBtn = panel.querySelector('.photo-edit-save');
+    const cropBtn = panel.querySelector('.crop-button');
+    const enhanceBtn = panel.querySelector('.enhance-resolution');
+    const removeBgBtn = panel.querySelector('.remove-background');
+
+    // Handle close/cancel
+    const closePanel = () => {
+        // Clear any update timer
+        if (photoObject._updateTimer) {
+            clearTimeout(photoObject._updateTimer);
+            photoObject._updateTimer = null;
+        }
+        
+        // Clear any temporary filters
+        if (photoObject._tempFilters) {
+            delete photoObject._tempFilters;
+        }
+        
+        // Restore original state
+        photoObject.currentFilters = originalFilters;
+        
+        // Update the texture with original state
+        updateShirt3DTexture();
+        
+        panel.remove();
+    };
+
+    closeBtn.addEventListener('click', closePanel);
+    cancelBtn.addEventListener('click', closePanel);
+
+    // Handle reset
+    resetBtn.addEventListener('click', () => {
+        // Reset all sliders to 100%
+        sliders.forEach(slider => {
+            slider.value = 100;
+            slider.nextElementSibling.textContent = '100%';
+        });
+        
+        // Clear any temporary filters
+        if (photoObject._tempFilters) {
+            delete photoObject._tempFilters;
+        }
+        
+        // Clear the preview filter
+        previewImg.style.filter = '';
+        
+        // Update the texture to show reset state
+        updateShirt3DTexture();
+    });
+
+    // Handle save
+    saveBtn.addEventListener('click', () => {
+        // Clear update timer
+        if (photoObject._updateTimer) {
+            clearTimeout(photoObject._updateTimer);
+            photoObject._updateTimer = null;
+        }
+        
+        // Apply the temporary filters permanently
+        if (photoObject._tempFilters) {
+            photoObject.currentFilters = photoObject._tempFilters;
+            delete photoObject._tempFilters;
+            
+            // Store original image if not already stored
+            if (!photoObject.originalImg && photoObject.img) {
+                photoObject.originalImg = photoObject.img.cloneNode(true);
+            }
+        }
+        
+        // Save the current state for undo/redo functionality
+        saveCurrentState();
+        
+        // Update the texture one last time
+        updateShirt3DTexture();
+        
+        panel.remove();
+    });
+
+    // Handle crop
+    cropBtn.addEventListener('click', () => {
+        // TODO: Implement cropping functionality
+        showToast('Cropping functionality coming soon!');
+    });
+
+    // Handle enhance resolution
+    enhanceBtn.addEventListener('click', () => {
+        // TODO: Implement resolution enhancement
+        showToast('Resolution enhancement coming soon!');
+    });
+
+    // Handle remove background
+    removeBgBtn.addEventListener('click', () => {
+        // TODO: Implement background removal
+        showToast('Background removal coming soon!');
+    });
+
+    // Add event listener to prevent panel from closing when clicking inside
+    panel.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+
+    return panel;
+}
+
+/**
+ * Update photo filters based on slider values
+ * @param {Object} photoObject - The photo object to update
+ * @param {HTMLElement} panel - The photo edit panel
+ */
+function updatePhotoFilters(photoObject, panel) {
+    // Get slider values
+    const brightness = panel.querySelector('.brightness-slider').value;
+    const contrast = panel.querySelector('.contrast-slider').value;
+    const saturation = panel.querySelector('.saturation-slider').value;
+    const shadows = panel.querySelector('.shadows-slider').value;
+    const highlights = panel.querySelector('.highlights-slider').value;
+
+    // Create filter string
+    const filters = [
+        `brightness(${brightness}%)`,
+        `contrast(${contrast}%)`,
+        `saturate(${saturation}%)`,
+        `drop-shadow(0 0 ${shadows}px rgba(0,0,0,0.5))`,
+        `brightness(${highlights}%)`
+    ].join(' ');
+
+    // Apply filters to the preview image
+    const previewImg = panel.querySelector('#photo-preview');
+    if (previewImg) {
+        previewImg.style.filter = filters;
+    }
+    
+    // Store filters temporarily on the object
+    photoObject._tempFilters = filters;
+    
+    // Debounce updates to prevent too many renders
+    if (photoObject._updateTimer) {
+        clearTimeout(photoObject._updateTimer);
+    }
+    
+    photoObject._updateTimer = setTimeout(() => {
+        // Update the 3D texture using the proper method
+        updateShirt3DTexture();
+        photoObject._updateTimer = null;
+    }, 50);
 }
 
 // Export the enhanced 3D editor
@@ -3803,244 +4180,3 @@ document.addEventListener('click', (e) => {
         }
     });
 });
-
-function createPhotoEditOverlay(selectedObject) {
-    // Create a floating panel
-    const panel = document.createElement('div');
-    panel.className = 'floating-panel photo-edit-panel';
-    
-    // Create header
-    const header = document.createElement('div');
-    header.className = 'panel-header';
-    header.innerHTML = `
-        <span>Edit Photo</span>
-        <button class="panel-close">&times;</button>
-    `;
-    
-    // Create content container
-    const content = document.createElement('div');
-    content.className = 'panel-content';
-    
-    // Create preview container
-    const previewContainer = document.createElement('div');
-    previewContainer.className = 'preview-container';
-    
-    // Create preview image
-    const previewImage = document.createElement('img');
-    previewImage.src = selectedObject.img.src;
-    previewImage.className = 'preview-image';
-    previewContainer.appendChild(previewImage);
-    
-    // Create sliders container
-    const slidersContainer = document.createElement('div');
-    slidersContainer.className = 'sliders-container';
-
-    // Define all the photo editing options with their ranges
-    const photoOptions = [
-        { name: 'Brightness', min: -100, max: 100, default: 0 },
-        { name: 'Contrast', min: -100, max: 100, default: 0 },
-        { name: 'Saturation', min: -100, max: 100, default: 0 },
-        { name: 'Hue', min: -180, max: 180, default: 0 },
-        { name: 'Sharpness', min: 0, max: 100, default: 0 },
-        { name: 'Exposure', min: -100, max: 100, default: 0 },
-        { name: 'Gamma', min: 0, max: 200, default: 100 },
-        { name: 'Vibrance', min: -100, max: 100, default: 0 },
-        { name: 'Temperature', min: -100, max: 100, default: 0 },
-        { name: 'Tint', min: -100, max: 100, default: 0 },
-        { name: 'Shadows', min: -100, max: 100, default: 0 },
-        { name: 'Highlights', min: -100, max: 100, default: 0 },
-        { name: 'Clarity', min: -100, max: 100, default: 0 }
-    ];
-
-    // Create sliders for each option
-    photoOptions.forEach(option => {
-        const sliderContainer = document.createElement('div');
-        sliderContainer.className = 'slider-container';
-        
-        const label = document.createElement('label');
-        label.textContent = option.name;
-        
-        const slider = document.createElement('input');
-        slider.type = 'range';
-        slider.min = option.min;
-        slider.max = option.max;
-        slider.value = option.default;
-        slider.className = 'photo-edit-slider';
-        slider.dataset.option = option.name.toLowerCase();
-        
-        const valueDisplay = document.createElement('span');
-        valueDisplay.className = 'slider-value';
-        valueDisplay.textContent = option.default;
-        
-        sliderContainer.appendChild(label);
-        sliderContainer.appendChild(slider);
-        sliderContainer.appendChild(valueDisplay);
-        slidersContainer.appendChild(sliderContainer);
-
-        // Add real-time update on slider change
-        slider.addEventListener('input', () => {
-            valueDisplay.textContent = slider.value;
-            // Apply the filter in real-time
-            applyPhotoFilters(previewImage, panel, selectedObject, false);
-        });
-    });
-
-    // Add buttons
-    const buttonsContainer = document.createElement('div');
-    buttonsContainer.className = 'text-edit-buttons';
-    buttonsContainer.innerHTML = `
-        <button class="text-edit-reset">Reset</button>
-        <button class="text-edit-cancel">Cancel</button>
-    `;
-
-    // Add reset functionality
-    buttonsContainer.querySelector('.text-edit-reset').addEventListener('click', () => {
-        // Reset all sliders to default values
-        panel.querySelectorAll('.photo-edit-slider').forEach(slider => {
-            const option = photoOptions.find(opt => opt.name.toLowerCase() === slider.dataset.option);
-            if (option) {
-                slider.value = option.default;
-                slider.nextElementSibling.textContent = option.default;
-            }
-        });
-        // Reset the image
-        if (selectedObject.originalImg) {
-            selectedObject.img.src = selectedObject.originalImg.src;
-            selectedObject.currentFilters = '';
-            selectedObject.filteredImageData = null;
-            if (selectedObject.texture) {
-                selectedObject.texture.image.src = selectedObject.originalImg.src;
-                selectedObject.texture.needsUpdate = true;
-            }
-            updateShirt3DTexture();
-        }
-    });
-
-    // Add cancel functionality
-    buttonsContainer.querySelector('.text-edit-cancel').addEventListener('click', () => {
-        // Restore original image
-        if (selectedObject.originalImg) {
-            selectedObject.img.src = selectedObject.originalImg.src;
-            selectedObject.currentFilters = '';
-            selectedObject.filteredImageData = null;
-            if (selectedObject.texture) {
-                selectedObject.texture.image.src = selectedObject.originalImg.src;
-                selectedObject.texture.needsUpdate = true;
-            }
-            updateShirt3DTexture();
-        }
-        panel.remove();
-    });
-
-    // Handle close button
-    panel.querySelector('.panel-close').addEventListener('click', () => {
-        panel.remove();
-    });
-
-    // Handle escape key
-    document.addEventListener('keydown', function handleEscape(e) {
-        if (e.key === 'Escape') {
-            document.removeEventListener('keydown', handleEscape);
-            panel.remove();
-        }
-    });
-
-    // Assemble the panel content
-    content.appendChild(previewContainer);
-    content.appendChild(slidersContainer);
-    content.appendChild(buttonsContainer);
-    
-    // Add to panel
-    panel.appendChild(header);
-    panel.appendChild(content);
-    
-    return panel;
-}
-
-function applyPhotoFilters(image, panel, selectedObject, previewOnly = false) {
-    const filters = [];
-    const sliders = panel.querySelectorAll('.photo-edit-slider');
-    
-    sliders.forEach(slider => {
-        const value = slider.value;
-        const option = slider.dataset.option;
-        
-        switch(option) {
-            case 'brightness':
-                filters.push(`brightness(${100 + parseInt(value)}%)`);
-                break;
-            case 'contrast':
-                filters.push(`contrast(${100 + parseInt(value)}%)`);
-                break;
-            case 'saturation':
-                filters.push(`saturate(${100 + parseInt(value)}%)`);
-                break;
-            case 'hue':
-                filters.push(`hue-rotate(${value}deg)`);
-                break;
-            case 'sharpness':
-                filters.push(`blur(${(100 - parseInt(value)) / 10}px)`);
-                break;
-            case 'exposure':
-                filters.push(`brightness(${100 + parseInt(value)}%)`);
-                break;
-            case 'gamma':
-                filters.push(`brightness(${parseInt(value)}%)`);
-                break;
-            case 'vibrance':
-                filters.push(`saturate(${100 + parseInt(value)}%)`);
-                break;
-            case 'temperature':
-                filters.push(`sepia(${Math.abs(parseInt(value))}%)`);
-                break;
-            case 'tint':
-                filters.push(`hue-rotate(${value}deg)`);
-                break;
-            case 'shadows':
-                filters.push(`brightness(${100 + parseInt(value)}%)`);
-                break;
-            case 'highlights':
-                filters.push(`brightness(${100 + parseInt(value)}%)`);
-                break;
-            case 'clarity':
-                filters.push(`contrast(${100 + parseInt(value)}%)`);
-                break;
-        }
-    });
-    
-    const filterString = filters.join(' ');
-    image.style.filter = filterString;
-
-    // Apply filters to the actual image in real-time
-    if (selectedObject && selectedObject.img) {
-        // Create or reuse the filter canvas
-        if (!selectedObject.filterCanvas) {
-            selectedObject.filterCanvas = document.createElement('canvas');
-            selectedObject.filterCtx = selectedObject.filterCanvas.getContext('2d');
-            selectedObject.filterCanvas.width = selectedObject.img.naturalWidth || selectedObject.img.width;
-            selectedObject.filterCanvas.height = selectedObject.img.naturalHeight || selectedObject.img.height;
-        }
-
-        // Apply filters to the context
-        selectedObject.filterCtx.filter = filterString;
-        
-        // Draw the original image with filters
-        selectedObject.filterCtx.drawImage(selectedObject.originalImg || selectedObject.img, 0, 0);
-
-        // Update the existing image source
-        selectedObject.img.src = selectedObject.filterCanvas.toDataURL();
-        
-        // Store current filters
-        selectedObject.currentFilters = filterString;
-
-        // Update the texture
-        if (selectedObject.texture) {
-            selectedObject.texture.needsUpdate = true;
-        }
-        
-        // Force texture update
-        requestAnimationFrame(() => {
-            updateShirt3DTexture();
-        });
-    }
-}
