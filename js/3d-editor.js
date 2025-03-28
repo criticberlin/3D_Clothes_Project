@@ -5,7 +5,7 @@
  */
 
 import * as THREE from 'three';
-import { state, updateState } from './state.js';
+import { state, updateState, loadPanelSettings, addPanelItem, removePanelItem } from './state.js';
 import { modelConfig } from './texture-mapper.js';
 import { Logger, Performance, debounce } from './utils.js';
 import { showToast } from './ui.js';
@@ -1258,27 +1258,39 @@ function drawObjectToCanvas(object) {
         }
     } else if (object.type === 'text') {
         // Load and apply the font
-        const fontFamily = object.fontFamily || 'Arial';
-        const fontSize = object.fontSize || 20;
+        const fontFamily = object.font || 'Arial';  // Fixed: Changed fontFamily to font to match object property
+        const fontSize = object.fontSize || 30; // Increased default font size
         
         // Create a temporary canvas to measure text
         const tempCanvas = document.createElement('canvas');
         const tempCtx = tempCanvas.getContext('2d');
-        tempCtx.font = `${fontSize}px "${fontFamily}"`;
+        tempCtx.font = `bold ${fontSize}px "${fontFamily}"`; // Added bold
         
         // Set the main canvas font
-        ctx.font = `${fontSize}px "${fontFamily}"`;
+        ctx.font = `bold ${fontSize}px "${fontFamily}"`; // Added bold
         ctx.fillStyle = object.color || '#000000';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
-        // Draw text with outline for better visibility
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.lineWidth = fontSize / 10;
+        // Add a slight shadow for better visibility
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+        
+        // Draw the stroke with increased width for better visibility
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = fontSize / 8; // Increased stroke width
         ctx.strokeText(object.text, 0, 0);
         
         // Draw the main text
         ctx.fillText(object.text, 0, 0);
+        
+        // Reset shadow after drawing
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
     } else if (object.type === 'shape') {
         if (object.shapeType === 'rectangle') {
             ctx.fillStyle = object.color || '#000000';
@@ -1611,45 +1623,62 @@ export function removeObject(object) {
 export function addImage(imageUrl, options = {}) {
     return new Promise((resolve, reject) => {
         // Get current view
-        const targetView = options.view || state.cameraView;
-        lastUsedView = targetView;
-
+        const targetView = options.view || state.cameraView || 'front';
+        
         // Create an image element to load the image
         const img = new Image();
         
-        // Enable CORS if the image is from a different domain
-        img.crossOrigin = 'Anonymous';
+        // Handle load errors
+        img.onerror = (error) => {
+            console.error('Error loading image:', error);
+            reject(error);
+        };
         
-        // Handle successful load
+        // Set crossOrigin to anonymous for CORS images
+        if (imageUrl.startsWith('http')) {
+            img.crossOrigin = 'anonymous';
+        }
+        
+        // When the image loads
         img.onload = () => {
             // Calculate optimal dimensions while maintaining aspect ratio
-            const maxWidth = canvasData.width * 0.25; // Reduced from 0.3 to 0.25 (25% of canvas width)
-            const maxHeight = canvasData.height * 0.25; // Reduced from 0.3 to 0.25 (25% of canvas height)
-            
             const aspectRatio = img.width / img.height;
-            let defaultWidth, defaultHeight;
             
-            if (img.width > img.height) {
-                defaultWidth = Math.min(img.width, maxWidth);
-                defaultHeight = defaultWidth / aspectRatio;
-                
-                if (defaultHeight > maxHeight) {
-                    defaultHeight = maxHeight;
-                    defaultWidth = defaultHeight * aspectRatio;
-                }
-            } else {
-                defaultHeight = Math.min(img.height, maxHeight);
-                defaultWidth = defaultHeight * aspectRatio;
-                
-                if (defaultWidth > maxWidth) {
-                    defaultWidth = maxWidth;
-                    defaultHeight = defaultWidth / aspectRatio;
-                }
+            // Default width based on canvas size, or user-specified width - make it smaller
+            const defaultWidth = canvasData.width * 0.2; // Reduced from 0.3 to 0.2
+            
+            // Calculate height based on aspect ratio
+            const defaultHeight = defaultWidth / aspectRatio;
+            
+            // Get view configuration for correct placement
+            const viewConfig = modelConfig[state.currentModel]?.views?.[targetView];
+            if (!viewConfig) {
+                reject(new Error(`Invalid view configuration for ${targetView}`));
+                return;
             }
             
-            // Check for transparency to auto-detect decals
+            // Get the position based on options or calculate a default position
+            let left, top;
+            if (options.left !== undefined && options.top !== undefined) {
+                // Use provided position
+                left = options.left;
+                top = options.top;
+            } else {
+                // Always center the image in the view for consistent placement
+                const uvRect = viewConfig.uvRect;
+                const centerX = (uvRect.u1 + uvRect.u2) / 2 * canvasData.width;
+                const centerY = (uvRect.v1 + uvRect.v2) / 2 * canvasData.height;
+                left = centerX - defaultWidth / 2;
+                top = centerY - defaultHeight / 2;
+            }
+            
+            // Check if this is a decal type image
             let hasTransparency = false;
-            const isDecalType = /(png|svg|webp|gif)$/i.test(imageUrl);
+            const isDecalType = /\.(png|webp|gif)$/i.test(imageUrl) || 
+                                imageUrl.includes("data:image/png") || 
+                                imageUrl.includes("data:image/webp") ||
+                                options.isDecal || 
+                                options.removeColor;
             
             try {
                 // Create a temporary canvas to check for transparency
@@ -1680,48 +1709,21 @@ export function addImage(imageUrl, options = {}) {
                 options.isDecal = isDecalType;
             }
             
-            // Get current view's UV boundaries to ensure the image is placed within them
-            const viewConfig = modelConfig[state.currentModel].views[targetView];
-            if (!viewConfig) {
-                reject(new Error('Invalid view configuration'));
-                return;
-            }
-
             const uvRect = viewConfig.uvRect;
             
             // Calculate safe placement area (with padding)
             const minX = uvRect.u1 * canvasData.width;
-            const maxX = uvRect.u2 * canvasData.width;
             const minY = uvRect.v1 * canvasData.height;
+            const maxX = uvRect.u2 * canvasData.width;
             const maxY = uvRect.v2 * canvasData.height;
             
-            // Apply padding (2% of area dimensions)
-            const paddingX = (maxX - minX) * 0.02;
-            const paddingY = (maxY - minY) * 0.02;
-            
-            const safeMinX = minX + paddingX;
-            const safeMaxX = maxX - paddingX;
-            const safeMinY = minY + paddingY;
-            const safeMaxY = maxY - paddingY;
-            
-            // Calculate center of safe area
-            const centerX = (safeMinX + safeMaxX) / 2;
-            const centerY = (safeMinY + safeMaxY) / 2;
-            
-            // Ensure the image fits within the safe area
-            let left, top;
-            if (options.left !== undefined && options.top !== undefined) {
-                // If position is specified, use it but constrain to safe area
-                left = Math.max(safeMinX, Math.min(safeMaxX - defaultWidth, options.left));
-                top = Math.max(safeMinY, Math.min(safeMaxY - defaultHeight, options.top));
-            } else {
-                // Otherwise center in the safe area
-                left = centerX - (defaultWidth / 2);
-                top = centerY - (defaultHeight / 2);
-            }
+            // Ensure the image position is within valid UV bounds
+            left = Math.max(minX, Math.min(maxX - defaultWidth / 2, left));
+            top = Math.max(minY, Math.min(maxY - defaultHeight / 2, top));
             
             // Create the object with improved default properties for decals
             const obj = {
+                id: 'img_' + Date.now() + '_' + Math.floor(Math.random() * 1000), // Add unique ID
                 type: 'image',
                 img: img,
                 src: imageUrl,
@@ -1731,6 +1733,7 @@ export function addImage(imageUrl, options = {}) {
                 height: options.height || defaultHeight,
                 angle: options.angle || 0,
                 isDecal: options.isDecal || false, // Explicit decal flag
+                isAIGenerated: options.isAIGenerated || false, // Flag for AI generated images
                 removeColor: options.removeColor || false,
                 view: targetView,
                 metadata: {
@@ -1746,6 +1749,15 @@ export function addImage(imageUrl, options = {}) {
             // Save state for undo
             historyStack.saveState();
             
+            // Save to panel settings if it's a decal
+            if (obj.isDecal) {
+                if (obj.isAIGenerated) {
+                    addPanelItem('ai', obj);
+                } else {
+                    addPanelItem('photo', obj);
+                }
+            }
+            
             // Update the 3D texture
             updateShirt3DTexture();
             
@@ -1754,12 +1766,6 @@ export function addImage(imageUrl, options = {}) {
             
             // Log success but with additional decal information
             Logger.log(`Added image${obj.isDecal ? ' (decal)' : ''}: ${imageUrl.substring(0, 50)}...`);
-        };
-
-        // Handle error
-        img.onerror = (error) => {
-            console.error('Error loading image:', error);
-            reject(error);
         };
 
         // Set source to start loading
@@ -1880,13 +1886,14 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
     return panel;
 }
 
+// Add text to canvas
 export async function addText(text = '', options = {}) {
     try {
         // Get the position if this is called from a button click
         const position = options.fromButton ? getButtonPosition('add-text-btn') : null;
         
         // Show text editor and wait for result
-        const panel = createTextEditOverlay(text, options.color || '#000000', options.fontFamily || 'Arial');
+        const panel = createTextEditOverlay(text, options.color || '#000000', options.font || 'Arial');
         
         // Position the panel
         positionFloatingPanel(panel, position);
@@ -1899,7 +1906,7 @@ export async function addText(text = '', options = {}) {
             const colorOptions = panel.querySelectorAll('.color-option');
             const fontSelect = panel.querySelector('#font-select');
             let selectedColor = options.color || '#000000';
-            let selectedFont = options.fontFamily || 'Arial';
+            let selectedFont = options.font || 'Arial';
 
             // Focus the textarea
             textarea.focus();
@@ -1924,7 +1931,7 @@ export async function addText(text = '', options = {}) {
             panel.querySelector('.text-edit-save').addEventListener('click', () => {
                 const newText = textarea.value.trim();
                 if (newText) {
-                    resolve({ text: newText, color: selectedColor, fontFamily: fontSelect.value });
+                    resolve({ text: newText, color: selectedColor, font: fontSelect.value });
                 }
                 panel.remove();
             });
@@ -1941,7 +1948,7 @@ export async function addText(text = '', options = {}) {
                     e.preventDefault();
                     const newText = textarea.value.trim();
                     if (newText) {
-                        resolve({ text: newText, color: selectedColor, fontFamily: fontSelect.value });
+                        resolve({ text: newText, color: selectedColor, font: fontSelect.value });
                     }
                     panel.remove();
                 }
@@ -1970,7 +1977,7 @@ export async function addText(text = '', options = {}) {
                 ctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
                 
                 // Draw text
-                ctx.font = `30px ${textResult.fontFamily}`;
+                ctx.font = `30px ${textResult.font}`;
                 ctx.fillStyle = textResult.color;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
@@ -1985,32 +1992,55 @@ export async function addText(text = '', options = {}) {
                         // Get view config for the selected view
                         const viewConfig = modelConfig[state.currentModel].views[selectedView];
                         
-                        // Calculate position in canvas space for the selected view
-                        const left = (viewConfig.uvRect.u1 + viewConfig.uvRect.u2) / 2 * canvasData.width - 100;
-                        const top = (viewConfig.uvRect.v1 + viewConfig.uvRect.v2) / 2 * canvasData.height - 20;
+                        // Calculate the center of the editable area
+                        const centerX = (viewConfig.uvRect.u1 + viewConfig.uvRect.u2) / 2 * canvasData.width;
+                        const centerY = (viewConfig.uvRect.v1 + viewConfig.uvRect.v2) / 2 * canvasData.height;
 
-        // Create text object
-        const textObj = {
-            type: 'text',
+                        // Set font size based on canvas size - make it smaller
+                        const fontSize = 30; // Reduced font size
+                        
+                        // Measure text dimensions (create a temporary canvas context)
+                        const tempCanvas = document.createElement('canvas');
+                        const tempCtx = tempCanvas.getContext('2d');
+                        tempCtx.font = `bold ${fontSize}px "${textResult.font || 'Arial'}"`;
+                        const textMetrics = tempCtx.measureText(textResult.text);
+                        
+                        // Calculate text width and height
+                        const textWidth = textMetrics.width;
+                        const textHeight = fontSize * 1.2;
+
+                        // Create text object with unique ID - exactly centered
+                        const textObj = {
+                            id: 'text_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+                            type: 'text',
                             text: textResult.text,
-            left: left,
-            top: top,
-            width: 200,
-            height: 40,
-            fontSize: 30,
-                            fontFamily: textResult.fontFamily || 'Arial',
+                            font: textResult.font || 'Arial',
+                            fontSize: fontSize,
                             color: textResult.color,
-            angle: 0,
-                            active: false,
-                            view: selectedView
-        };
+                            left: centerX - textWidth/2, // Center horizontally
+                            top: centerY - textHeight/2, // Center vertically
+                            width: textWidth,
+                            height: textHeight,
+                            angle: 0,
+                            view: selectedView,
+                            isDecal: true,
+                            textAlign: 'center',
+                            lineHeight: 1.2,
+                            backgroundColor: 'transparent',
+                            padding: 0,
+                            stroke: null,
+                            strokeWidth: 0
+                        };
 
-        // Add to canvas
-        addObject(textObj);
-
+                        // Add to canvas
+                        addObject(textObj);
+                        
+                        // Save to panel settings
+                        addPanelItem('text', textObj);
+                        
                         // Update the texture
                         updateShirt3DTexture();
-                        
+
                         // Switch to the selected view
                         import('./scene.js').then(scene => {
                             scene.changeCameraView(selectedView);
@@ -2225,7 +2255,7 @@ export async function addShape(shapeType = '', options = {}) {
                         case 'star':
                             // Draw a 5-point star
                             const outerRadius = size/2;
-                            const innerRadius = outerRadius * 0.4;
+                            const innerRadius = outerRadius * 0.4; // Inner radius for star points
                             
                             for (let i = 0; i < 10; i++) {
                                 const radius = i % 2 === 0 ? outerRadius : innerRadius;
@@ -2255,29 +2285,40 @@ export async function addShape(shapeType = '', options = {}) {
                             // Get view config for the selected view
                             const viewConfig = modelConfig[state.currentModel].views[selectedView];
                             
-                            // Calculate position in canvas space for the selected view
-            const left = (viewConfig.uvRect.u1 + viewConfig.uvRect.u2) / 2 * canvasData.width - 50;
-            const top = (viewConfig.uvRect.v1 + viewConfig.uvRect.v2) / 2 * canvasData.height - 50;
+                            // Calculate the center point of the editable area
+                            const centerX = (viewConfig.uvRect.u1 + viewConfig.uvRect.u2) / 2 * canvasData.width;
+                            const centerY = (viewConfig.uvRect.v1 + viewConfig.uvRect.v2) / 2 * canvasData.height;
+                            
+                            // Calculate the size of the editable area
+                            const areaWidth = Math.abs(viewConfig.uvRect.u2 - viewConfig.uvRect.u1) * canvasData.width;
+                            const areaHeight = Math.abs(viewConfig.uvRect.v2 - viewConfig.uvRect.v1) * canvasData.height;
+                            
+                            // Make shapes smaller - use 15% of the smaller dimension
+                            const shapeSize = Math.min(areaWidth, areaHeight) * 0.15;
 
-            // Create shape object
-            const shapeObj = {
-                type: 'shape',
+                            // Create shape object - smaller and centered
+                            const shapeObj = {
+                                id: 'shape_' + Date.now() + '_' + Math.floor(Math.random() * 1000), // Add unique ID
+                                type: 'shape',
                                 shapeType: shapeResult.type,
-                left: left,
-                top: top,
-                width: 100,
-                height: 100,
+                                width: shapeSize,
+                                height: shapeSize,
                                 color: shapeResult.color,
-                angle: 0,
-                                active: false,
-                                view: selectedView
-            };
+                                left: centerX - shapeSize/2,
+                                top: centerY - shapeSize/2,
+                                angle: 0,
+                                view: selectedView,
+                                isDecal: true
+                            };
 
-            // Add to canvas
-            addObject(shapeObj);
-            
-            // Update the texture
-            updateShirt3DTexture();
+                            // Add to canvas
+                            addObject(shapeObj);
+                            
+                            // Save to panel settings
+                            addPanelItem('shape', shapeObj);
+                            
+                            // Update texture
+                            updateShirt3DTexture();
 
                             // Switch to the selected view
                             import('./scene.js').then(scene => {
@@ -2922,16 +2963,30 @@ function handleEditableAreaClick(uv, intersection) {
                     break;
 
                 case 'delete':
-                    // Delete the selected object
-                    const index = canvasData.objects.indexOf(selectedObject);
-                    if (index > -1) {
-                        canvasData.objects.splice(index, 1);
-                        selectedObject = null;
-                        transformMode = 'none';
-                        document.body.style.cursor = cursors.default;
-                        toggleCameraControls(true); // Unlock t-shirt movement after deletion
-                        updateShirt3DTexture();
-                    }
+                    // Show confirmation dialog before deleting
+                    const objType = selectedObject.type === 'image' ? 'photo' : selectedObject.type;
+                    import('./ui.js').then(ui => {
+                        ui.showDeleteConfirmationDialog(objType, () => {
+                            // Only delete if user confirms
+                            const index = canvasData.objects.indexOf(selectedObject);
+                            if (index > -1) {
+                                // Remove from panel settings
+                                const panelType = selectedObject.type === 'image' 
+                                    ? (selectedObject.isAIGenerated ? 'ai' : 'photo') 
+                                    : selectedObject.type;
+                                removePanelItem(panelType, selectedObject.id);
+                                
+                                // Remove the object
+                                canvasData.objects.splice(index, 1);
+                                selectedObject = null;
+                                transformMode = 'none';
+                                document.body.style.cursor = cursors.default;
+                                toggleCameraControls(true); // Unlock t-shirt movement after deletion
+                                updateShirt3DTexture();
+                                historyStack.saveState(); // Save state for undo after deletion
+                            }
+                        });
+                    });
                     break;
 
                 case 'pin':
@@ -3334,22 +3389,32 @@ export function deleteSelectedObject() {
         return false;
     }
 
-    // Find the object's index in the objects array
-    const index = canvasData.objects.indexOf(selectedObject);
-    if (index !== -1) {
-        // Remove the object
-        canvasData.objects.splice(index, 1);
+    // Show confirmation dialog before deleting
+    const objType = selectedObject.type === 'image' ? 'photo' : selectedObject.type;
+    import('./ui.js').then(ui => {
+        ui.showDeleteConfirmationDialog(objType, () => {
+            // Find the object's index in the objects array
+            const index = canvasData.objects.indexOf(selectedObject);
+            if (index !== -1) {
+                // Remove from panel settings
+                const panelType = selectedObject.type === 'image' 
+                    ? (selectedObject.isAIGenerated ? 'ai' : 'photo') 
+                    : selectedObject.type;
+                removePanelItem(panelType, selectedObject.id);
+                
+                // Remove the object
+                canvasData.objects.splice(index, 1);
+                selectedObject = null;
+                transformMode = 'none';
+                document.body.style.cursor = cursors.default;
+                toggleCameraControls(true); // Unlock t-shirt movement after deletion
+                updateShirt3DTexture();
+                historyStack.saveState(); // Save state for undo after deletion
+            }
+        });
+    });
 
-        // Update the texture
-        updateShirt3DTexture();
-
-        // Clear selection
-        deselectObject();
-
-        return true;
-    }
-
-    return false;
+    return true;
 }
 
 /**
@@ -3768,8 +3833,8 @@ function createPhotoEditOverlay(photoObject) {
                             <span class="slider-value">100%</span>
                         </div>
                         <div class="slider-container">
-                            <label>Saturation</label>
-                            <input type="range" min="0" max="200" value="100" class="saturation-slider">
+                            <label>Exposure</label>
+                            <input type="range" min="0" max="200" value="100" class="exposure-slider">
                             <span class="slider-value">100%</span>
                         </div>
                         <div class="slider-container">
@@ -3781,6 +3846,58 @@ function createPhotoEditOverlay(photoObject) {
                             <label>Highlights</label>
                             <input type="range" min="0" max="200" value="100" class="highlights-slider">
                             <span class="slider-value">100%</span>
+                        </div>
+                        <div class="slider-container">
+                            <label>Saturation</label>
+                            <input type="range" min="0" max="200" value="100" class="saturation-slider">
+                            <span class="slider-value">100%</span>
+                        </div>
+                        <div class="slider-container">
+                            <label>Temperature</label>
+                            <input type="range" min="0" max="200" value="100" class="temperature-slider">
+                            <span class="slider-value">100%</span>
+                        </div>
+                        <div class="slider-container">
+                            <label>Sharpness</label>
+                            <input type="range" min="0" max="200" value="100" class="sharpness-slider">
+                            <span class="slider-value">100%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="adjustment-dropdown">
+                    <button class="filters-toggle">
+                        <i class="fas fa-magic"></i> Filters <i class="fas fa-chevron-down toggle-icon"></i>
+                    </button>
+                    <div class="filters-content">
+                        <div class="filter-options">
+                            <div class="filter-option" data-filter="none">
+                                <div class="filter-preview">Original</div>
+                                <span>None</span>
+                            </div>
+                            <div class="filter-option" data-filter="vintage">
+                                <div class="filter-preview filter-vintage"></div>
+                                <span>Vintage</span>
+                            </div>
+                            <div class="filter-option" data-filter="bw">
+                                <div class="filter-preview filter-bw"></div>
+                                <span>B&W</span>
+                            </div>
+                            <div class="filter-option" data-filter="hdr">
+                                <div class="filter-preview filter-hdr"></div>
+                                <span>HDR</span>
+                            </div>
+                            <div class="filter-option" data-filter="cinematic">
+                                <div class="filter-preview filter-cinematic"></div>
+                                <span>Cinematic</span>
+                            </div>
+                            <div class="filter-option" data-filter="retro">
+                                <div class="filter-preview filter-retro"></div>
+                                <span>Retro</span>
+                            </div>
+                            <div class="filter-option" data-filter="film">
+                                <div class="filter-preview filter-film"></div>
+                                <span>Film</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -3817,6 +3934,42 @@ function createPhotoEditOverlay(photoObject) {
 
     // Setup preview
     const previewImg = panel.querySelector('#photo-preview');
+    const previewContainer = panel.querySelector('.preview-container');
+    
+    // Image dimensions and aspect ratio
+    const imgWidth = photoObject.img.naturalWidth;
+    const imgHeight = photoObject.img.naturalHeight;
+    const aspectRatio = imgWidth / imgHeight;
+    
+    // Set maximum dimensions for the preview
+    const maxWidth = 300;
+    const maxHeight = 300;
+    
+    // Calculate dimensions to maintain aspect ratio
+    let containerWidth, containerHeight;
+    if (aspectRatio > 1) {
+        // Wide image
+        containerWidth = Math.min(maxWidth, imgWidth);
+        containerHeight = containerWidth / aspectRatio;
+    } else {
+        // Tall image
+        containerHeight = Math.min(maxHeight, imgHeight);
+        containerWidth = containerHeight * aspectRatio;
+    }
+    
+    // Update container and image styles
+    if (previewContainer) {
+        previewContainer.style.width = `${containerWidth}px`;
+        previewContainer.style.height = `${containerHeight}px`;
+        previewContainer.style.margin = '0 auto';
+        previewContainer.style.position = 'relative';
+        previewContainer.style.overflow = 'hidden';
+    }
+    
+    // Set the image styles
+    previewImg.style.width = '100%';
+    previewImg.style.height = '100%';
+    previewImg.style.objectFit = 'contain';
     previewImg.src = photoObject.img.src;
     
     // If the image already has filters, apply them to the preview
@@ -3890,10 +4043,87 @@ function createPhotoEditOverlay(photoObject) {
         adjustmentContent.classList.toggle('open');
     });
     
-    // Open the adjustment panel by default
-    adjustmentToggle.classList.add('open');
-    adjustmentContent.classList.add('open');
-
+    // Setup filters dropdown toggle
+    const filtersToggle = panel.querySelector('.filters-toggle');
+    const filtersContent = panel.querySelector('.filters-content');
+    
+    filtersToggle.addEventListener('click', () => {
+        filtersToggle.classList.toggle('open');
+        filtersContent.classList.toggle('open');
+    });
+    
+    // Setup filter options
+    const filterOptions = panel.querySelectorAll('.filter-option');
+    
+    // Apply the actual photo to filter previews
+    filterOptions.forEach(option => {
+        const filterType = option.dataset.filter;
+        const previewDiv = option.querySelector('.filter-preview');
+        
+        if (previewDiv && filterType !== 'none') {
+            // Create preview with the actual photo
+            const previewImg = document.createElement('img');
+            previewImg.src = photoObject.img.src;
+            previewImg.style.width = '100%';
+            previewImg.style.height = '100%';
+            previewImg.style.objectFit = 'cover';
+            
+            // Apply the filter
+            switch (filterType) {
+                case 'vintage':
+                    previewImg.style.filter = 'sepia(50%) saturate(150%) contrast(120%)';
+                    break;
+                case 'bw':
+                    previewImg.style.filter = 'grayscale(100%) contrast(120%)';
+                    break;
+                case 'hdr':
+                    previewImg.style.filter = 'contrast(150%) saturate(140%) brightness(110%)';
+                    break;
+                case 'cinematic':
+                    previewImg.style.filter = 'contrast(130%) saturate(90%) brightness(90%) sepia(30%)';
+                    break;
+                case 'retro':
+                    previewImg.style.filter = 'sepia(60%) hue-rotate(-20deg) saturate(90%) brightness(105%)';
+                    break;
+                case 'film':
+                    previewImg.style.filter = 'contrast(110%) brightness(110%) sepia(30%) saturate(130%)';
+                    break;
+            }
+            
+            // Clear existing content and add the image
+            previewDiv.innerHTML = '';
+            previewDiv.appendChild(previewImg);
+        } else if (filterType === 'none' && previewDiv) {
+            // For "none" filter option, show the original image
+            const previewImg = document.createElement('img');
+            previewImg.src = photoObject.img.src;
+            previewImg.style.width = '100%';
+            previewImg.style.height = '100%';
+            previewImg.style.objectFit = 'cover';
+            
+            // Clear existing content and add the image
+            previewDiv.innerHTML = '';
+            previewDiv.appendChild(previewImg);
+        }
+        
+        option.addEventListener('click', () => {
+            // Remove active class from all options
+            filterOptions.forEach(opt => opt.classList.remove('active'));
+            
+            // Add active class to clicked option
+            option.classList.add('active');
+            
+            // Update filters
+            updatePhotoFilters(photoObject, panel);
+        });
+    });
+    
+    // Set the "None" filter as active by default
+    const noneFilter = panel.querySelector('.filter-option[data-filter="none"]');
+    if (noneFilter) {
+        noneFilter.classList.add('active');
+    }
+    
     // Setup sliders
     const sliders = panel.querySelectorAll('.slider-container input[type="range"]');
     sliders.forEach(slider => {
@@ -3932,6 +4162,7 @@ function createPhotoEditOverlay(photoObject) {
         // Update the texture with original state
         updateShirt3DTexture();
         
+        // Remove the panel directly rather than just hiding it
         panel.remove();
     };
 
@@ -3945,6 +4176,16 @@ function createPhotoEditOverlay(photoObject) {
             slider.value = 100;
             slider.nextElementSibling.textContent = '100%';
         });
+        
+        // Reset filter selection
+        const filterOptions = panel.querySelectorAll('.filter-option');
+        filterOptions.forEach(opt => opt.classList.remove('active'));
+        
+        // Activate the 'none' filter
+        const noneFilter = panel.querySelector('.filter-option[data-filter="none"]');
+        if (noneFilter) {
+            noneFilter.classList.add('active');
+        }
         
         // Clear any temporary filters
         if (photoObject._tempFilters) {
@@ -3983,13 +4224,14 @@ function createPhotoEditOverlay(photoObject) {
         // Update the texture one last time
         updateShirt3DTexture();
         
+        // Remove the panel directly
         panel.remove();
     });
 
     // Handle crop
     cropBtn.addEventListener('click', () => {
-        // TODO: Implement cropping functionality
-        showToast('Cropping functionality coming soon!');
+        // Pass the panel to createCropPanel 
+        createCropPanel(photoObject, panel);
     });
 
     // Handle enhance resolution
@@ -4013,7 +4255,7 @@ function createPhotoEditOverlay(photoObject) {
 }
 
 /**
- * Update photo filters based on slider values
+ * Update photo filters based on slider values and preset filters
  * @param {Object} photoObject - The photo object to update
  * @param {HTMLElement} panel - The photo edit panel
  */
@@ -4021,18 +4263,79 @@ function updatePhotoFilters(photoObject, panel) {
     // Get slider values
     const brightness = panel.querySelector('.brightness-slider').value;
     const contrast = panel.querySelector('.contrast-slider').value;
-    const saturation = panel.querySelector('.saturation-slider').value;
+    const exposure = panel.querySelector('.exposure-slider').value;
     const shadows = panel.querySelector('.shadows-slider').value;
     const highlights = panel.querySelector('.highlights-slider').value;
+    const saturation = panel.querySelector('.saturation-slider').value;
+    const temperature = panel.querySelector('.temperature-slider').value;
+    const sharpness = panel.querySelector('.sharpness-slider').value;
+    
+    // Get active preset filter if any
+    const activeFilter = panel.querySelector('.filter-option.active');
+    let presetFilter = '';
+    
+    if (activeFilter && activeFilter.dataset.filter !== 'none') {
+        switch (activeFilter.dataset.filter) {
+            case 'vintage':
+                presetFilter = 'sepia(50%) saturate(150%) contrast(120%)';
+                break;
+            case 'bw':
+                presetFilter = 'grayscale(100%) contrast(120%)';
+                break;
+            case 'hdr':
+                presetFilter = 'contrast(150%) saturate(140%) brightness(110%)';
+                break;
+            case 'cinematic':
+                presetFilter = 'contrast(130%) saturate(90%) brightness(90%) sepia(30%)';
+                break;
+            case 'retro':
+                presetFilter = 'sepia(60%) hue-rotate(-20deg) saturate(90%) brightness(105%)';
+                break;
+            case 'film':
+                presetFilter = 'contrast(110%) brightness(110%) sepia(30%) saturate(130%)';
+                break;
+        }
+    }
 
-    // Create filter string
-    const filters = [
+    // Create temperature filter (add blue or orange tint)
+    let tempFilter = '';
+    if (temperature < 100) {
+        // Cooler/blue
+        const blueAmount = 100 - temperature;
+        tempFilter = `hue-rotate(${blueAmount * 0.3}deg) saturate(${100 + blueAmount * 0.5}%)`;
+    } else if (temperature > 100) {
+        // Warmer/orange
+        const orangeAmount = temperature - 100;
+        tempFilter = `hue-rotate(-${orangeAmount * 0.3}deg) saturate(${100 + orangeAmount * 0.5}%)`;
+    }
+    
+    // Create sharpness filter
+    let sharpnessFilter = '';
+    if (sharpness > 100) {
+        const amount = (sharpness - 100) / 10;
+        // Sharpen using a combination of contrast and brightness
+        sharpnessFilter = `contrast(${100 + amount * 2}%) brightness(${100 + amount}%)`;
+    }
+
+    // Create exposure filter
+    const exposureFilter = exposure !== 100 ? `brightness(${exposure}%)` : '';
+    
+    // Create adjustment filters
+    const adjustmentFilters = [
         `brightness(${brightness}%)`,
         `contrast(${contrast}%)`,
         `saturate(${saturation}%)`,
         `drop-shadow(0 0 ${shadows}px rgba(0,0,0,0.5))`,
-        `brightness(${highlights}%)`
-    ].join(' ');
+        `brightness(${highlights}%)`,
+        tempFilter,
+        sharpnessFilter,
+        exposureFilter
+    ].filter(f => f !== ''); // Remove empty filters
+
+    // Combine preset and adjustment filters
+    const filters = presetFilter ? 
+        [presetFilter, ...adjustmentFilters].join(' ') : 
+        adjustmentFilters.join(' ');
 
     // Apply filters to the preview image
     const previewImg = panel.querySelector('#photo-preview');
@@ -4130,53 +4433,504 @@ function getButtonPosition(buttonSelector) {
 function positionFloatingPanel(panel, position) {
     if (!panel) return;
     
-    // Default position if none provided
-    if (!position) {
-        const canvasContainer = document.querySelector('.canvas-container');
-        if (canvasContainer) {
-            const rect = canvasContainer.getBoundingClientRect();
-            position = {
-                top: rect.top + (rect.height / 2),
-                left: 100 // Fixed left position to match other panels
-            };
-        } else {
-            position = {
-                top: window.innerHeight / 2,
-                left: 100 // Fixed left position to match other panels
-            };
-        }
-    }
+    // Standard positioning for all panels (ignoring custom position)
+    // This ensures consistent positioning for all panels including crop panel
+    const left = 100; // Fixed left position to match other panels
+    let top = window.innerHeight / 2;
     
     panel.style.position = 'fixed';
-    panel.style.top = `${position.top}px`;
-    panel.style.left = `${position.left}px`;
+    panel.style.top = `${top}px`;
+    panel.style.left = `${left}px`;
     panel.style.transform = 'translateY(-50%)';
     panel.style.zIndex = '1000';
     
     // Ensure panel stays within viewport
+    setTimeout(() => {
     const panelRect = panel.getBoundingClientRect();
     const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
     
     if (panelRect.bottom > viewportHeight) {
         panel.style.top = `${viewportHeight - panelRect.height - 20}px`;
+            panel.style.transform = 'none';
     }
     
     if (panelRect.right > viewportWidth) {
         panel.style.left = `${viewportWidth - panelRect.width - 20}px`;
     }
+    }, 0);
     
     // Add active class to show the panel
     panel.classList.add('active');
 }
 
-// Add click event listener to document to close panels when clicking outside
-document.addEventListener('click', (e) => {
-    const panels = document.querySelectorAll('.floating-panel.active');
-    panels.forEach(panel => {
-        if (!panel.contains(e.target)) {
-            panel.classList.remove('active');
-            setTimeout(() => panel.remove(), 300);
+/**
+ * Creates a floating panel for image cropping
+ * @param {Object} photoObject - The photo object to crop
+ * @param {HTMLElement} parentPanel - The parent panel (photo edit panel)
+ */
+function createCropPanel(photoObject, parentPanel) {
+    // Create the crop panel
+    const cropPanel = document.createElement('div');
+    cropPanel.id = 'photo-crop-panel';
+    cropPanel.className = 'floating-panel';
+    
+    // Hide the parent panel when crop panel opens
+    if (parentPanel) {
+        parentPanel.classList.remove('active');
+        parentPanel.style.display = 'none';
+    }
+    
+    // Create header
+    const header = document.createElement('div');
+    header.className = 'panel-header';
+    header.innerHTML = `
+        <h3>Crop Photo</h3>
+        <button class="panel-close" aria-label="Close Panel">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    
+    // Create content
+    const content = document.createElement('div');
+    content.className = 'panel-content';
+    
+    // Calculate dimensions to maintain aspect ratio
+    const maxWidth = 300;
+    const maxHeight = 300;
+    const aspectRatio = photoObject.img.naturalWidth / photoObject.img.naturalHeight;
+    
+    let previewWidth, previewHeight;
+    if (aspectRatio > 1) {
+        previewWidth = maxWidth;
+        previewHeight = maxWidth / aspectRatio;
+    } else {
+        previewHeight = maxHeight;
+        previewWidth = maxHeight * aspectRatio;
+    }
+    
+    content.innerHTML = `
+        <div class="crop-container" style="width: ${previewWidth}px; height: ${previewHeight}px;">
+            <div class="crop-image-container">
+                <img src="${photoObject.img.src}" class="crop-image" 
+                     style="width: ${previewWidth}px; height: ${previewHeight}px;">
+                <div class="crop-overlay"></div>
+                <div class="crop-box">
+                    <div class="crop-handle top-left"></div>
+                    <div class="crop-handle top-right"></div>
+                    <div class="crop-handle bottom-left"></div>
+                    <div class="crop-handle bottom-right"></div>
+                </div>
+            </div>
+        </div>
+        <div class="aspect-ratio-options">
+            <button class="aspect-ratio-btn active" data-ratio="free">Free</button>
+            <button class="aspect-ratio-btn" data-ratio="1:1">1:1</button>
+            <button class="aspect-ratio-btn" data-ratio="4:3">4:3</button>
+            <button class="aspect-ratio-btn" data-ratio="16:9">16:9</button>
+        </div>
+        <div class="crop-actions">
+            <button class="crop-cancel-btn">Cancel</button>
+            <button class="crop-apply-btn">Apply Crop</button>
+        </div>
+    `;
+    
+    // Add to panel
+    cropPanel.appendChild(header);
+    cropPanel.appendChild(content);
+    
+    // Add to document body
+    document.body.appendChild(cropPanel);
+    
+    // Position the panel
+    positionFloatingPanel(cropPanel, { 
+        left: parentPanel.offsetLeft + parentPanel.offsetWidth + 20,
+        top: parentPanel.offsetTop
+    });
+    
+    // Show the panel
+    cropPanel.classList.add('active');
+    
+    // Set up crop box functionality
+    const cropBox = cropPanel.querySelector('.crop-box');
+    const cropImage = cropPanel.querySelector('.crop-image');
+    const cropContainer = cropPanel.querySelector('.crop-container');
+    const handles = cropPanel.querySelectorAll('.crop-handle');
+    
+    // Initial crop box to cover the whole image
+    let cropBoxData = {
+        left: 0,
+        top: 0,
+        width: previewWidth,
+        height: previewHeight
+    };
+    
+    // Set initial crop box position
+    updateCropBox();
+    
+    // Set up aspect ratio buttons
+    const aspectBtns = cropPanel.querySelectorAll('.aspect-ratio-btn');
+    let currentAspectRatio = null;
+    
+    aspectBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            aspectBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            const ratio = btn.dataset.ratio;
+            if (ratio === 'free') {
+                currentAspectRatio = null;
+            } else {
+                const [width, height] = ratio.split(':').map(Number);
+                currentAspectRatio = width / height;
+                
+                // Adjust crop box to maintain aspect ratio
+                let newWidth, newHeight;
+                
+                if (cropBoxData.width / cropBoxData.height > currentAspectRatio) {
+                    // Current box is wider than target ratio
+                    newHeight = cropBoxData.height;
+                    newWidth = newHeight * currentAspectRatio;
+                } else {
+                    // Current box is taller than target ratio
+                    newWidth = cropBoxData.width;
+                    newHeight = newWidth / currentAspectRatio;
+                }
+                
+                // Center the crop box
+                cropBoxData.left = (previewWidth - newWidth) / 2;
+                cropBoxData.top = (previewHeight - newHeight) / 2;
+                cropBoxData.width = newWidth;
+                cropBoxData.height = newHeight;
+                
+                updateCropBox();
+            }
+        });
+    });
+    
+    // Handle crop box dragging
+    let isDragging = false;
+    let startX, startY;
+    let dragType = ''; // 'move', 'resize-tl', 'resize-tr', etc.
+    
+    cropBox.addEventListener('mousedown', (e) => {
+        if (e.target === cropBox) {
+            isDragging = true;
+            dragType = 'move';
+            startX = e.clientX;
+            startY = e.clientY;
+            e.preventDefault();
         }
     });
-});
+    
+    // Handle resize from corners
+    handles.forEach(handle => {
+        handle.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            dragType = 'resize-' + handle.className.replace('crop-handle ', '');
+            startX = e.clientX;
+            startY = e.clientY;
+            e.preventDefault();
+            e.stopPropagation();
+        });
+    });
+    
+    // Handle mouse move for both dragging and resizing
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        
+        const deltaX = e.clientX - startX;
+        const deltaY = e.clientY - startY;
+        
+        if (dragType === 'move') {
+            // Move the crop box
+            cropBoxData.left = Math.max(0, Math.min(previewWidth - cropBoxData.width, cropBoxData.left + deltaX));
+            cropBoxData.top = Math.max(0, Math.min(previewHeight - cropBoxData.height, cropBoxData.top + deltaY));
+        } else if (dragType.startsWith('resize-')) {
+            // Handle resizing from different corners
+            const corner = dragType.replace('resize-', '');
+            
+            let newLeft = cropBoxData.left;
+            let newTop = cropBoxData.top;
+            let newWidth = cropBoxData.width;
+            let newHeight = cropBoxData.height;
+            
+            if (corner === 'top-left') {
+                newLeft = Math.min(cropBoxData.left + cropBoxData.width - 50, cropBoxData.left + deltaX);
+                newTop = Math.min(cropBoxData.top + cropBoxData.height - 50, cropBoxData.top + deltaY);
+                newWidth = cropBoxData.width - (newLeft - cropBoxData.left);
+                newHeight = cropBoxData.height - (newTop - cropBoxData.top);
+            } else if (corner === 'top-right') {
+                newTop = Math.min(cropBoxData.top + cropBoxData.height - 50, cropBoxData.top + deltaY);
+                newWidth = Math.max(50, cropBoxData.width + deltaX);
+                newHeight = cropBoxData.height - (newTop - cropBoxData.top);
+            } else if (corner === 'bottom-left') {
+                newLeft = Math.min(cropBoxData.left + cropBoxData.width - 50, cropBoxData.left + deltaX);
+                newWidth = cropBoxData.width - (newLeft - cropBoxData.left);
+                newHeight = Math.max(50, cropBoxData.height + deltaY);
+            } else if (corner === 'bottom-right') {
+                newWidth = Math.max(50, cropBoxData.width + deltaX);
+                newHeight = Math.max(50, cropBoxData.height + deltaY);
+            }
+            
+            // Enforce aspect ratio if needed
+            if (currentAspectRatio !== null) {
+                if (corner === 'top-left' || corner === 'bottom-right') {
+                    newHeight = newWidth / currentAspectRatio;
+                } else {
+                    newWidth = newHeight * currentAspectRatio;
+                }
+            }
+            
+            // Check boundaries
+            if (newLeft + newWidth > previewWidth) {
+                newWidth = previewWidth - newLeft;
+                if (currentAspectRatio !== null) {
+                    newHeight = newWidth / currentAspectRatio;
+                }
+            }
+            
+            if (newTop + newHeight > previewHeight) {
+                newHeight = previewHeight - newTop;
+                if (currentAspectRatio !== null) {
+                    newWidth = newHeight * currentAspectRatio;
+                }
+            }
+            
+            // Update crop box data
+            cropBoxData.left = newLeft;
+            cropBoxData.top = newTop;
+            cropBoxData.width = newWidth;
+            cropBoxData.height = newHeight;
+        }
+        
+        updateCropBox();
+        startX = e.clientX;
+        startY = e.clientY;
+    });
+    
+    // Handle mouse up to stop dragging/resizing
+    document.addEventListener('mouseup', () => {
+        isDragging = false;
+    });
+    
+    // Update crop box position and dimensions
+    function updateCropBox() {
+        cropBox.style.left = `${cropBoxData.left}px`;
+        cropBox.style.top = `${cropBoxData.top}px`;
+        cropBox.style.width = `${cropBoxData.width}px`;
+        cropBox.style.height = `${cropBoxData.height}px`;
+    }
+    
+    // Handle close button
+    const closeBtn = cropPanel.querySelector('.panel-close');
+    closeBtn.addEventListener('click', () => {
+        // Remove the crop panel
+        cropPanel.remove();
+        
+        // Show the parent panel again with proper styling
+        if (parentPanel) {
+            parentPanel.classList.add('active');
+            parentPanel.style.display = 'flex';
+            document.body.appendChild(parentPanel); // Re-add to document if needed
+        }
+        
+        // Clean up event listeners
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+    });
+    
+    // Handle cancel button
+    const cancelBtn = cropPanel.querySelector('.crop-cancel-btn');
+    cancelBtn.addEventListener('click', () => {
+        // Remove the crop panel
+        cropPanel.remove();
+        
+        // Show the parent panel again with proper styling
+        if (parentPanel) {
+            parentPanel.classList.add('active');
+            parentPanel.style.display = 'flex';
+            document.body.appendChild(parentPanel); // Re-add to document if needed
+        }
+    });
+    
+    // Handle apply crop button
+    const applyBtn = cropPanel.querySelector('.crop-apply-btn');
+    applyBtn.addEventListener('click', () => {
+        // Apply crop to the image and get the new image source
+        const newImageSrc = applyCrop(photoObject, cropBoxData, previewWidth, previewHeight);
+        
+        // Remove the crop panel
+        cropPanel.remove();
+        
+        // Show the parent panel again with proper styling
+        if (parentPanel) {
+            parentPanel.classList.add('active');
+            parentPanel.style.display = 'flex';
+            document.body.appendChild(parentPanel); // Re-add to document if needed
+            
+            // Update the preview in the parent panel
+            const previewImg = parentPanel.querySelector('#photo-preview');
+            const previewContainer = parentPanel.querySelector('.preview-container');
+            
+            if (previewImg) {
+                // Force reload of the preview image with the new cropped dimensions
+                previewImg.onload = () => {
+                    // After image loads, update the preview container to match the new aspect ratio
+                    if (previewContainer) {
+                        // Calculate the new aspect ratio based on the crop dimensions
+                        const cropAspectRatio = cropBoxData.width / cropBoxData.height;
+                        
+                        // Set max width/height for the preview container
+                        const maxWidth = 300;
+                        const maxHeight = 300;
+                        
+                        // Calculate dimensions to maintain aspect ratio
+                        let containerWidth, containerHeight;
+                        if (cropAspectRatio > 1) {
+                            // Wide image
+                            containerWidth = Math.min(maxWidth, previewImg.naturalWidth);
+                            containerHeight = containerWidth / cropAspectRatio;
+                        } else {
+                            // Tall image
+                            containerHeight = Math.min(maxHeight, previewImg.naturalHeight);
+                            containerWidth = containerHeight * cropAspectRatio;
+                        }
+                        
+                        // Update container and image styles
+                        previewContainer.style.width = `${containerWidth}px`;
+                        previewContainer.style.height = `${containerHeight}px`;
+                        previewImg.style.width = '100%';
+                        previewImg.style.height = '100%';
+                        previewImg.style.objectFit = 'contain';
+                    }
+                };
+                
+                // Set the image source after setting up the onload handler
+                previewImg.src = newImageSrc;
+            }
+        }
+        
+        // Update the shirt texture - this is now also done in applyCrop when image loads
+        updateShirt3DTexture();
+    });
+}
+
+/**
+ * Apply crop to an image
+ * @param {Object} photoObject - The photo object to crop
+ * @param {Object} cropData - The crop box data
+ * @param {number} previewWidth - The preview width
+ * @param {number} previewHeight - The preview height
+ */
+function applyCrop(photoObject, cropData, previewWidth, previewHeight) {
+    // Create a canvas to perform the crop
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Original image dimensions
+    const originalWidth = photoObject.img.naturalWidth;
+    const originalHeight = photoObject.img.naturalHeight;
+    
+    // Calculate the scale between preview and original image
+    const scaleX = originalWidth / previewWidth;
+    const scaleY = originalHeight / previewHeight;
+    
+    // Calculate crop dimensions in original image scale
+    const cropX = cropData.left * scaleX;
+    const cropY = cropData.top * scaleY;
+    const cropWidth = cropData.width * scaleX;
+    const cropHeight = cropData.height * scaleY;
+    
+    // Set canvas dimensions to the cropped size
+    canvas.width = cropWidth;
+    canvas.height = cropHeight;
+    
+    // Draw only the cropped portion to the canvas
+    ctx.drawImage(
+        photoObject.img,
+        cropX, cropY, cropWidth, cropHeight,
+        0, 0, cropWidth, cropHeight
+    );
+    
+    // Store the original image if not already stored
+    if (!photoObject.originalImg) {
+        photoObject.originalImg = photoObject.img.cloneNode(true);
+    }
+    
+    // Create a new image with the cropped data
+    const croppedImage = new Image();
+    
+    // Wait for the image to load before updating the shirt texture
+    croppedImage.onload = () => {
+        // Replace the current image with the cropped one
+        photoObject.img = croppedImage;
+        
+        // Update dimensions to match the new cropped size
+        photoObject.width = cropWidth;
+        photoObject.height = cropHeight;
+        
+        // Update object aspect ratio if it exists
+        if (photoObject.aspectRatio !== undefined) {
+            photoObject.aspectRatio = cropWidth / cropHeight;
+        }
+        
+        // If the photo object has position data, we might need to adjust it
+        if (photoObject.x !== undefined && photoObject.y !== undefined) {
+            // The object may need position adjustment based on new dimensions
+            if (photoObject.originalWidth && photoObject.originalHeight) {
+                // Calculate scale change
+                const widthRatio = cropWidth / photoObject.originalWidth;
+                const heightRatio = cropHeight / photoObject.originalHeight;
+                
+                // Store the new dimensions
+                photoObject.originalWidth = cropWidth;
+                photoObject.originalHeight = cropHeight;
+            } else {
+                // If original dimensions weren't stored, store them now
+                photoObject.originalWidth = cropWidth;
+                photoObject.originalHeight = cropHeight;
+            }
+        }
+        
+        // Save the current state for undo functionality
+        saveCurrentState();
+        
+        // Update the shirt texture immediately
+        updateShirt3DTexture();
+    };
+    
+    // Set the source to the canvas data
+    croppedImage.src = canvas.toDataURL('image/png');
+    
+    // Immediate update for the preview - don't wait for onload
+    return croppedImage.src;
+}
+
+// Initialize 3D scene and canvas
+export function init(container, modelType = 'tshirt') {
+    container = container || document.getElementById('editor-container');
+    if (!container) {
+        console.error('Container element not found');
+        return;
+    }
+
+    // Create a global ref to container
+    editorContainer = container;
+
+    // Initialize canvas
+    canvasData = initializeCanvas(2048, 2048);
+    
+    // Load saved panel settings
+    loadPanelSettings();
+
+    // Set up the scene
+    scene = new THREE.Scene();
+    
+    // Create camera
+    const aspect = window.innerWidth / window.innerHeight;
+    camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
+    camera.position.set(0, 0, 400);
+
+    // Rest of init function continues...
+}

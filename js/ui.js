@@ -611,7 +611,8 @@ function setupPanelSpecificHandlers() {
                                                     if (editor.addImage) {
                                                         editor.addImage(event.target.result, {
                                                             view: selectedView,
-                                                            center: true
+                                                            center: true,
+                                                            isDecal: true
                                                         }).then(() => {
                                                             showToast(`Image added to ${selectedView} view`);
                                                             
@@ -663,27 +664,31 @@ function setupPanelSpecificHandlers() {
         });
     }
     
-    // Text upload button
+    // Text upload button - Updated to directly use addText from 3d-editor.js
     const textButton = document.getElementById('text-upload-btn');
     if (textButton) {
-        textButton.addEventListener('click', () => {
-            console.log('Text panel opened');
+        // Remove existing event listeners
+        const newTextButton = textButton.cloneNode(true);
+        textButton.parentNode.replaceChild(newTextButton, textButton);
+        
+        // Add the new event listener
+        newTextButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            console.log('Text button clicked - calling addText directly');
             
-            // We can skip the panel and directly use the existing 3D editor function
-            // This is the same implementation that the right-side button uses
-            if (typeof window.add3DText === 'function') {
-                window.add3DText('', { fromButton: true });
+            // Import and use the 3d-editor module directly
+            import('./3d-editor.js')
+                .then((editor) => {
+                    // Call the addText function with empty text to start a new text
+                    // The fromButton option makes it show in the right position
+                    editor.addText('', { fromButton: true });
+                })
+                .catch((error) => {
+                    console.error('Error importing 3d-editor module:', error);
+                    showToast('Failed to add text');
+                });
                 
-                // Close the panel immediately since the 3D editor handles the UI
-                const panel = document.getElementById('text-panel');
-                if (panel) {
-                    panel.classList.remove('active');
-                    textButton.classList.remove('active');
-                }
-            } else {
-                console.error('add3DText function not available');
-                showToast('Text functionality not available');
-            }
+            // We don't need to show the panel as addText opens its own overlay
         });
     }
     
@@ -1762,10 +1767,13 @@ function setupFloatingButtons() {
                 panel.style.display = 'flex'; // Force display
                 newButton.classList.add('active');
             }
+
         });
     });
     
-    // Close panels when clicking outside
+    // Comment out the code that closes panels when clicking outside
+    // This change makes panels only closable via their buttons, not by clicking elsewhere
+    /* 
     document.addEventListener('click', (event) => {
         // Don't close if clicking on a button or inside a panel
         const isButton = Object.values(buttons).some(btn => 
@@ -1780,6 +1788,7 @@ function setupFloatingButtons() {
             closeAllPanels();
         }
     });
+    */
 }
 
 /**
@@ -1804,8 +1813,17 @@ function setupPanelCloseButtons() {
             const panel = newButton.closest('.floating-panel');
             if (panel) {
                 console.log(`Closing panel: ${panel.id}`);
-                panel.classList.remove('active');
-                panel.style.display = 'none';
+                
+                // Only remove the panel if it's a dynamic panel; otherwise just hide it
+                // Photo edit panels and crop panels should be fully removed
+                if (panel.id === 'photo-edit-panel' || panel.id === 'photo-crop-panel' || 
+                    panel.id === 'text-edit-panel' || panel.id === 'shape-edit-panel') {
+                    panel.remove();
+                } else {
+                    // Standard panels should just be hidden
+                    panel.classList.remove('active');
+                    panel.style.display = 'none';
+                }
                 
                 // Find and deactivate the corresponding button
                 const panelId = panel.id;
@@ -2314,3 +2332,78 @@ window.addEventListener('model-loaded', () => {
     console.log('Model loaded event detected - initializing floating UI with retry mechanism');
     retryInitialization();
 }); 
+
+/**
+ * Show a confirmation dialog for deleting an object
+ * @param {string} type - Type of object being deleted ('photo', 'text', or 'shape')
+ * @param {function} onConfirm - Function to call if user confirms deletion
+ */
+export function showDeleteConfirmationDialog(type, onConfirm) {
+    // Remove any existing confirmation dialogs
+    const existingDialogs = document.querySelectorAll('.confirmation-dialog');
+    existingDialogs.forEach(dialog => dialog.remove());
+    
+    // Create the dialog element
+    const dialog = document.createElement('div');
+    dialog.className = 'confirmation-dialog';
+    
+    // Set the content based on type
+    dialog.innerHTML = `
+        <div class="confirmation-content">
+            <h3>Confirm Deletion</h3>
+            <p>Are you sure you want to delete this ${type}?</p>
+            <div class="confirmation-buttons">
+                <button class="cancel-btn">Cancel</button>
+                <button class="confirm-btn">Delete</button>
+            </div>
+        </div>
+    `;
+    
+    // Add the dialog to the body
+    document.body.appendChild(dialog);
+    
+    // Add styles to make dialog appear centered
+    dialog.style.position = 'fixed';
+    dialog.style.left = '50%';
+    dialog.style.top = '50%';
+    dialog.style.transform = 'translate(-50%, -50%)';
+    dialog.style.zIndex = '2000';
+
+    // Show the dialog with animation
+    setTimeout(() => {
+        dialog.classList.add('active');
+    }, 10);
+    
+    // Add event listeners for the buttons
+    const cancelBtn = dialog.querySelector('.cancel-btn');
+    const confirmBtn = dialog.querySelector('.confirm-btn');
+    
+    cancelBtn.addEventListener('click', () => {
+        dialog.classList.remove('active');
+        setTimeout(() => {
+            dialog.remove();
+        }, 300);
+    });
+    
+    confirmBtn.addEventListener('click', () => {
+        dialog.classList.remove('active');
+        setTimeout(() => {
+            dialog.remove();
+            if (typeof onConfirm === 'function') {
+                onConfirm();
+            }
+        }, 300);
+    });
+    
+    // Close on escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            document.removeEventListener('keydown', handleEscape);
+            dialog.classList.remove('active');
+            setTimeout(() => {
+                dialog.remove();
+            }, 300);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+}

@@ -80,7 +80,106 @@ export const updateState = (updates) => {
     callbacks.forEach(callback => callback(state));
 };
 
+// Panel settings - stores the last state of edits for each panel
+export const panelSettings = {
+    // Text panel settings
+    text: {
+        items: [] // Will store text objects that have been created
+    },
+    // Photo panel settings
+    photo: {
+        items: [] // Will store photo objects that have been created
+    },
+    // AI panel settings
+    ai: {
+        items: [] // Will store AI generated images
+    },
+    // Shape panel settings
+    shape: {
+        items: [] // Will store shape objects that have been created
+    }
+};
+
+/**
+ * Save panel settings to localStorage
+ */
+export const savePanelSettings = () => {
+    try {
+        localStorage.setItem('panelSettings', JSON.stringify(panelSettings));
+        console.log('Panel settings saved to localStorage');
+    } catch (error) {
+        console.error('Error saving panel settings to localStorage:', error);
+    }
+};
+
+/**
+ * Load panel settings from localStorage
+ */
+export const loadPanelSettings = () => {
+    try {
+        const savedSettings = localStorage.getItem('panelSettings');
+        if (savedSettings) {
+            Object.assign(panelSettings, JSON.parse(savedSettings));
+            console.log('Panel settings loaded from localStorage');
+        }
+    } catch (error) {
+        console.error('Error loading panel settings from localStorage:', error);
+    }
+};
+
+/**
+ * Add an item to panel settings
+ * @param {string} panelType - The type of panel ('text', 'photo', 'ai', 'shape')
+ * @param {Object} item - The item to add
+ */
+export const addPanelItem = (panelType, item) => {
+    if (panelSettings[panelType]) {
+        // Create a copy without circular references
+        const itemCopy = JSON.parse(JSON.stringify(item, (key, value) => {
+            // Skip node types and functions to avoid circular references
+            if (key === 'img' || typeof value === 'function' || value instanceof Node) {
+                return undefined;
+            }
+            return value;
+        }));
+        
+        // Store src URL or relevant data
+        if (item.src) {
+            itemCopy.src = item.src;
+        }
+        
+        // Add item to panel settings
+        panelSettings[panelType].items.push(itemCopy);
+        
+        // Save settings to localStorage
+        savePanelSettings();
+        console.log(`Added ${panelType} item to panel settings`);
+    }
+};
+
+/**
+ * Remove an item from panel settings
+ * @param {string} panelType - The type of panel ('text', 'photo', 'ai', 'shape')
+ * @param {Object} item - The item to remove, must have an id property
+ */
+export const removePanelItem = (panelType, itemId) => {
+    if (panelSettings[panelType] && panelSettings[panelType].items) {
+        // Find and remove the item
+        const index = panelSettings[panelType].items.findIndex(item => item.id === itemId);
+        if (index !== -1) {
+            panelSettings[panelType].items.splice(index, 1);
+            savePanelSettings();
+            console.log(`Removed ${panelType} item from panel settings`);
+        }
+    }
+};
+
 // Make functions available globally for use by direct scripts
 window.state = state;
 window.updateState = updateState;
-window.subscribe = subscribe; 
+window.subscribe = subscribe;
+window.panelSettings = panelSettings;
+window.savePanelSettings = savePanelSettings;
+window.loadPanelSettings = loadPanelSettings;
+window.addPanelItem = addPanelItem;
+window.removePanelItem = removePanelItem; 

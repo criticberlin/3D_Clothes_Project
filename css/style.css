@@ -2252,21 +2252,29 @@ body.dark-theme #editor-mode-toggle:hover {
 }
 
 #photo-edit-panel .preview-container {
-    width: 100%;
-    height: 200px;
-    margin-bottom: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto 1rem;
+    background-color: var(--bg-tertiary);
     border-radius: var(--border-radius);
     overflow: hidden;
-    background-color: var(--bg-tertiary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: relative;
+    max-width: 300px;
+    max-height: 300px;
 }
 
-#photo-edit-panel .preview-container img {
-    max-width: 100%;
-    max-height: 100%;
+#photo-edit-panel #photo-preview {
+    display: block;
+    width: 100%;
+    height: 100%;
     object-fit: contain;
+}
+
+#photo-edit-panel .crop-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1rem;
 }
 
 #photo-edit-panel .photo-edit-options {
@@ -2308,9 +2316,11 @@ body.dark-theme #editor-mode-toggle:hover {
 
 #photo-edit-panel .adjustment-dropdown {
     width: 100%;
+    margin-bottom: 1rem;
 }
 
-#photo-edit-panel .adjustment-toggle {
+#photo-edit-panel .adjustment-toggle,
+#photo-edit-panel .filters-toggle {
     width: 100%;
     padding: 0.75rem 1rem;
     background-color: var(--bg-tertiary);
@@ -2324,20 +2334,24 @@ body.dark-theme #editor-mode-toggle:hover {
     transition: var(--transition);
 }
 
-#photo-edit-panel .adjustment-toggle:hover {
+#photo-edit-panel .adjustment-toggle:hover,
+#photo-edit-panel .filters-toggle:hover {
     background-color: var(--primary-color);
     color: white;
 }
 
-#photo-edit-panel .adjustment-toggle .toggle-icon {
+#photo-edit-panel .adjustment-toggle .toggle-icon,
+#photo-edit-panel .filters-toggle .toggle-icon {
     transition: transform 0.3s ease;
 }
 
-#photo-edit-panel .adjustment-toggle.open .toggle-icon {
+#photo-edit-panel .adjustment-toggle.open .toggle-icon,
+#photo-edit-panel .filters-toggle.open .toggle-icon {
     transform: rotate(180deg);
 }
 
-#photo-edit-panel .adjustment-content {
+#photo-edit-panel .adjustment-content,
+#photo-edit-panel .filters-content {
     display: none;
     padding: 1rem;
     background-color: var(--bg-secondary);
@@ -2346,9 +2360,69 @@ body.dark-theme #editor-mode-toggle:hover {
     border-radius: 0 0 var(--border-radius) var(--border-radius);
 }
 
-#photo-edit-panel .adjustment-content.open {
+#photo-edit-panel .adjustment-content.open,
+#photo-edit-panel .filters-content.open {
     display: block;
     animation: slideDown 0.3s ease;
+}
+
+/* Filter options */
+#photo-edit-panel .filter-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+#photo-edit-panel .filter-option {
+    cursor: pointer;
+    text-align: center;
+    transition: transform 0.2s ease;
+}
+
+#photo-edit-panel .filter-option:hover {
+    transform: scale(1.05);
+}
+
+#photo-edit-panel .filter-option.active {
+    border: 2px solid var(--primary-color);
+    border-radius: var(--border-radius);
+}
+
+#photo-edit-panel .filter-preview {
+    width: 100%;
+    height: 60px;
+    background-color: var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    margin-bottom: 0.3rem;
+    background-image: url("../assets/sample-image.jpg");
+    background-size: cover;
+    background-position: center;
+}
+
+/* Filter styles */
+#photo-edit-panel .filter-vintage {
+    filter: sepia(50%) saturate(150%) contrast(120%);
+}
+
+#photo-edit-panel .filter-bw {
+    filter: grayscale(100%) contrast(120%);
+}
+
+#photo-edit-panel .filter-hdr {
+    filter: contrast(150%) saturate(140%) brightness(110%);
+}
+
+#photo-edit-panel .filter-cinematic {
+    filter: contrast(130%) saturate(90%) brightness(90%) sepia(30%);
+}
+
+#photo-edit-panel .filter-retro {
+    filter: sepia(60%) hue-rotate(-20deg) saturate(90%) brightness(105%);
+}
+
+#photo-edit-panel .filter-film {
+    filter: contrast(110%) brightness(110%) sepia(30%) saturate(130%);
 }
 
 @keyframes slideDown {
@@ -2489,4 +2563,318 @@ body.dark-theme #editor-mode-toggle:hover {
     color: var(--text-secondary);
     font-size: 0.8rem;
     text-align: right;
+}
+
+/* Photo Crop Panel */
+#photo-crop-panel {
+    z-index: 1010; /* Higher than normal panels */
+}
+
+.crop-container {
+    position: relative;
+    margin: 0 auto;
+    background-color: var(--bg-tertiary);
+    overflow: hidden;
+    border-radius: var(--border-radius);
+}
+
+.crop-image-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.crop-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    object-fit: contain;
+}
+
+.crop-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.crop-box {
+    position: absolute;
+    border: 2px dashed white;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+    cursor: move;
+}
+
+.crop-handle {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background-color: white;
+    border: 1px solid rgba(0, 0, 0, 0.3);
+    border-radius: 50%;
+}
+
+.crop-handle.top-left {
+    top: -7px;
+    left: -7px;
+    cursor: nwse-resize;
+}
+
+.crop-handle.top-right {
+    top: -7px;
+    right: -7px;
+    cursor: nesw-resize;
+}
+
+.crop-handle.bottom-left {
+    bottom: -7px;
+    left: -7px;
+    cursor: nesw-resize;
+}
+
+.crop-handle.bottom-right {
+    bottom: -7px;
+    right: -7px;
+    cursor: nwse-resize;
+}
+
+.aspect-ratio-options {
+    display: flex;
+    justify-content: center;
+    margin: 1rem 0;
+    gap: 0.5rem;
+}
+
+.aspect-ratio-btn {
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 0.3rem 0.7rem;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.aspect-ratio-btn:hover {
+    background-color: var(--bg-secondary);
+}
+
+.aspect-ratio-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.crop-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 1rem;
+}
+
+.crop-cancel-btn, 
+.crop-apply-btn {
+    padding: 0.5rem 1rem;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.crop-cancel-btn {
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.crop-apply-btn {
+    background-color: var(--primary-color);
+    border: none;
+    color: white;
+}
+
+/* Confirmation Dialog Styles */
+.confirmation-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(var(--bg-primary-rgb), 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.confirmation-dialog.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.confirmation-content {
+    width: 320px;
+    max-width: 90%;
+    background-color: var(--bg-secondary);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    padding: 24px;
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+}
+
+.confirmation-dialog.active .confirmation-content {
+    transform: scale(1);
+}
+
+.confirmation-content h3 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 16px 0;
+    text-align: center;
+}
+
+.confirmation-content p {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    margin: 0 0 24px 0;
+    text-align: center;
+}
+
+.confirmation-buttons {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.confirmation-buttons button {
+    flex: 1;
+    padding: 10px;
+    border-radius: var(--border-radius-sm);
+    font-weight: 500;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: none;
+}
+
+.confirmation-buttons .cancel-btn {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.confirmation-buttons .confirm-btn {
+    background-color: var(--danger-color);
+    color: white;
+}
+
+.confirmation-buttons .cancel-btn:hover {
+    background-color: var(--border-color);
+}
+
+.confirmation-buttons .confirm-btn:hover {
+    background-color: #e53935;
+}
+
+/* Saved Items Grid Styles */
+.saved-items-section {
+    margin-top: 20px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 16px;
+}
+
+.saved-items-section h4 {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+.saved-items-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.saved-item {
+    position: relative;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    overflow: hidden;
+    background-color: var(--bg-tertiary);
+    height: 80px;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.saved-item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.item-thumbnail {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: rgba(var(--bg-tertiary-rgb), 0.5);
+}
+
+.item-thumbnail img {
+    max-width: 100%;
+    max-height: 60px;
+    object-fit: contain;
+}
+
+.item-preview {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    font-size: 0.9rem;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.item-preview i {
+    font-size: 1.5rem;
+}
+
+.item-actions {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    padding: 4px;
+    display: flex;
+    gap: 4px;
+}
+
+.item-actions button {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: none;
+    background-color: var(--primary-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.item-actions button:hover {
+    transform: scale(1.1);
+}
+
+.item-use-btn {
+    background-color: var(--success-color) !important;
 }
