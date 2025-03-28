@@ -1111,6 +1111,28 @@ export function updateShirt3DTexture() {
 
     // Draw all objects
     for (const obj of canvasData.objects) {
+        // For images, ensure we're using the correct image source
+        if (obj.type === 'image' && obj.img) {
+            // If we have current filters, apply them
+            if (obj.currentFilters) {
+                // Create or reuse the filter canvas
+                if (!obj.filterCanvas) {
+                    obj.filterCanvas = document.createElement('canvas');
+                    obj.filterCtx = obj.filterCanvas.getContext('2d');
+                    obj.filterCanvas.width = obj.img.naturalWidth || obj.img.width;
+                    obj.filterCanvas.height = obj.img.naturalHeight || obj.img.height;
+                }
+
+                // Apply filters to the context
+                obj.filterCtx.filter = obj.currentFilters;
+                
+                // Draw the original image with filters
+                obj.filterCtx.drawImage(obj.originalImg || obj.img, 0, 0);
+
+                // Update the image source
+                obj.img.src = obj.filterCanvas.toDataURL();
+            }
+        }
         drawObjectToCanvas(obj);
     }
 
@@ -1828,6 +1850,14 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
     // Add to document body
     document.body.appendChild(panel);
     
+    // Position the panel with fixed left position
+    positionFloatingPanel(panel, { left: 100 });
+    
+    // Add event listeners to prevent panel from closing when clicking inside
+    panel.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+    
     return panel;
 }
 
@@ -2052,23 +2082,16 @@ function createShapeEditOverlay(existingShape = null, position = null) {
     panel.appendChild(header);
     panel.appendChild(content);
     
-    // Position panel in the middle of the screen
-    const canvasContainer = document.querySelector('.canvas-container');
-    if (canvasContainer && !position) {
-        canvasContainer.appendChild(panel);
-    } else if (position) {
-        // If position is provided, position it accordingly
-        panel.style.position = 'absolute';
-        panel.style.top = `${position.top}px`;
-        panel.style.left = `${position.left}px`;
-        panel.style.transform = 'translateY(0)';
-        document.body.appendChild(panel);
-    } else {
-        document.body.appendChild(panel);
-    }
+    // Add to document body
+    document.body.appendChild(panel);
     
-    // Show the panel
-    panel.classList.add('active');
+    // Position the panel with fixed left position
+    positionFloatingPanel(panel, { left: 100 });
+    
+    // Add event listeners to prevent panel from closing when clicking inside
+    panel.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
     
     return panel;
 }
@@ -3572,75 +3595,87 @@ export function getLastUsedView() {
 }
 
 /**
- * Handle double click events for text editing
+ * Handle double click events for text and photo editing
  * @param {MouseEvent} event 
  */
 function onDoubleClick(event) {
-    if (!selectedObject || selectedObject.type !== 'text') return;
+    if (!selectedObject) return;
 
-    const overlay = createTextEditOverlay(selectedObject.text, selectedObject.color);
-    document.body.appendChild(overlay);
+    if (selectedObject.type === 'text') {
+        const overlay = createTextEditOverlay(selectedObject.text, selectedObject.color, selectedObject.fontFamily);
+        document.body.appendChild(overlay);
 
-    const textarea = overlay.querySelector('.text-edit-input');
-    const colorOptions = overlay.querySelectorAll('.color-option');
-    let selectedColor = selectedObject.color;
+        const textarea = overlay.querySelector('.text-edit-input');
+        const colorOptions = overlay.querySelectorAll('.color-option');
+        const fontSelect = overlay.querySelector('#font-select');
+        
+        // Store original values
+        const originalText = selectedObject.text;
+        const originalColor = selectedObject.color;
+        const originalFont = selectedObject.fontFamily;
 
-    // Focus the textarea
-    textarea.focus();
-    textarea.select();
-
-    // Handle color selection
-    colorOptions.forEach(option => {
-        option.addEventListener('click', () => {
-            colorOptions.forEach(opt => opt.classList.remove('active'));
-            option.classList.add('active');
-            selectedColor = option.dataset.color;
-        });
-    });
-
-    // Handle save
-    overlay.querySelector('.text-edit-save').addEventListener('click', () => {
-        const newText = textarea.value.trim();
-        if (newText) {
-            selectedObject.text = newText;
-            selectedObject.color = selectedColor;
+        // Real-time text update
+        textarea.addEventListener('input', () => {
+            selectedObject.text = textarea.value;
             updateShirt3DTexture();
-        }
-        overlay.remove();
-    });
+        });
 
-    // Handle cancel
-    overlay.querySelector('.text-edit-cancel').addEventListener('click', () => {
-        overlay.remove();
-    });
-
-    // Handle enter key
-    textarea.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            const newText = textarea.value.trim();
-            if (newText) {
-                selectedObject.text = newText;
-                selectedObject.color = selectedColor;
+        // Real-time color update
+        colorOptions.forEach(option => {
+            option.addEventListener('click', () => {
+                colorOptions.forEach(opt => opt.classList.remove('active'));
+                option.classList.add('active');
+                selectedObject.color = option.dataset.color;
                 updateShirt3DTexture();
+            });
+        });
+
+        // Real-time font update
+        fontSelect.addEventListener('change', () => {
+            selectedObject.fontFamily = fontSelect.value;
+            updateShirt3DTexture();
+        });
+
+        // Handle cancel
+        overlay.querySelector('.text-edit-cancel').addEventListener('click', () => {
+            // Restore original values
+            selectedObject.text = originalText;
+            selectedObject.color = originalColor;
+            selectedObject.fontFamily = originalFont;
+            updateShirt3DTexture();
+            overlay.remove();
+        });
+
+        // Handle escape key
+        textarea.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                // Restore original values
+                selectedObject.text = originalText;
+                selectedObject.color = originalColor;
+                selectedObject.fontFamily = originalFont;
+                updateShirt3DTexture();
+                overlay.remove();
             }
-            overlay.remove();
+        });
+    } else if (selectedObject.type === 'image') {
+        // Store original image if not already stored
+        if (!selectedObject.originalImg) {
+            selectedObject.originalImg = new Image();
+            selectedObject.originalImg.src = selectedObject.img.src;
         }
-    });
 
-    // Handle escape key
-    textarea.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            overlay.remove();
-        }
-    });
-
-    // Handle click outside
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) {
-            overlay.remove();
-        }
-    });
+        // Create and show the photo edit panel
+        const panel = createPhotoEditOverlay(selectedObject);
+        document.body.appendChild(panel);
+        
+        // Position the panel
+        positionFloatingPanel(panel, { left: 100 });
+        
+        // Add event listener to prevent panel from closing when clicking inside
+        panel.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    }
 }
 
 // Export the enhanced 3D editor
@@ -3716,11 +3751,296 @@ function getButtonPosition(buttonSelector) {
 
 // Add this function to handle panel positioning
 function positionFloatingPanel(panel, position) {
-    if (!panel || !position) return;
+    if (!panel) return;
+    
+    // Default position if none provided
+    if (!position) {
+        const canvasContainer = document.querySelector('.canvas-container');
+        if (canvasContainer) {
+            const rect = canvasContainer.getBoundingClientRect();
+            position = {
+                top: rect.top + (rect.height / 2),
+                left: 100 // Fixed left position to match other panels
+            };
+        } else {
+            position = {
+                top: window.innerHeight / 2,
+                left: 100 // Fixed left position to match other panels
+            };
+        }
+    }
     
     panel.style.position = 'fixed';
     panel.style.top = `${position.top}px`;
     panel.style.left = `${position.left}px`;
-    panel.style.transform = 'none'; // Remove default transform
-    panel.style.zIndex = '1000'; // Ensure panel appears above other elements
+    panel.style.transform = 'translateY(-50%)';
+    panel.style.zIndex = '1000';
+    
+    // Ensure panel stays within viewport
+    const panelRect = panel.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+    
+    if (panelRect.bottom > viewportHeight) {
+        panel.style.top = `${viewportHeight - panelRect.height - 20}px`;
+    }
+    
+    if (panelRect.right > viewportWidth) {
+        panel.style.left = `${viewportWidth - panelRect.width - 20}px`;
+    }
+    
+    // Add active class to show the panel
+    panel.classList.add('active');
+}
+
+// Add click event listener to document to close panels when clicking outside
+document.addEventListener('click', (e) => {
+    const panels = document.querySelectorAll('.floating-panel.active');
+    panels.forEach(panel => {
+        if (!panel.contains(e.target)) {
+            panel.classList.remove('active');
+            setTimeout(() => panel.remove(), 300);
+        }
+    });
+});
+
+function createPhotoEditOverlay(selectedObject) {
+    // Create a floating panel
+    const panel = document.createElement('div');
+    panel.className = 'floating-panel photo-edit-panel';
+    
+    // Create header
+    const header = document.createElement('div');
+    header.className = 'panel-header';
+    header.innerHTML = `
+        <span>Edit Photo</span>
+        <button class="panel-close">&times;</button>
+    `;
+    
+    // Create content container
+    const content = document.createElement('div');
+    content.className = 'panel-content';
+    
+    // Create preview container
+    const previewContainer = document.createElement('div');
+    previewContainer.className = 'preview-container';
+    
+    // Create preview image
+    const previewImage = document.createElement('img');
+    previewImage.src = selectedObject.img.src;
+    previewImage.className = 'preview-image';
+    previewContainer.appendChild(previewImage);
+    
+    // Create sliders container
+    const slidersContainer = document.createElement('div');
+    slidersContainer.className = 'sliders-container';
+
+    // Define all the photo editing options with their ranges
+    const photoOptions = [
+        { name: 'Brightness', min: -100, max: 100, default: 0 },
+        { name: 'Contrast', min: -100, max: 100, default: 0 },
+        { name: 'Saturation', min: -100, max: 100, default: 0 },
+        { name: 'Hue', min: -180, max: 180, default: 0 },
+        { name: 'Sharpness', min: 0, max: 100, default: 0 },
+        { name: 'Exposure', min: -100, max: 100, default: 0 },
+        { name: 'Gamma', min: 0, max: 200, default: 100 },
+        { name: 'Vibrance', min: -100, max: 100, default: 0 },
+        { name: 'Temperature', min: -100, max: 100, default: 0 },
+        { name: 'Tint', min: -100, max: 100, default: 0 },
+        { name: 'Shadows', min: -100, max: 100, default: 0 },
+        { name: 'Highlights', min: -100, max: 100, default: 0 },
+        { name: 'Clarity', min: -100, max: 100, default: 0 }
+    ];
+
+    // Create sliders for each option
+    photoOptions.forEach(option => {
+        const sliderContainer = document.createElement('div');
+        sliderContainer.className = 'slider-container';
+        
+        const label = document.createElement('label');
+        label.textContent = option.name;
+        
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = option.min;
+        slider.max = option.max;
+        slider.value = option.default;
+        slider.className = 'photo-edit-slider';
+        slider.dataset.option = option.name.toLowerCase();
+        
+        const valueDisplay = document.createElement('span');
+        valueDisplay.className = 'slider-value';
+        valueDisplay.textContent = option.default;
+        
+        sliderContainer.appendChild(label);
+        sliderContainer.appendChild(slider);
+        sliderContainer.appendChild(valueDisplay);
+        slidersContainer.appendChild(sliderContainer);
+
+        // Add real-time update on slider change
+        slider.addEventListener('input', () => {
+            valueDisplay.textContent = slider.value;
+            // Apply the filter in real-time
+            applyPhotoFilters(previewImage, panel, selectedObject, false);
+        });
+    });
+
+    // Add buttons
+    const buttonsContainer = document.createElement('div');
+    buttonsContainer.className = 'text-edit-buttons';
+    buttonsContainer.innerHTML = `
+        <button class="text-edit-reset">Reset</button>
+        <button class="text-edit-cancel">Cancel</button>
+    `;
+
+    // Add reset functionality
+    buttonsContainer.querySelector('.text-edit-reset').addEventListener('click', () => {
+        // Reset all sliders to default values
+        panel.querySelectorAll('.photo-edit-slider').forEach(slider => {
+            const option = photoOptions.find(opt => opt.name.toLowerCase() === slider.dataset.option);
+            if (option) {
+                slider.value = option.default;
+                slider.nextElementSibling.textContent = option.default;
+            }
+        });
+        // Reset the image
+        if (selectedObject.originalImg) {
+            selectedObject.img.src = selectedObject.originalImg.src;
+            selectedObject.currentFilters = '';
+            selectedObject.filteredImageData = null;
+            if (selectedObject.texture) {
+                selectedObject.texture.image.src = selectedObject.originalImg.src;
+                selectedObject.texture.needsUpdate = true;
+            }
+            updateShirt3DTexture();
+        }
+    });
+
+    // Add cancel functionality
+    buttonsContainer.querySelector('.text-edit-cancel').addEventListener('click', () => {
+        // Restore original image
+        if (selectedObject.originalImg) {
+            selectedObject.img.src = selectedObject.originalImg.src;
+            selectedObject.currentFilters = '';
+            selectedObject.filteredImageData = null;
+            if (selectedObject.texture) {
+                selectedObject.texture.image.src = selectedObject.originalImg.src;
+                selectedObject.texture.needsUpdate = true;
+            }
+            updateShirt3DTexture();
+        }
+        panel.remove();
+    });
+
+    // Handle close button
+    panel.querySelector('.panel-close').addEventListener('click', () => {
+        panel.remove();
+    });
+
+    // Handle escape key
+    document.addEventListener('keydown', function handleEscape(e) {
+        if (e.key === 'Escape') {
+            document.removeEventListener('keydown', handleEscape);
+            panel.remove();
+        }
+    });
+
+    // Assemble the panel content
+    content.appendChild(previewContainer);
+    content.appendChild(slidersContainer);
+    content.appendChild(buttonsContainer);
+    
+    // Add to panel
+    panel.appendChild(header);
+    panel.appendChild(content);
+    
+    return panel;
+}
+
+function applyPhotoFilters(image, panel, selectedObject, previewOnly = false) {
+    const filters = [];
+    const sliders = panel.querySelectorAll('.photo-edit-slider');
+    
+    sliders.forEach(slider => {
+        const value = slider.value;
+        const option = slider.dataset.option;
+        
+        switch(option) {
+            case 'brightness':
+                filters.push(`brightness(${100 + parseInt(value)}%)`);
+                break;
+            case 'contrast':
+                filters.push(`contrast(${100 + parseInt(value)}%)`);
+                break;
+            case 'saturation':
+                filters.push(`saturate(${100 + parseInt(value)}%)`);
+                break;
+            case 'hue':
+                filters.push(`hue-rotate(${value}deg)`);
+                break;
+            case 'sharpness':
+                filters.push(`blur(${(100 - parseInt(value)) / 10}px)`);
+                break;
+            case 'exposure':
+                filters.push(`brightness(${100 + parseInt(value)}%)`);
+                break;
+            case 'gamma':
+                filters.push(`brightness(${parseInt(value)}%)`);
+                break;
+            case 'vibrance':
+                filters.push(`saturate(${100 + parseInt(value)}%)`);
+                break;
+            case 'temperature':
+                filters.push(`sepia(${Math.abs(parseInt(value))}%)`);
+                break;
+            case 'tint':
+                filters.push(`hue-rotate(${value}deg)`);
+                break;
+            case 'shadows':
+                filters.push(`brightness(${100 + parseInt(value)}%)`);
+                break;
+            case 'highlights':
+                filters.push(`brightness(${100 + parseInt(value)}%)`);
+                break;
+            case 'clarity':
+                filters.push(`contrast(${100 + parseInt(value)}%)`);
+                break;
+        }
+    });
+    
+    const filterString = filters.join(' ');
+    image.style.filter = filterString;
+
+    // Apply filters to the actual image in real-time
+    if (selectedObject && selectedObject.img) {
+        // Create or reuse the filter canvas
+        if (!selectedObject.filterCanvas) {
+            selectedObject.filterCanvas = document.createElement('canvas');
+            selectedObject.filterCtx = selectedObject.filterCanvas.getContext('2d');
+            selectedObject.filterCanvas.width = selectedObject.img.naturalWidth || selectedObject.img.width;
+            selectedObject.filterCanvas.height = selectedObject.img.naturalHeight || selectedObject.img.height;
+        }
+
+        // Apply filters to the context
+        selectedObject.filterCtx.filter = filterString;
+        
+        // Draw the original image with filters
+        selectedObject.filterCtx.drawImage(selectedObject.originalImg || selectedObject.img, 0, 0);
+
+        // Update the existing image source
+        selectedObject.img.src = selectedObject.filterCanvas.toDataURL();
+        
+        // Store current filters
+        selectedObject.currentFilters = filterString;
+
+        // Update the texture
+        if (selectedObject.texture) {
+            selectedObject.texture.needsUpdate = true;
+        }
+        
+        // Force texture update
+        requestAnimationFrame(() => {
+            updateShirt3DTexture();
+        });
+    }
 }

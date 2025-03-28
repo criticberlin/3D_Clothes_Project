@@ -129,15 +129,38 @@ export function setupFilePicker() {
 }
 
 /**
+ * Position a floating panel on the screen
+ * @param {HTMLElement} panel - The panel element to position
+ */
+function positionFloatingPanel(panel) {
+    if (!panel) return;
+    
+    // Get the panel dimensions
+    const panelRect = panel.getBoundingClientRect();
+    
+    // Calculate position - 100px from left edge, centered vertically
+    const left = 100; // Fixed distance from left edge
+    const top = (window.innerHeight - panelRect.height) / 2;
+    
+    // Apply position
+    panel.style.left = `${left}px`;
+    panel.style.top = `${top}px`;
+}
+
+/**
  * Show the view selection modal to choose where to apply the design element
  * @param {string} imageData - The image data URL for previews
  * @param {function} callback - Function to call with the selected view
  * @param {string} title - Optional title for the modal
  */
 export function showViewSelectionModal(imageData, callback, title = 'Choose Placement') {
-    // Create and show view selection modal
-    const viewSelectionModal = document.createElement('div');
-    viewSelectionModal.classList.add('view-selection-modal');
+    // Remove any existing view selection containers
+    const existingContainers = document.querySelectorAll('.view-selection-container');
+    existingContainers.forEach(container => container.remove());
+    
+    // Create view selection container
+    const container = document.createElement('div');
+    container.classList.add('view-selection-container');
     
     let previewHtml = '';
     if (imageData) {
@@ -148,9 +171,14 @@ export function showViewSelectionModal(imageData, callback, title = 'Choose Plac
         `;
     }
     
-    viewSelectionModal.innerHTML = `
-        <div class="view-selection-container">
+    container.innerHTML = `
+        <div class="panel-header">
             <h2>${title}</h2>
+            <button class="panel-close" aria-label="Close Panel">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="panel-content">
             <p>Select which part of the garment to place your design:</p>
             ${previewHtml}
             <div class="view-options">
@@ -175,35 +203,73 @@ export function showViewSelectionModal(imageData, callback, title = 'Choose Plac
         </div>
     `;
     
-    document.body.appendChild(viewSelectionModal);
+    // Append the container to the document body
+    document.body.appendChild(container);
     
-    // Handle Escape key to close the modal
+    // Position the panel
+    positionFloatingPanel(container);
+    
+    // Force display and add active class
+    container.style.display = 'flex';
+    requestAnimationFrame(() => {
+        container.classList.add('active');
+    });
+    
+    // Handle Escape key to close the panel
     const handleEscape = (e) => {
         if (e.key === 'Escape') {
             document.removeEventListener('keydown', handleEscape);
-            document.body.removeChild(viewSelectionModal);
-            callback(null); // Call with null to indicate cancellation
+            container.classList.remove('active');
+            setTimeout(() => {
+                document.body.removeChild(container);
+                callback(null); // Call with null to indicate cancellation
+            }, 300);
         }
     };
     document.addEventListener('keydown', handleEscape);
     
     // Handle view option selection
-    const viewOptions = viewSelectionModal.querySelectorAll('.view-option');
+    const viewOptions = container.querySelectorAll('.view-option');
     viewOptions.forEach(option => {
-        option.addEventListener('click', function() {
+        option.addEventListener('click', function(e) {
+            e.stopPropagation();
             const selectedView = this.dataset.view;
             document.removeEventListener('keydown', handleEscape);
-            document.body.removeChild(viewSelectionModal);
-            callback(selectedView);
+            container.classList.remove('active');
+            setTimeout(() => {
+                document.body.removeChild(container);
+                callback(selectedView);
+            }, 300);
         });
     });
     
     // Handle cancel button
-    const cancelButton = viewSelectionModal.querySelector('.cancel-view-selection');
-    cancelButton.addEventListener('click', function() {
+    const cancelButton = container.querySelector('.cancel-view-selection');
+    cancelButton.addEventListener('click', function(e) {
+        e.stopPropagation();
         document.removeEventListener('keydown', handleEscape);
-        document.body.removeChild(viewSelectionModal);
-        callback(null); // Call with null to indicate cancellation
+        container.classList.remove('active');
+        setTimeout(() => {
+            document.body.removeChild(container);
+            callback(null); // Call with null to indicate cancellation
+        }, 300);
+    });
+    
+    // Handle close button
+    const closeButton = container.querySelector('.panel-close');
+    closeButton.addEventListener('click', function(e) {
+        e.stopPropagation();
+        document.removeEventListener('keydown', handleEscape);
+        container.classList.remove('active');
+        setTimeout(() => {
+            document.body.removeChild(container);
+            callback(null); // Call with null to indicate cancellation
+        }, 300);
+    });
+    
+    // Prevent panel from closing when clicking inside
+    container.addEventListener('click', (e) => {
+        e.stopPropagation();
     });
 }
 

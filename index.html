@@ -35,6 +35,12 @@
 			}
 		</script>
 
+		<!-- Add GLTFLoader -->
+		<script type="module">
+			import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+			window.GLTFLoader = GLTFLoader;
+		</script>
+
 		<!-- Add Fabric.js -->
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
 
@@ -103,24 +109,30 @@
 		</script>
 	</head>
 	<body>
-		<div class="app">
-			<!-- App Header - New mobile-friendly header -->
-			<header class="app-header">
-				<div class="header-logo">
-					<h1>3D Shirt <span>Studio</span></h1>
-				</div>
+		<!-- Landing Page -->
+		<div class="landing-page">
+			<button id="landing-theme-toggle" class="theme-toggle landing-theme-toggle" aria-label="Toggle Theme" title="Toggle Light/Dark Theme">
+				<i class="fas fa-sun"></i>
+			</button>
+			<h1 class="landing-title">3D Shirt <span>Studio</span></h1>
+			<p class="landing-subtitle">Design Your Perfect T-Shirt in 3D</p>
+			<button class="landing-button">Let's Go!</button>
+			<div class="landing-tshirt">
+				<!-- 3D T-shirt will be rendered here -->
+			</div>
+		</div>
 
-				<div class="header-controls">
-					<button
-						id="theme-toggle"
-						class="theme-toggle"
-						aria-label="Toggle Theme"
-						title="Toggle Light/Dark Theme"
-					>
-						<i class="fas fa-sun"></i>
-					</button>
-				</div>
-			</header>
+		<!-- Main App -->
+		<div class="app">
+			<!-- Theme Toggle Button -->
+			<button
+				id="theme-toggle"
+				class="theme-toggle"
+				aria-label="Toggle Theme"
+				title="Toggle Light/Dark Theme"
+			>
+				<i class="fas fa-sun"></i>
+			</button>
 
 			<!-- Main Content Container -->
 			<div class="main-container">

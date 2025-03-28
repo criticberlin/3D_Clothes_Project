@@ -590,4 +590,210 @@ function setupEditorModeToggle() {
 
     // Initialize with current state
     updateState({ editorMode: state.editorMode || true });
-} 
+}
+
+// Landing page initialization
+function initLandingPage() {
+    const landingPage = document.querySelector('.landing-page');
+    const landingButton = document.querySelector('.landing-button');
+    const app = document.querySelector('.app');
+    const landingThemeToggle = document.getElementById('landing-theme-toggle');
+    
+    // Initialize landing page theme toggle
+    if (landingThemeToggle) {
+        const savedTheme = localStorage.getItem('theme');
+        let isDarkMode = savedTheme ? savedTheme === 'dark' : true;
+        
+        landingThemeToggle.innerHTML = isDarkMode ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+        
+        landingThemeToggle.addEventListener('click', function() {
+            isDarkMode = !isDarkMode;
+            localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+            document.documentElement.classList.toggle('light-theme', !isDarkMode);
+            landingThemeToggle.innerHTML = isDarkMode ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+        });
+    }
+
+    // Handle landing page transition
+    if (landingButton) {
+        landingButton.addEventListener('click', function() {
+            landingPage.classList.add('fade-out');
+            setTimeout(() => {
+                app.classList.add('visible');
+                // Initialize the main application
+                initializeMainApp();
+            }, 500);
+        });
+    }
+
+    // Initialize 3D t-shirt for landing page
+    initLandingTShirt();
+}
+
+// Initialize 3D t-shirt for landing page
+function initLandingTShirt() {
+    const landingTShirt = document.querySelector('.landing-tshirt');
+    if (!landingTShirt) {
+        console.error('Landing t-shirt container not found');
+        return;
+    }
+
+    // Create a new scene for the landing page t-shirt
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ 
+        alpha: true,
+        antialias: true 
+    });
+    
+    renderer.setSize(500, 500);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    landingTShirt.appendChild(renderer.domElement);
+
+    // Add modern lighting setup
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(5, 5, 5);
+    scene.add(directionalLight);
+
+    const pointLight = new THREE.PointLight(0xffffff, 1, 100);
+    pointLight.position.set(-5, -5, -5);
+    scene.add(pointLight);
+
+    // Add subtle fog for depth
+    scene.fog = new THREE.Fog(0x000000, 5, 15);
+
+    // Create a temporary placeholder cube while loading
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const material = new THREE.MeshStandardMaterial({ 
+        color: 0x6366f1,
+        metalness: 0.1,
+        roughness: 0.8
+    });
+    const placeholder = new THREE.Mesh(geometry, material);
+    scene.add(placeholder);
+
+    // Set up camera with a slight tilt
+    camera.position.set(0, 0, 3);
+    camera.lookAt(0, 0, 0);
+
+    // Create a smooth animation loop for the placeholder
+    let time = 0;
+    function animate() {
+        requestAnimationFrame(animate);
+        time += 0.01;
+
+        // Smooth rotation
+        placeholder.rotation.y = Math.sin(time) * 0.2;
+        placeholder.rotation.x = Math.cos(time * 0.5) * 0.1;
+
+        // Subtle floating motion
+        placeholder.position.y = Math.sin(time * 2) * 0.05;
+
+        // Render the scene
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    // Load t-shirt model with enhanced materials
+    if (typeof window.GLTFLoader === 'undefined') {
+        console.error('GLTFLoader not found. Please check if the script is loaded correctly.');
+        return;
+    }
+
+    const loader = new window.GLTFLoader();
+    loader.load(
+        './models/tshirt.glb',
+        function(gltf) {
+            console.log('T-shirt model loaded successfully');
+            const model = gltf.scene;
+            scene.add(model);
+
+            // Remove placeholder
+            scene.remove(placeholder);
+
+            // Traverse the model to enhance materials
+            model.traverse((child) => {
+                if (child.isMesh) {
+                    // Enhance material properties
+                    child.material.metalness = 0.1;
+                    child.material.roughness = 0.8;
+                    child.material.envMapIntensity = 1;
+                    child.material.needsUpdate = true;
+                }
+            });
+
+            // Position and scale the model
+            model.scale.set(0.6, 0.6, 0.6);
+            model.position.set(0, 0, 0);
+
+            // Update animation loop for the t-shirt
+            function animateTShirt() {
+                requestAnimationFrame(animateTShirt);
+                time += 0.01;
+
+                // Smooth rotation
+                model.rotation.y = Math.sin(time) * 0.2;
+                model.rotation.x = Math.cos(time * 0.5) * 0.1;
+
+                // Subtle floating motion
+                model.position.y = Math.sin(time * 2) * 0.05;
+
+                // Render the scene
+                renderer.render(scene, camera);
+            }
+            animateTShirt();
+        },
+        // Progress callback
+        function(xhr) {
+            const percent = (xhr.loaded / xhr.total * 100);
+            console.log(`Loading t-shirt model: ${percent.toFixed(2)}%`);
+        },
+        // Error callback
+        function(error) {
+            console.error('Error loading landing page t-shirt:', error);
+            // Keep the placeholder visible if model fails to load
+            placeholder.material.color.setHex(0xff0000); // Change to red to indicate error
+        }
+    );
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+        const width = landingTShirt.clientWidth;
+        const height = landingTShirt.clientHeight;
+        
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        
+        renderer.setSize(width, height);
+        renderer.setPixelRatio(window.devicePixelRatio);
+    });
+}
+
+// Initialize main application
+function initializeMainApp() {
+    // Initialize all the existing functionality
+    setupUIControls();
+    loadModels().catch(error => {
+        console.error('Error during model loading:', error);
+    });
+}
+
+// Update the DOMContentLoaded event listener
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize landing page first
+    initLandingPage();
+    
+    // Check WebGL support
+    const webGLStatus = window.checkWebGLSupport();
+    if (!webGLStatus.supported) {
+        console.error('WebGL not properly supported:', webGLStatus.message);
+        showErrorMessage(webGLStatus.message);
+    } else if (webGLStatus.limitedSupport) {
+        console.warn('Limited WebGL support:', webGLStatus.message);
+    } else {
+        console.log('WebGL support:', webGLStatus.message);
+    }
+}); 
