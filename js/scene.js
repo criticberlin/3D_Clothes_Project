@@ -468,7 +468,7 @@ function initializeScene() {
     renderer.shadowMap.autoUpdate = true;
     renderer.outputEncoding = THREE.sRGBEncoding;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMappingExposure = 1.0;  // Increased for better color vibrancy
 
     // Disable shadow mapping completely to fix dark shadow issues
     // renderer.shadowMap.enabled = false;
@@ -490,7 +490,7 @@ function initializeScene() {
     // Fix deprecated properties warnings by using recommended new properties
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.9;  // Reduced from 1.1 for less brightness
+    renderer.toneMappingExposure = 1.0;  // Increased for better color vibrancy
 
     // Clear previous canvas if exists
     while (container.firstChild) {
@@ -547,8 +547,8 @@ function setupLighting() {
 
     // Create physically-based studio lighting for fabric rendering
 
-    // Ambient light for base illumination (reduced intensity for more natural look)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);  // Reduced for more contrast
+    // Ambient light for base illumination (increased for better visibility of details)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);  // Increased for better texture visibility
     scene.add(ambientLight);
 
     // Main key light (simulating window/studio key light)
@@ -563,22 +563,22 @@ function setupLighting() {
     scene.add(mainLight);
 
     // Fill light (simulating bounce light from environment)
-    const fillLight = new THREE.DirectionalLight(0xe6f0ff, 0.5);  // Slightly increased
+    const fillLight = new THREE.DirectionalLight(0xe6f0ff, 0.6);  // Increased for better texture visibility
     fillLight.position.set(-6, 4, -5);
     scene.add(fillLight);
 
     // Add rim/back light for fabric highlighting
-    const rimLight = new THREE.DirectionalLight(0xfff0e6, 0.4);  // Increased for better edge highlights
+    const rimLight = new THREE.DirectionalLight(0xfff0e6, 0.5);  // Increased for better edge highlights
     rimLight.position.set(0, 6, -10);
     scene.add(rimLight);
 
     // Add a warm ground bounce light
-    const groundLight = new THREE.DirectionalLight(0xfff0db, 0.25);  // Slightly increased
+    const groundLight = new THREE.DirectionalLight(0xfff0db, 0.3);  // Increased for better texture visibility
     groundLight.position.set(0, -5, 0);
     scene.add(groundLight);
 
     // Add very subtle hemisphere light for overall fill
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.2);  // Increased for better fill
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.25);  // Increased for better fill
     hemiLight.position.set(0, 10, 0);
     scene.add(hemiLight);
 
@@ -1675,6 +1675,8 @@ export function updateEditorCanvasTexture(texture) {
     
     // Optimize the texture for best quality and performance
     texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    texture.minFilter = THREE.LinearMipmapLinearFilter; // Use trilinear filtering for best quality
+    texture.magFilter = THREE.LinearFilter; // Use linear filtering for upscaling
     texture.premultiplyAlpha = false; // Better alpha blending with decals
     texture.needsUpdate = true;
     
@@ -1683,7 +1685,10 @@ export function updateEditorCanvasTexture(texture) {
     texture.matrixAutoUpdate = false; // We'll set the matrix manually
     texture.matrix.identity(); // Reset matrix
     
-    // Create material that only renders on the outside face
+    // Set color space to preserve saturation and vibrancy
+    texture.colorSpace = THREE.SRGBColorSpace;
+    
+    // Create material that only renders on the outside face with enhanced settings
     const material = new THREE.MeshBasicMaterial({
         map: texture,
         transparent: true,
@@ -1695,8 +1700,21 @@ export function updateEditorCanvasTexture(texture) {
         blendEquation: THREE.AddEquation,
         depthTest: true,
         depthWrite: false,
-        alphaTest: 0.001
+        alphaTest: 0.001,
+        // Set color space to preserve vibrancy
+        colorSpace: THREE.SRGBColorSpace,
+        // Add high-quality texture settings
+        toneMapped: false,
+        // Ensure maximum texture quality
+        dithering: true,
+        // Add subtle depth for better quality perception
+        depthTest: true,
+        depthWrite: false
     });
+    
+    // Add enhanced settings to preserve colors
+    material.toneMapped = false;
+    material.needsUpdate = true;
     
     // Create new layer
     const frontLayer = ensureShirtLayer('canvas-layer-front', material);
@@ -1708,7 +1726,7 @@ export function updateEditorCanvasTexture(texture) {
         renderer.render(scene, camera);
     }
     
-    console.log('Canvas texture applied to outside of shirt only');
+    console.log('Canvas texture applied to outside of shirt only with enhanced vibrancy settings');
 }
 
 // Update shirt texture with proper UV mapping

@@ -43,8 +43,8 @@ let currentLockedView = null;
 let canvasData = {
     canvas: null,
     ctx: null,
-    width: 1024,
-    height: 1024,
+    width: 2048,
+    height: 2048,
     objects: []
 };
 
@@ -55,7 +55,8 @@ const cursors = {
     rotate: 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\'><path d=\'M12 2 C12 22 12 22 12 22\' stroke=\'#2196F3\' stroke-width=\'2\'/></svg>"), auto',
     scale: 'nwse-resize',
     edit: 'crosshair',
-    grabbing: 'grabbing'
+    grabbing: 'grabbing',
+    nwseResize: 'nwse-resize'
 };
 
 // Add global variables for drag-and-drop and advanced features
@@ -230,71 +231,64 @@ function onMouseDown(event) {
 
         if (hitView) {
             // We clicked inside a valid UV rectangle (editable area)
-            if (!isEditingLocked || currentLockedView !== hitView) {
-                // Lock to this view if not already locked
-                lockToView(hitView);
-            }
-
-            // Check if we clicked on a transform handle of the selected object first
+            
+            // Don't lock to view unless actually editing - only lock when touching a decal or control
+            const clickedObject = detectObjectClick();
+            
+            // Check if we clicked on a transform handle of a selected object first
             if (selectedObject) {
                 const action = detectTransformHandleClick();
                 if (action) {
                     // Lock t-shirt movement when interacting with decal controls
                     toggleCameraControls(false);
+                    lockToView(hitView);
+                    
+                    // Reset scaling state variables at the start of scaling
+                    if (action === 'scale') {
+                        delete selectedObject._initialScaleDistance;
+                        delete selectedObject._initialWidth;
+                        delete selectedObject._initialHeight;
+                    }
+                    
                     // Handle the control button click
                     handleEditableAreaClick(uv, intersects[0]);
                     return;
                 }
             }
 
-            // Check if we clicked on an object
-            const clickedObject = detectObjectClick();
+            // If we clicked on an object, lock the view for editing
             if (clickedObject) {
-                // Lock t-shirt movement when clicking on a decal
-                toggleCameraControls(false);
-                // If we clicked on an object, handle it
+                // Lock to this view for editing
+                lockToView(hitView);
+                
+                // Handle the editable area click (select object, set transform mode, etc.)
                 handleEditableAreaClick(uv, intersects[0]);
-                // Set transform mode to move only if we clicked directly on the object
-                if (!clickedObject.isPinned) {
-                    transformMode = 'move';
-                    document.body.style.cursor = cursors.grabbing;
-                }
             } else {
-                // If we clicked on empty space, deselect current object and unlock t-shirt movement
-                if (selectedObject) {
-                    deselectObject();
-                }
-                selectedObject = null;
-                transformMode = 'none';
-                document.body.style.cursor = cursors.default;
-                toggleCameraControls(true); // Unlock t-shirt movement
+                // We didn't click on a decal or control, so keep the model free moving
+                // Only enable editing mode without locking camera controls
+                isEditingMode = true;
+                handleEditableAreaClick(uv, intersects[0]);
+                
+                // Don't lock camera movement if we're just clicking on the shirt
+                toggleCameraControls(true);
+                
+                // But still highlight the editable area
+                currentEditableArea = modelConfig[state.currentModel].views[hitView].uvRect;
                 updateShirt3DTexture();
             }
         } else {
-            // Clicked on shirt but outside any editable area
-            if (isEditingLocked) {
-                unlockFromView();
-            }
-            if (selectedObject) {
-                deselectObject();
-            }
-            transformMode = 'none';
-            document.body.style.cursor = cursors.default;
-            toggleCameraControls(true); // Unlock t-shirt movement
-        }
-    } else {
-        // Clicked completely outside the shirt
-        if (isEditingLocked) {
+            // If we click outside all editable areas, ensure camera is unlocked
             unlockFromView();
         }
-        if (selectedObject) {
+    } else {
+        // We clicked on something other than the shirt model
+        // If it wasn't a UI element, deselect current object
+        if (!event.target.closest('.ui-element')) {
             deselectObject();
         }
-        selectedObject = null;
-        transformMode = 'none';
-        document.body.style.cursor = cursors.default;
-        toggleCameraControls(true); // Unlock t-shirt movement
-        updateShirt3DTexture();
+        
+        // Ensure camera is unlocked
+        unlockFromView();
     }
 }
 
@@ -322,30 +316,46 @@ function onMouseMove(event) {
         const deltaX = currentPoint.x - startPoint.x;
         const deltaY = currentPoint.y - startPoint.y;
 
+        // Track if transformation actually occurred
+        let transformApplied = false;
+
         // Handle different transform modes
         switch (transformMode) {
             case 'move':
                 if (!selectedObject.isPinned) {
                     moveObject(selectedObject, deltaX, deltaY);
+                    transformApplied = true;
                 }
                 break;
             case 'rotate':
+                // Allow rotation for both decals and text objects
                 if (selectedObject.isDecal || selectedObject.type === 'text') {
                     rotateObject(selectedObject, deltaX, deltaY);
+                    transformApplied = true;
                 }
                 break;
             case 'scale':
                 if (!selectedObject.isPinned) {
                     scaleObject(selectedObject, deltaX, deltaY);
+                    transformApplied = true;
                 }
                 break;
         }
 
-        // Update the texture
-        debounce(updateShirt3DTexture, 50)();
-
-        // Update the transform controls
-        updateTransformControls();
+        // Only update if transformation was applied
+        if (transformApplied) {
+            // Use requestAnimationFrame for smoother updates
+            if (!window._updateAnimationFrame) {
+                window._updateAnimationFrame = requestAnimationFrame(() => {
+                    // Update the texture with optimized debouncing
+                    updateShirt3DTexture();
+                    // Update the transform controls
+                    updateTransformControls();
+                    // Clear the animation frame flag
+                    window._updateAnimationFrame = null;
+                });
+            }
+        }
 
         // Update the starting point for smooth transformations
         startPoint.copy(currentPoint);
@@ -357,22 +367,42 @@ function onMouseMove(event) {
  * @param {MouseEvent} event 
  */
 function onMouseUp(event) {
-    // Only take action if we're in a transform mode
+    // Only re-enable camera controls if we're not in editing mode or 
+    // if we're done with a transformation
     if (transformMode !== 'none') {
-        // Finalize any transformations
-        updateShirt3DTexture();
+        // If we were rotating, clean up the rotation variables
+        if (transformMode === 'rotate' && selectedObject) {
+            // Clean up rotation tracking variables but keep the final angle
+            delete selectedObject._lastRotationAngle;
+            delete selectedObject._startAngle;
+            // Keep _startRotation for future rotations
+        }
         
-        // Save the state for undo/redo
-        saveCurrentState();
+        // Reset scaling state variables when operation is complete
+        if (transformMode === 'scale' && selectedObject) {
+            delete selectedObject._initialScaleDistance;
+            delete selectedObject._initialWidth;
+            delete selectedObject._initialHeight;
+        }
         
-        // Reset transform mode and cursor
+        // Done with transformation, but still in edit mode
         transformMode = 'none';
-        document.body.style.cursor = cursors.default;
         
-        // If no object is selected, unlock t-shirt movement
-        if (!selectedObject) {
+        // Keep camera controls disabled if we still have a selected object
+        if (selectedObject) {
+            // Only show edit cursor when we have a selected object
+            document.body.style.cursor = cursors.edit;
+        } else {
+            // If no object is selected, reset cursor and enable camera
+            document.body.style.cursor = cursors.default;
             toggleCameraControls(true);
         }
+    }
+
+    // Save state for undo
+    if (stateChanged) {
+        historyStack.saveState();
+        stateChanged = false;
     }
 }
 
@@ -396,88 +426,125 @@ function updateMousePosition(event) {
 
 /**
  * Detect if user clicked on a transform handle
- * @returns {string} The transform mode or action
+ * @returns {string|null} Action name or null if no handle was clicked
  */
 function detectTransformHandleClick() {
     if (!selectedObject) return null;
 
-    // Calculate global mouse position
+    // Get object from the collection
+    const object = selectedObject;
+    
+    // Get current mouse position in UV space from raycaster
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObject(shirtMesh);
     if (intersects.length === 0) return null;
-
+    
     const uv = intersects[0].uv;
     const x = uv.x * canvasData.width;
     const y = uv.y * canvasData.height;
+    
+    // Calculate object center in canvas space
+    const centerX = object.left + object.width / 2;
+    const centerY = object.top + object.height / 2;
+    
+    // Calculate the rotated bounding box dimensions - MUST MATCH drawSelectionOverlay
+    let borderWidth = object.width;
+    let borderHeight = object.height;
+    let borderOffsetX = 0;
+    let borderOffsetY = 0;
 
-    // Object dimensions and position
-    const object = selectedObject;
-    const width = object.width;
-    const height = object.height;
-    const centerX = object.left + width / 2;
-    const centerY = object.top + height / 2;
+    if (object.angle && Math.abs(object.angle) > 0.1) {
+        const angleRad = object.angle * Math.PI / 180;
+        const halfWidth = object.width / 2;
+        const halfHeight = object.height / 2;
 
-    // Button size and padding
+        // Calculate the four corners of the unrotated box - EXACTLY match drawSelectionOverlay
+        const corners = [
+            { x: -halfWidth, y: -halfHeight },  // Top-left
+            { x: halfWidth, y: -halfHeight },   // Top-right
+            { x: halfWidth, y: halfHeight },    // Bottom-right
+            { x: -halfWidth, y: halfHeight }    // Bottom-left
+        ];
+
+        // Rotate each corner and find the extreme points
+        let minRotX = Number.MAX_VALUE;
+        let maxRotX = -Number.MAX_VALUE;
+        let minRotY = Number.MAX_VALUE;
+        let maxRotY = -Number.MAX_VALUE;
+
+        corners.forEach(corner => {
+            // Apply rotation transformation
+            const rotX = corner.x * Math.cos(angleRad) - corner.y * Math.sin(angleRad);
+            const rotY = corner.x * Math.sin(angleRad) + corner.y * Math.cos(angleRad);
+
+            // Update extreme points
+            minRotX = Math.min(minRotX, rotX);
+            maxRotX = Math.max(maxRotX, rotX);
+            minRotY = Math.min(minRotY, rotY);
+            maxRotY = Math.max(maxRotY, rotY);
+        });
+
+        // Calculate the new border dimensions - EXACTLY match drawSelectionOverlay
+        borderWidth = maxRotX - minRotX;
+        borderHeight = maxRotY - minRotY;
+        borderOffsetX = (minRotX + maxRotX) / 2;
+        borderOffsetY = (minRotY + maxRotY) / 2;
+    }
+    
+    // Translate mouse position to object's coordinate system
+    const relX = x - centerX;
+    const relY = y - centerY;
+    
+    // Size and positioning for control buttons - MUST MATCH drawSelectionOverlay
     const buttonRadius = 12;
     const buttonPadding = 5;
-    const hitRadius = buttonRadius * 1.5; // Slightly larger hit area for better UX
-
-    // Convert mouse position to object-relative coordinates
-    const relX = (x - centerX);
-    const relY = (y - centerY);
-
-    // Apply inverse rotation to get coordinates in the object's local space
-    const angle = object.angle || 0;
-    const radians = -angle * Math.PI / 180;
-    const localX = relX * Math.cos(radians) - relY * Math.sin(radians);
-    const localY = relX * Math.sin(radians) + relY * Math.cos(radians);
-
-    // Check each button with increased hit area
+    const hitRadius = buttonRadius * 1.5; // Slightly larger hit area for better usability
+    
+    // Define control button positions - MUST MATCH drawSelectionOverlay
     const buttons = [
         // Delete button (bottom left)
         {
-            x: -width / 2 - buttonRadius - buttonPadding,
-            y: height / 2 + buttonRadius + buttonPadding,
+            x: -borderWidth / 2 - buttonRadius - buttonPadding + borderOffsetX,
+            y: borderHeight / 2 + buttonRadius + buttonPadding + borderOffsetY,
             action: 'delete'
         },
         // Layers button (top center, only check if there are overlapping decals)
         {
-            x: 0,
-            y: -height / 2 - buttonRadius - buttonPadding,
+            x: borderOffsetX,
+            y: -borderHeight / 2 - buttonRadius - buttonPadding + borderOffsetY,
             action: 'layers',
             condition: () => canvasData.objects.some(otherObj => 
                 otherObj !== object && 
-                otherObj.isDecal && 
                 isObjectsOverlapping(object, otherObj)
             )
         },
         // Resize button (bottom right)
         {
-            x: width / 2 + buttonRadius + buttonPadding,
-            y: height / 2 + buttonRadius + buttonPadding,
+            x: borderWidth / 2 + buttonRadius + buttonPadding + borderOffsetX,
+            y: borderHeight / 2 + buttonRadius + buttonPadding + borderOffsetY,
             action: 'scale'
         },
         // Pin button (top left)
         {
-            x: -width / 2 - buttonRadius - buttonPadding,
-            y: -height / 2 - buttonRadius - buttonPadding,
+            x: -borderWidth / 2 - buttonRadius - buttonPadding + borderOffsetX,
+            y: -borderHeight / 2 - buttonRadius - buttonPadding + borderOffsetY,
             action: 'pin'
         },
         // Rotate button (top right)
         {
-            x: width / 2 + buttonRadius + buttonPadding,
-            y: -height / 2 - buttonRadius - buttonPadding,
+            x: borderWidth / 2 + buttonRadius + buttonPadding + borderOffsetX,
+            y: -borderHeight / 2 - buttonRadius - buttonPadding + borderOffsetY,
             action: 'rotate'
         },
         // Duplicate button (bottom center)
         {
-            x: 0,
-            y: height / 2 + buttonRadius + buttonPadding,
+            x: borderOffsetX,
+            y: borderHeight / 2 + buttonRadius + buttonPadding + borderOffsetY,
             action: 'duplicate'
         }
     ];
 
-    // Check each button
+    // Check each button - no need to apply inverse rotation as we're using the rotated bounding box
     for (const button of buttons) {
         // Skip checking layers button if condition is not met
         if (button.action === 'layers' && !button.condition()) {
@@ -485,8 +552,8 @@ function detectTransformHandleClick() {
         }
 
         const distanceToButton = Math.sqrt(
-            Math.pow(localX - button.x, 2) +
-            Math.pow(localY - button.y, 2)
+            Math.pow(relX - button.x, 2) +
+            Math.pow(relY - button.y, 2)
         );
 
         if (distanceToButton <= hitRadius) {
@@ -495,14 +562,29 @@ function detectTransformHandleClick() {
     }
 
     // Check if we're inside the object (for move)
-    const padding = 5;
-    if (
-        localX >= -width / 2 - padding &&
-        localX <= width / 2 + padding &&
-        localY >= -height / 2 - padding &&
-        localY <= height / 2 + padding
-    ) {
-        return 'move';
+    // For rotated objects, we need to apply inverse rotation to check if point is inside
+    if (object.angle && Math.abs(object.angle) > 0.1) {
+        const angleRad = -object.angle * Math.PI / 180; // Negative for inverse rotation
+        const dx = relX;
+        const dy = relY;
+        
+        // Apply inverse rotation
+        const localX = dx * Math.cos(angleRad) - dy * Math.sin(angleRad);
+        const localY = dx * Math.sin(angleRad) + dy * Math.cos(angleRad);
+        
+        // Check if within the object bounds plus padding
+        const padding = 5;
+        if (Math.abs(localX) <= object.width / 2 + padding && 
+            Math.abs(localY) <= object.height / 2 + padding) {
+            return 'move';
+        }
+    } else {
+        // For non-rotated objects, simple boundary check
+        const padding = 5;
+        if (Math.abs(relX) <= object.width / 2 + padding && 
+            Math.abs(relY) <= object.height / 2 + padding) {
+            return 'move';
+        }
     }
 
     return null;
@@ -700,12 +782,12 @@ function moveObject(object, deltaX, deltaY) {
     // Convert screen space delta to UV space delta with advanced calculations
     const deltaUV = screenToUVDelta(deltaX, deltaY);
 
-    // Get object's current position in UV space
+    // Optimize movement with direct positioning instead of incremental updates
+    // Get object's current position in UV space for calculations
     const objLeftUV = object.left / canvasData.width;
     const objTopUV = object.top / canvasData.height;
 
-    // Calculate distortion factor based on position in UV map
-    // Objects near edges might need to move differently due to UV distortion
+    // Calculate distortion factor based on position in UV map with improved smoothing
     let distortionFactorX = 1.0;
     let distortionFactorY = 1.0;
 
@@ -713,21 +795,21 @@ function moveObject(object, deltaX, deltaY) {
     const edgeThreshold = 0.1;
     const uvRect = viewConfig.uvRect;
 
-    // Adjust for distortion near edges - apply progressively stronger correction
+    // Adjust for distortion near edges - apply progressively stronger correction with improved smoothing
     if (objLeftUV < uvRect.u1 + edgeThreshold) {
-        // Left edge distortion correction
-        distortionFactorX = 0.8 + (0.2 * (objLeftUV - uvRect.u1) / edgeThreshold);
+        // Left edge distortion correction with improved smoothing
+        distortionFactorX = 0.9 + (0.1 * (objLeftUV - uvRect.u1) / edgeThreshold);
     } else if (objLeftUV > uvRect.u2 - edgeThreshold) {
-        // Right edge distortion correction
-        distortionFactorX = 0.8 + (0.2 * (uvRect.u2 - objLeftUV) / edgeThreshold);
+        // Right edge distortion correction with improved smoothing
+        distortionFactorX = 0.9 + (0.1 * (uvRect.u2 - objLeftUV) / edgeThreshold);
     }
 
     if (objTopUV < uvRect.v1 + edgeThreshold) {
-        // Top edge distortion correction
-        distortionFactorY = 0.8 + (0.2 * (objTopUV - uvRect.v1) / edgeThreshold);
+        // Top edge distortion correction with improved smoothing
+        distortionFactorY = 0.9 + (0.1 * (objTopUV - uvRect.v1) / edgeThreshold);
     } else if (objTopUV > uvRect.v2 - edgeThreshold) {
-        // Bottom edge distortion correction
-        distortionFactorY = 0.8 + (0.2 * (uvRect.v2 - objTopUV) / edgeThreshold);
+        // Bottom edge distortion correction with improved smoothing
+        distortionFactorY = 0.9 + (0.1 * (uvRect.v2 - objTopUV) / edgeThreshold);
     }
 
     // Apply curvature correction based on model type and view
@@ -739,15 +821,19 @@ function moveObject(object, deltaX, deltaY) {
         distortionFactorX *= curvatureCorrection;
     }
 
-    // Apply the final movement with all corrections
+    // Apply the final movement with all corrections and improved precision
     // Invert the Y-axis movement by negating deltaUV.y
-    object.left += deltaUV.x * canvasData.width * distortionFactorX;
-    object.top -= deltaUV.y * canvasData.height * distortionFactorY;
+    const newLeft = object.left + deltaUV.x * canvasData.width * distortionFactorX;
+    const newTop = object.top - deltaUV.y * canvasData.height * distortionFactorY;
+    
+    // Use direct assignment for smoother updates rather than incremental changes
+    object.left = newLeft;
+    object.top = newTop;
 
     // Apply advanced constraints to keep object in valid UV space
     constrainObjectToUVBoundary(object);
 
-    Logger.log('Moved object with advanced calculations');
+    Logger.log('Moved object with improved smooth calculations');
 }
 
 /**
@@ -777,16 +863,17 @@ function rotateObject(object, deltaX, deltaY) {
         // Calculate angle between center and current point
         const angle = Math.atan2(y - centerY, x - centerX);
 
-        // Initialize the last angle if needed
+        // Store initial angle and rotation when beginning a new rotation action
         if (object._lastRotationAngle === undefined) {
             object._lastRotationAngle = angle;
+            object._startAngle = angle;
+            object._startRotation = object.angle || 0;
             return;
         }
 
         // Calculate the angle difference
         let angleDelta = angle - object._lastRotationAngle;
-
-        // Normalize angleDelta to avoid jumps
+     
         if (angleDelta > Math.PI) angleDelta -= Math.PI * 2;
         if (angleDelta < -Math.PI) angleDelta += Math.PI * 2;
 
@@ -794,16 +881,22 @@ function rotateObject(object, deltaX, deltaY) {
         const rotationSpeed = 1.5; // Increased from 1.0 to 1.5
         angleDelta *= (180 / Math.PI) * rotationSpeed;
 
-        // Update the object's rotation with dampening
-        const smoothingFactor = 0.8; // Lower = more dampening
-        object.angle = (object.angle || 0) + (angleDelta * smoothingFactor);
+        // Calculate new angle based on total change from start position
+        // This prevents drift and ensures smooth continuation of rotation
+        object.angle = object._startRotation + ((angle - object._startAngle) * (180 / Math.PI) * rotationSpeed);
 
-        // Store the current angle for next time
+        // Update the last angle for next calculation
         object._lastRotationAngle = angle;
     } else {
         // Fallback to a simpler method if ray doesn't hit
         const rotationFactor = 1.0; // Adjusted for appropriate rotation speed
         const rotationDelta = deltaX * rotationFactor;
+        
+        // Initialize start values if needed
+        if (object._startRotation === undefined) {
+            object._startRotation = object.angle || 0;
+        }
+        
         object.angle = (object.angle || 0) + rotationDelta;
     }
 
@@ -824,9 +917,6 @@ function scaleObject(object, deltaX, deltaY) {
     const viewConfig = modelConfig[state.currentModel].views[state.cameraView];
     if (!viewConfig) return;
 
-    // Convert screen deltas to UV space
-    const worldDeltas = screenToUVDelta(deltaX, deltaY);
-
     // Get object center coordinates
     const centerX = object.left + object.width / 2;
     const centerY = object.top + object.height / 2;
@@ -834,40 +924,73 @@ function scaleObject(object, deltaX, deltaY) {
     // Cast a ray to get position on the model
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObject(shirtMesh);
-
-    // Calculate scale factor - positive delta = scale up, negative = scale down
-    const movementMagnitude = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-    const scaleDirection = (deltaX + deltaY) > 0 ? 1 : -1;
-    const scaleFactor = 1 + (movementMagnitude * 0.03 * scaleDirection); // Reduced from 0.05 to 0.03 for less sensitivity
-
-    // Apply scaling with constraints
+    
+    if (intersects.length === 0) return;
+    
+    const uv = intersects[0].uv;
+    const mouseX = uv.x * canvasData.width;
+    const mouseY = uv.y * canvasData.height;
+    
+    // Calculate the distance from center to current mouse position
+    const dx = mouseX - centerX;
+    const dy = mouseY - centerY;
+    const currentDistance = Math.sqrt(dx * dx + dy * dy);
+    
+    // If this is the first move, store the initial distance and object size
+    if (!object._initialScaleDistance) {
+        object._initialScaleDistance = currentDistance;
+        object._initialWidth = object.width;
+        object._initialHeight = object.height;
+        
+        // For text objects, also store the initial fontSize
+        if (object.type === 'text') {
+            object._initialFontSize = object.fontSize || 30;
+        }
+        return;
+    }
+    
+    // Calculate the scale ratio based on distance change
+    const scaleFactor = currentDistance / object._initialScaleDistance;
+    
+    // Apply the scale relative to the initial size
+    let newWidth = object._initialWidth * scaleFactor;
+    let newHeight = object._initialHeight * scaleFactor;
+    
+    // Apply minimum and maximum constraints
     const minDimension = 20; // Minimum size in pixels
     const maxDimension = Math.min(canvasData.width, canvasData.height) * 0.8; // Maximum size
-
-    // Calculate new dimensions
-    let newWidth = Math.max(minDimension, Math.min(maxDimension, object.width * scaleFactor));
-    let newHeight = Math.max(minDimension, Math.min(maxDimension, object.height * scaleFactor));
-
-    // Maintain aspect ratio for images and text
-    if ((object.type === 'image' && object.preserveAspectRatio !== false) || object.type === 'text') {
-        const originalAspect = object.metadata?.originalWidth / object.metadata?.originalHeight || 
-                               object.width / object.height;
+    
+    newWidth = Math.max(minDimension, Math.min(maxDimension, newWidth));
+    newHeight = Math.max(minDimension, Math.min(maxDimension, newHeight));
+    
+    // Special handling for text objects
+    if (object.type === 'text') {
+        // Scale the font size proportionally
+        const newFontSize = Math.max(12, object._initialFontSize * scaleFactor);
+        object.fontSize = newFontSize;
         
-        // Use the dimension that changed more as the primary scale
-        if (Math.abs(newWidth / object.width) > Math.abs(newHeight / object.height)) {
-            newHeight = newWidth / originalAspect;
-        } else {
-            newWidth = newHeight * originalAspect;
-        }
-
-        // Check bounds again after aspect ratio adjustment
+        // For text objects, measure the new dimensions based on the scaled font size
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.font = `bold ${newFontSize}px "${object.font || 'Arial'}"`;
+        const textMetrics = tempCtx.measureText(object.text);
+        
+        // Update dimensions based on the new font size
+        newWidth = textMetrics.width || newWidth;
+        newHeight = newFontSize * 1.2; // Approximation for text height
+    }
+    // Normal aspect ratio handling for non-text objects
+    else if ((object.type === 'image' && object.preserveAspectRatio !== false)) {
+        const originalAspect = object.metadata?.originalWidth / object.metadata?.originalHeight || 
+                             object._initialWidth / object._initialHeight;
+        
+        // Adjust height based on width to maintain aspect ratio
+        newHeight = newWidth / originalAspect;
+        
+        // Check bounds again
         if (newHeight > maxDimension) {
             newHeight = maxDimension;
             newWidth = newHeight * originalAspect;
-        }
-        if (newWidth > maxDimension) {
-            newWidth = maxDimension;
-            newHeight = newWidth / originalAspect;
         }
     }
 
@@ -880,7 +1003,7 @@ function scaleObject(object, deltaX, deltaY) {
     // Ensure object stays within boundaries
     constrainObjectToUVBoundary(object);
 
-    Logger.log('Scaled object');
+    Logger.log('Scaled object with natural scaling behavior');
 }
 
 /**
@@ -1198,14 +1321,16 @@ function drawObjectToCanvas(object) {
         // If the object has temporary filters being previewed or permanent filters
         if (object._tempFilters || object.currentFilters) {
             // Use temporary filters for preview while editing, or permanent filters otherwise
-            const currentFilter = object._tempFilters || object.currentFilters;
+            const currentFilter = object._tempFilters || object.currentFilters || 'contrast(120%) saturate(130%) brightness(105%)';
             
             // Apply filters directly to the context
-            // This is the most reliable method that works across browsers
             ctx.filter = currentFilter;
             
             // No need to modify the source image
             sourceImage = object.img;
+        } else if (isDecal) {
+            // Apply default enhancement for decals if no filters are specified
+            ctx.filter = 'contrast(120%) saturate(130%) brightness(105%)';
         }
         
         // For decals with transparency, use the most direct rendering approach possible
@@ -1218,9 +1343,22 @@ function drawObjectToCanvas(object) {
             ctx.globalCompositeOperation = 'source-over';
             ctx.globalAlpha = 1.0;
             
-            // Draw at original dimensions to maintain fine details
+            // Create a temporary high-resolution canvas for better quality rendering
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = sourceImage.naturalWidth;
+            tempCanvas.height = sourceImage.naturalHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // Apply maximum quality settings
+            tempCtx.imageSmoothingEnabled = true;
+            tempCtx.imageSmoothingQuality = 'high';
+            
+            // Draw original image to temp canvas
+            tempCtx.drawImage(sourceImage, 0, 0, sourceImage.naturalWidth, sourceImage.naturalHeight);
+            
+            // Draw the image from temp canvas to main canvas at the desired size
             ctx.drawImage(
-                sourceImage,
+                tempCanvas,
                 -object.width / 2,
                 -object.height / 2,
                 object.width,
@@ -1372,7 +1510,7 @@ function drawSelectionOverlay(object) {
     // Save context state
     ctx.save();
 
-    // Apply transformations for position only (no rotation for controls)
+    // Apply transformations for position (center of object)
     ctx.translate(object.left + object.width / 2, object.top + object.height / 2);
 
     // Calculate the rotated bounding box dimensions
@@ -1419,19 +1557,30 @@ function drawSelectionOverlay(object) {
         borderOffsetY = (minRotY + maxRotY) / 2;
     }
 
-    // Draw selection outline with modern style
+    // Draw selection outline - non-rotating rectangular boundary
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
     ctx.lineWidth = 2;
     ctx.setLineDash([6, 6]);
     
-    // Draw rectangle selection with padding
-    const padding = 2;
+    // Use padding for better visibility
+    const padding = 4;
+    
+    // Draw a rectangular boundary that doesn't rotate, just like the control buttons
     ctx.strokeRect(
-        -borderWidth / 2 - padding + borderOffsetX,
-        -borderHeight / 2 - padding + borderOffsetY,
+        borderOffsetX - borderWidth/2 - padding,
+        borderOffsetY - borderHeight/2 - padding,
         borderWidth + padding * 2,
         borderHeight + padding * 2
     );
+    
+    // Draw center point for reference (if object is rotated)
+    if (object.angle && Math.abs(object.angle) > 0.1) {
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(0, 0, 4, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.fill();
+    }
     
     // Draw modern control buttons
     const buttonRadius = 12;
@@ -1458,7 +1607,6 @@ function drawSelectionOverlay(object) {
     // Check if we should show the layers button (when there are overlapping decals)
     const hasOverlappingDecals = canvasData.objects.some(otherObj => 
         otherObj !== object && 
-        otherObj.isDecal && 
         isObjectsOverlapping(object, otherObj)
     );
     
@@ -1509,15 +1657,15 @@ function drawSelectionOverlay(object) {
         '#F3E5F5'
     );
     
-    // Draw duplicate button (bottom center) - Orange color scheme
+    // Draw duplicate button (bottom center)
     drawControlButton(
         borderOffsetX,
         borderHeight / 2 + buttonRadius + buttonPadding + borderOffsetY,
-        'x2',
+        '📋',
         '#FF9800',
         '#FFF3E0'
     );
-
+    
     // Restore context state
     ctx.restore();
 }
@@ -1623,29 +1771,23 @@ export function removeObject(object) {
 export function addImage(imageUrl, options = {}) {
     return new Promise((resolve, reject) => {
         // Get current view
-        const targetView = options.view || state.cameraView || 'front';
+        const targetView = options.view || state.cameraView;
         
-        // Create an image element to load the image
+        // Create new image with high quality settings
         const img = new Image();
+        img.crossOrigin = 'anonymous';
         
-        // Handle load errors
-        img.onerror = (error) => {
-            console.error('Error loading image:', error);
-            reject(error);
-        };
-        
-        // Set crossOrigin to anonymous for CORS images
-        if (imageUrl.startsWith('http')) {
-            img.crossOrigin = 'anonymous';
-        }
+        // Set image quality settings
+        img.imageSmoothingEnabled = true;
+        img.imageSmoothingQuality = 'high';
         
         // When the image loads
         img.onload = () => {
             // Calculate optimal dimensions while maintaining aspect ratio
             const aspectRatio = img.width / img.height;
             
-            // Default width based on canvas size, or user-specified width - make it smaller
-            const defaultWidth = canvasData.width * 0.2; // Reduced from 0.3 to 0.2
+            // Default width based on canvas size, or user-specified width
+            const defaultWidth = canvasData.width * 0.2;
             
             // Calculate height based on aspect ratio
             const defaultHeight = defaultWidth / aspectRatio;
@@ -1684,8 +1826,8 @@ export function addImage(imageUrl, options = {}) {
                 // Create a temporary canvas to check for transparency
                 const tempCanvas = document.createElement('canvas');
                 const tempCtx = tempCanvas.getContext('2d');
-                tempCanvas.width = Math.min(img.width, 100); // Sample at smaller size for efficiency
-                tempCanvas.height = Math.min(img.height, 100);
+                tempCanvas.width = img.width; // Use original image dimensions
+                tempCanvas.height = img.height;
                 tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
                 
                 // Sample pixels to check for transparency
@@ -1723,7 +1865,7 @@ export function addImage(imageUrl, options = {}) {
             
             // Create the object with improved default properties for decals
             const obj = {
-                id: 'img_' + Date.now() + '_' + Math.floor(Math.random() * 1000), // Add unique ID
+                id: 'img_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
                 type: 'image',
                 img: img,
                 src: imageUrl,
@@ -1732,10 +1874,12 @@ export function addImage(imageUrl, options = {}) {
                 width: options.width || defaultWidth,
                 height: options.height || defaultHeight,
                 angle: options.angle || 0,
-                isDecal: options.isDecal || false, // Explicit decal flag
-                isAIGenerated: options.isAIGenerated || false, // Flag for AI generated images
+                isDecal: options.isDecal || false,
+                isAIGenerated: options.isAIGenerated || false,
                 removeColor: options.removeColor || false,
                 view: targetView,
+                // Apply default enhancement filters to make decals more vibrant
+                currentFilters: options.currentFilters || 'contrast(120%) saturate(130%) brightness(105%)',
                 metadata: {
                     originalWidth: img.width,
                     originalHeight: img.height,
@@ -2897,6 +3041,9 @@ function unlockFromView() {
 
     // Exit editing mode
     isEditingMode = false;
+    
+    // Reset the transform mode
+    transformMode = 'none';
 
     // Reset cursor
     document.body.style.cursor = cursors.default;
@@ -2916,148 +3063,97 @@ function unlockFromView() {
  * @param {Object} intersection - The ray intersection data
  */
 function handleEditableAreaClick(uv, intersection) {
-    const x = uv.x * canvasData.width;
-    const y = uv.y * canvasData.height;
-
-    // Get the current view from UV coordinates
-    const hitView = detectViewFromUV(uv);
-    if (hitView) {
-        // Update current editable area
-        currentEditableArea = modelConfig[state.currentModel].views[hitView].uvRect;
-        isEditingMode = true;
-        updateShirt3DTexture(); // Update to show the new editable area
-    }
-
-    // First check if we clicked on a transform handle of the selected object
+    if (transformMode !== 'none') return;
+    
+    // Check if we clicked on a transform handle of the selected object
     if (selectedObject) {
         const action = detectTransformHandleClick();
         if (action) {
-            event.preventDefault();
-            event.stopPropagation();
-
-            // Lock t-shirt movement when using any control
-            toggleCameraControls(false);
-
             switch (action) {
+                case 'delete':
+                    deleteSelectedObject();
+                    break;
+                    
+                case 'scale':
+                    if (!selectedObject.isPinned) {
+                        transformMode = 'scale';
+                        document.body.style.cursor = cursors.nwseResize;
+                        // Lock camera when scaling
+                        toggleCameraControls(false);
+                    }
+                    break;
+                    
+                case 'rotate':
+                    // Allow rotation for both decals and text objects
+                    if (selectedObject.isDecal || selectedObject.type === 'text') {
+                        transformMode = 'rotate';
+                        document.body.style.cursor = cursors.rotate;
+                        // Lock camera when rotating
+                        toggleCameraControls(false);
+                    }
+                    break;
+                    
+                case 'pin':
+                    // Toggle pin state
+                    selectedObject.isPinned = !selectedObject.isPinned;
+                    updateShirt3DTexture();
+                    historyStack.saveState();
+                    break;
+                    
+                case 'duplicate':
+                    duplicateSelectedObject();
+                    break;
+                    
+                case 'layers':
+                    // Handle layers button - find overlapping objects
+                    const overlappingObjects = canvasData.objects.filter(obj => 
+                        obj !== selectedObject && isObjectsOverlapping(selectedObject, obj)
+                    );
+                    
+                    if (overlappingObjects.length > 0) {
+                        // Bring to front
+                        const index = canvasData.objects.indexOf(selectedObject);
+                        if (index !== -1) {
+                            canvasData.objects.splice(index, 1);
+                            canvasData.objects.push(selectedObject);
+                            updateShirt3DTexture();
+                        }
+                    }
+                    break;
+                    
                 case 'move':
                     if (!selectedObject.isPinned) {
                         transformMode = 'move';
                         document.body.style.cursor = cursors.grabbing;
-                    }
-                    break;
-
-                case 'rotate':
-                    if (selectedObject.isDecal) {
-                        transformMode = 'rotate';
-                        document.body.style.cursor = cursors.rotate;
-                        // Initialize rotation tracking
-                        selectedObject._lastRotationAngle = undefined;
-                    }
-                    break;
-
-                case 'scale':
-                    if (!selectedObject.isPinned) {
-                        transformMode = 'scale';
-                        document.body.style.cursor = cursors.scale;
-                    }
-                    break;
-
-                case 'delete':
-                    // Show confirmation dialog before deleting
-                    const objType = selectedObject.type === 'image' ? 'photo' : selectedObject.type;
-                    import('./ui.js').then(ui => {
-                        ui.showDeleteConfirmationDialog(objType, () => {
-                            // Only delete if user confirms
-                            const index = canvasData.objects.indexOf(selectedObject);
-                            if (index > -1) {
-                                // Remove from panel settings
-                                const panelType = selectedObject.type === 'image' 
-                                    ? (selectedObject.isAIGenerated ? 'ai' : 'photo') 
-                                    : selectedObject.type;
-                                removePanelItem(panelType, selectedObject.id);
-                                
-                                // Remove the object
-                                canvasData.objects.splice(index, 1);
-                                selectedObject = null;
-                                transformMode = 'none';
-                                document.body.style.cursor = cursors.default;
-                                toggleCameraControls(true); // Unlock t-shirt movement after deletion
-                                updateShirt3DTexture();
-                                historyStack.saveState(); // Save state for undo after deletion
-                            }
-                        });
-                    });
-                    break;
-
-                case 'pin':
-                    // Toggle pin state
-                    selectedObject.isPinned = !selectedObject.isPinned;
-                    transformMode = 'none';
-                    document.body.style.cursor = cursors.default;
-                    updateShirt3DTexture();
-                    break;
-
-                case 'duplicate':
-                    // Create a copy of the selected object
-                    const clone = { ...selectedObject };
-                    // Offset the clone slightly
-                    clone.left += 20;
-                    clone.top += 20;
-                    canvasData.objects.push(clone);
-                    selectObject(clone);
-                    transformMode = 'move';
-                    document.body.style.cursor = cursors.grabbing;
-                    break;
-
-                case 'layers':
-                    // Find overlapping objects with improved detection
-                    const overlappingObjects = canvasData.objects.filter(obj => 
-                        obj !== selectedObject && 
-                        obj.isDecal && 
-                        isObjectsOverlapping(selectedObject, obj)
-                    );
-                    
-                    if (overlappingObjects.length > 0) {
-                        // Move selected object to top
-                        const currentIndex = canvasData.objects.indexOf(selectedObject);
-                        if (currentIndex > -1) {
-                            canvasData.objects.splice(currentIndex, 1);
-                            canvasData.objects.push(selectedObject);
-                            updateShirt3DTexture();
-                        }
+                        // Lock camera when moving decal
+                        toggleCameraControls(false);
                     }
                     break;
             }
             return;
         }
     }
-
-    // If we didn't click a handle, check if we clicked an object
+    
+    // If a specific action wasn't triggered, check for object clicks
     const clickedObject = detectObjectClick();
     
     if (clickedObject) {
-        // Lock t-shirt movement when selecting an object
-        toggleCameraControls(false);
-        // Allow selecting pinned objects
         selectObject(clickedObject);
+        
         if (!clickedObject.isPinned) {
             transformMode = 'move';
             document.body.style.cursor = cursors.grabbing;
-        } else {
-            transformMode = 'none';
-            document.body.style.cursor = cursors.default;
+            // Lock camera when moving decal
+            toggleCameraControls(false);
         }
-        // Update texture to show control buttons
         updateShirt3DTexture();
     } else {
-        // Clicked empty space
+        // If not clicking on an object or control, deselect and enable camera controls
         if (selectedObject) {
             deselectObject();
         }
-        selectedObject = null;
-        transformMode = 'none';
-        document.body.style.cursor = cursors.default;
-        toggleCameraControls(true); // Unlock t-shirt movement
+        // Re-enable camera controls since we're not interacting with decals
+        toggleCameraControls(true);
         updateShirt3DTexture();
     }
 }
@@ -3983,6 +4079,15 @@ function createPhotoEditOverlay(photoObject) {
             const filterRegex = /(brightness|contrast|saturate|drop-shadow|)\(([^)]+)\)/g;
             let match;
             
+            // Always leave UI sliders at default positions (100%)
+            // This ensures the UI stays at neutral while still applying the enhanced filters
+            
+            // Applied filter settings are managed internally in updatePhotoFilters
+            // which now automatically adds the base enhancement filter
+            
+            // Initialize with default filter settings when first opening
+            updatePhotoFilters(photoObject, panel);
+            
             while ((match = filterRegex.exec(photoObject.currentFilters)) !== null) {
                 if (match[1] === 'brightness') {
                     const value = parseInt(match[2]);
@@ -3994,7 +4099,7 @@ function createPhotoEditOverlay(photoObject) {
                     const value = parseInt(match[2]);
                     if (!isNaN(value)) filterValues.saturation = value;
                 } else if (match[1] === 'drop-shadow') {
-                    // Parse shadow value - this is complex but we'll try a simple approach
+                    // Extract shadow size from the drop-shadow filter
                     const shadowParts = match[2].split(' ');
                     if (shadowParts.length >= 3) {
                         const shadowSize = parseInt(shadowParts[2]);
@@ -4003,35 +4108,14 @@ function createPhotoEditOverlay(photoObject) {
                 }
             }
             
-            // Apply parsed values to sliders
-            if (filterValues.brightness !== undefined) {
-                const slider = panel.querySelector('.brightness-slider');
-                slider.value = filterValues.brightness;
-                slider.nextElementSibling.textContent = `${filterValues.brightness}%`;
-            }
-            
-            if (filterValues.contrast !== undefined) {
-                const slider = panel.querySelector('.contrast-slider');
-                slider.value = filterValues.contrast;
-                slider.nextElementSibling.textContent = `${filterValues.contrast}%`;
-            }
-            
-            if (filterValues.saturation !== undefined) {
-                const slider = panel.querySelector('.saturation-slider');
-                slider.value = filterValues.saturation;
-                slider.nextElementSibling.textContent = `${filterValues.saturation}%`;
-            }
-            
-            if (filterValues.shadows !== undefined) {
-                const slider = panel.querySelector('.shadows-slider');
-                slider.value = filterValues.shadows;
-                slider.nextElementSibling.textContent = `${filterValues.shadows}%`;
-            }
-            
-            // Highlights is trickier as it's the second brightness filter, default to 100 if we can't parse
+            // Keep UI at defaults, enhancements apply automatically
+            // Don't update UI sliders with parsed values
         } catch (e) {
-            console.error('Error parsing existing filters:', e);
+            console.warn('Error parsing filters:', e);
         }
+    } else {
+        // For new images with no filters yet, initialize with default enhancement
+        updatePhotoFilters(photoObject, panel);
     }
 
     // Setup adjustment dropdown toggle
@@ -4187,13 +4271,9 @@ function createPhotoEditOverlay(photoObject) {
             noneFilter.classList.add('active');
         }
         
-        // Clear any temporary filters
-        if (photoObject._tempFilters) {
-            delete photoObject._tempFilters;
-        }
-        
-        // Clear the preview filter
-        previewImg.style.filter = '';
+        // Instead of clearing filters completely, reset to default enhancement filter
+        // Apply the base enhancement filter
+        updatePhotoFilters(photoObject, panel);
         
         // Update the texture to show reset state
         updateShirt3DTexture();
@@ -4332,10 +4412,13 @@ function updatePhotoFilters(photoObject, panel) {
         exposureFilter
     ].filter(f => f !== ''); // Remove empty filters
 
+    // Add base enhancement filter that's always applied (not shown in UI)
+    const baseEnhancementFilter = 'contrast(120%) saturate(130%) brightness(105%)';
+    
     // Combine preset and adjustment filters
     const filters = presetFilter ? 
-        [presetFilter, ...adjustmentFilters].join(' ') : 
-        adjustmentFilters.join(' ');
+        [baseEnhancementFilter, presetFilter, ...adjustmentFilters].join(' ') : 
+        [baseEnhancementFilter, ...adjustmentFilters].join(' ');
 
     // Apply filters to the preview image
     const previewImg = panel.querySelector('#photo-preview');
@@ -4905,6 +4988,33 @@ function applyCrop(photoObject, cropData, previewWidth, previewHeight) {
     
     // Immediate update for the preview - don't wait for onload
     return croppedImage.src;
+}
+
+/**
+ * Initialize a canvas with the specified width and height
+ * @param {number} width - Canvas width
+ * @param {number} height - Canvas height
+ * @returns {Object} - Canvas data object
+ */
+function initializeCanvas(width, height) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+    
+    return {
+        canvas: canvas,
+        ctx: ctx,
+        width: width,
+        height: height,
+        objects: []
+    };
 }
 
 // Initialize 3D scene and canvas
