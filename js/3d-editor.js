@@ -306,7 +306,7 @@ function onMouseMove(event) {
         return;
     }
 
-    // Only proceed with transformation if we have a selected object and we're in move mode
+    // Only proceed with transformation if we have a selected object
     if (selectedObject) {
         // Store current point for transformations
         currentPoint.x = mouse.x;
@@ -316,19 +316,20 @@ function onMouseMove(event) {
         const deltaX = currentPoint.x - startPoint.x;
         const deltaY = currentPoint.y - startPoint.y;
 
-        // Track if transformation actually occurred
+        // Apply transformation based on mode
         let transformApplied = false;
-
-        // Handle different transform modes
+        
         switch (transformMode) {
             case 'move':
                 if (!selectedObject.isPinned) {
                     moveObject(selectedObject, deltaX, deltaY);
                     transformApplied = true;
+                    
+                    // Update visual controls without waiting for texture update
+                    updateTransformControlsPosition();
                 }
                 break;
             case 'rotate':
-                // Allow rotation for both decals and text objects
                 if (selectedObject.isDecal || selectedObject.type === 'text') {
                     rotateObject(selectedObject, deltaX, deltaY);
                     transformApplied = true;
@@ -344,21 +345,45 @@ function onMouseMove(event) {
 
         // Only update if transformation was applied
         if (transformApplied) {
-            // Use requestAnimationFrame for smoother updates
-            if (!window._updateAnimationFrame) {
-                window._updateAnimationFrame = requestAnimationFrame(() => {
-                    // Update the texture with optimized debouncing
+            // For moving operations, use a dedicated high-performance renderer
+            if (transformMode === 'move') {
+                // Each move creates its own animation frame for optimal smoothness
+                requestAnimationFrame(() => {
                     updateShirt3DTexture();
-                    // Update the transform controls
                     updateTransformControls();
-                    // Clear the animation frame flag
-                    window._updateAnimationFrame = null;
                 });
+            } else {
+                // For other transformations, use the existing approach with debouncing
+                if (!window._updateAnimationFrame) {
+                    window._updateAnimationFrame = requestAnimationFrame(() => {
+                        updateShirt3DTexture();
+                        updateTransformControls();
+                        window._updateAnimationFrame = null;
+                    });
+                }
             }
         }
 
-        // Update the starting point for smooth transformations
+        // Update starting point for next frame
         startPoint.copy(currentPoint);
+    }
+}
+
+/**
+ * Update just the transform controls position without redrawing the entire texture
+ * This function provides immediate visual feedback with minimal performance impact
+ */
+function updateTransformControlsPosition() {
+    if (selectedObject && transformControls) {
+        // Use direct DOM manipulation for maximum speed
+        const controlsElement = transformControls.element;
+        if (controlsElement) {
+            const left = selectedObject.left + (selectedObject.width / 2);
+            const top = selectedObject.top + (selectedObject.height / 2);
+            
+            // Use transform for GPU acceleration instead of left/top
+            controlsElement.style.transform = `translate(${left}px, ${top}px)`;
+        }
     }
 }
 
@@ -367,6 +392,18 @@ function onMouseMove(event) {
  * @param {MouseEvent} event 
  */
 function onMouseUp(event) {
+    // Clear any pending animation frame
+    if (window._updateAnimationFrame) {
+        cancelAnimationFrame(window._updateAnimationFrame);
+        window._updateAnimationFrame = null;
+    }
+    
+    // Force a final update
+    requestAnimationFrame(() => {
+        updateShirt3DTexture();
+        updateTransformControls();
+    });
+    
     // Only re-enable camera controls if we're not in editing mode or 
     // if we're done with a transformation
     if (transformMode !== 'none') {
@@ -383,6 +420,14 @@ function onMouseUp(event) {
             delete selectedObject._initialScaleDistance;
             delete selectedObject._initialWidth;
             delete selectedObject._initialHeight;
+        }
+        
+        // Reset moving state variables when operation is complete
+        if (transformMode === 'move' && selectedObject) {
+            delete selectedObject._lastMovePosition;
+            delete selectedObject._startPosition;
+            delete selectedObject._startLeft;
+            delete selectedObject._startTop;
         }
         
         // Done with transformation, but still in edit mode
@@ -779,61 +824,85 @@ function moveObject(object, deltaX, deltaY) {
     const viewConfig = modelConfig[state.currentModel].views[state.cameraView];
     if (!viewConfig) return;
 
-    // Convert screen space delta to UV space delta with advanced calculations
-    const deltaUV = screenToUVDelta(deltaX, deltaY);
-
-    // Optimize movement with direct positioning instead of incremental updates
-    // Get object's current position in UV space for calculations
-    const objLeftUV = object.left / canvasData.width;
-    const objTopUV = object.top / canvasData.height;
-
-    // Calculate distortion factor based on position in UV map with improved smoothing
-    let distortionFactorX = 1.0;
-    let distortionFactorY = 1.0;
-
-    // Check if we're near edges of UV map where distortion might occur
-    const edgeThreshold = 0.1;
-    const uvRect = viewConfig.uvRect;
-
-    // Adjust for distortion near edges - apply progressively stronger correction with improved smoothing
-    if (objLeftUV < uvRect.u1 + edgeThreshold) {
-        // Left edge distortion correction with improved smoothing
-        distortionFactorX = 0.9 + (0.1 * (objLeftUV - uvRect.u1) / edgeThreshold);
-    } else if (objLeftUV > uvRect.u2 - edgeThreshold) {
-        // Right edge distortion correction with improved smoothing
-        distortionFactorX = 0.9 + (0.1 * (uvRect.u2 - objLeftUV) / edgeThreshold);
-    }
-
-    if (objTopUV < uvRect.v1 + edgeThreshold) {
-        // Top edge distortion correction with improved smoothing
-        distortionFactorY = 0.9 + (0.1 * (objTopUV - uvRect.v1) / edgeThreshold);
-    } else if (objTopUV > uvRect.v2 - edgeThreshold) {
-        // Bottom edge distortion correction with improved smoothing
-        distortionFactorY = 0.9 + (0.1 * (uvRect.v2 - objTopUV) / edgeThreshold);
-    }
-
-    // Apply curvature correction based on model type and view
-    // For curved surfaces like sleeves, additional correction is needed
-    if (state.cameraView === 'left' || state.cameraView === 'right') {
-        // Sleeves require special treatment due to curved surface
-        const distanceFromCenter = Math.abs(objLeftUV - ((uvRect.u1 + uvRect.u2) / 2));
-        const curvatureCorrection = 1.0 - (distanceFromCenter * 0.5);
-        distortionFactorX *= curvatureCorrection;
-    }
-
-    // Apply the final movement with all corrections and improved precision
-    // Invert the Y-axis movement by negating deltaUV.y
-    const newLeft = object.left + deltaUV.x * canvasData.width * distortionFactorX;
-    const newTop = object.top - deltaUV.y * canvasData.height * distortionFactorY;
+    // Cast a ray to get current mouse position in world space
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObject(shirtMesh);
     
-    // Use direct assignment for smoother updates rather than incremental changes
-    object.left = newLeft;
-    object.top = newTop;
+    if (intersects.length === 0) return;
+    
+    const uv = intersects[0].uv;
+    const x = uv.x * canvasData.width;
+    const y = uv.y * canvasData.height;
 
-    // Apply advanced constraints to keep object in valid UV space
-    constrainObjectToUVBoundary(object);
+    // Store initial position when beginning a new move action
+    // This exactly matches the pattern from rotateObject
+    if (object._lastMovePosition === undefined) {
+        object._lastMovePosition = { x: x, y: y };
+        object._startPosition = { x: x, y: y };
+        object._startLeft = object.left;
+        object._startTop = object.top;
+        return;
+    }
 
-    Logger.log('Moved object with improved smooth calculations');
+    // Calculate the position difference (analogous to angle difference in rotate)
+    const moveX = x - object._lastMovePosition.x;
+    const moveY = y - object._lastMovePosition.y;
+
+    // Apply a movement speed adjustment (like rotationSpeed in rotateObject)
+    const moveSpeed = 1.0;
+    const adjustedMoveX = moveX * moveSpeed;
+    const adjustedMoveY = moveY * moveSpeed;
+
+    // Calculate new position based on total change from start position
+    // This matches how rotation calculates angle from startAngle
+    // The key to smoothness is calculating from original position each time
+    const totalMoveX = (x - object._startPosition.x) * moveSpeed;
+    const totalMoveY = (y - object._startPosition.y) * moveSpeed;
+    
+    object.left = object._startLeft + totalMoveX;
+    object.top = object._startTop + totalMoveY;
+
+    // Update the last position for next calculation (like lastRotationAngle)
+    object._lastMovePosition = { x: x, y: y };
+    
+    // Apply boundary constraints
+    const uvRect = viewConfig.uvRect;
+    const minX = uvRect.u1 * canvasData.width;
+    const maxX = uvRect.u2 * canvasData.width;
+    const minY = uvRect.v1 * canvasData.height;
+    const maxY = uvRect.v2 * canvasData.height;
+    
+    if (object.left < minX) object.left = minX;
+    if (object.left + object.width > maxX) object.left = maxX - object.width;
+    if (object.top < minY) object.top = minY;
+    if (object.top + object.height > maxY) object.top = maxY - object.height;
+}
+
+/**
+ * Fast check if an object might need constraint enforcement
+ * @param {Object} object - The object to check
+ * @param {Object} viewConfig - The current view configuration
+ * @returns {boolean} - Whether constraint checking is needed
+ */
+function needsConstraintCheck(object, viewConfig) {
+    // Skip constraint checking if object is well within boundaries
+    const uvRect = viewConfig.uvRect;
+    const margin = 0.1; // 10% margin
+    
+    const objLeft = object.left / canvasData.width;
+    const objRight = (object.left + object.width) / canvasData.width;
+    const objTop = object.top / canvasData.height;
+    const objBottom = (object.top + object.height) / canvasData.height;
+    
+    // If object is well within boundaries, no need for expensive constraint checking
+    if (objLeft > uvRect.u1 + margin && 
+        objRight < uvRect.u2 - margin && 
+        objTop > uvRect.v1 + margin && 
+        objBottom < uvRect.v2 - margin) {
+        return false;
+    }
+    
+    return true;
 }
 
 /**
@@ -1661,7 +1730,7 @@ function drawSelectionOverlay(object) {
     drawControlButton(
         borderOffsetX,
         borderHeight / 2 + buttonRadius + buttonPadding + borderOffsetY,
-        '📋',
+        'x2',
         '#FF9800',
         '#FFF3E0'
     );
