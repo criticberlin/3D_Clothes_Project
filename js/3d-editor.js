@@ -322,11 +322,7 @@ function onMouseMove(event) {
         switch (transformMode) {
             case 'move':
                 if (!selectedObject.isPinned) {
-                    moveObject(selectedObject, deltaX, deltaY);
-                    transformApplied = true;
-                    
-                    // Update visual controls without waiting for texture update
-                    updateTransformControlsPosition();
+                    transformApplied = moveObject(selectedObject, deltaX, deltaY);
                 }
                 break;
             case 'rotate':
@@ -343,17 +339,22 @@ function onMouseMove(event) {
                 break;
         }
 
-        // Only update if transformation was applied
+        // For full texture updates (less frequent)
         if (transformApplied) {
-            // For moving operations, use a dedicated high-performance renderer
+            // Different handling for move vs other transformations
             if (transformMode === 'move') {
-                // Each move creates its own animation frame for optimal smoothness
-                requestAnimationFrame(() => {
-                    updateShirt3DTexture();
-                    updateTransformControls();
-                });
+                // For move, use a less frequent texture update schedule
+                if (!window._moveTextureUpdate) {
+                    window._moveTextureUpdate = setTimeout(() => {
+                        // Schedule a complete texture update
+                        requestAnimationFrame(() => {
+                            updateShirt3DTexture();
+                            window._moveTextureUpdate = null;
+                        });
+                    }, 64); // ~15 updates per second is enough for texture
+                }
             } else {
-                // For other transformations, use the existing approach with debouncing
+                // For other transformations, use the existing approach
                 if (!window._updateAnimationFrame) {
                     window._updateAnimationFrame = requestAnimationFrame(() => {
                         updateShirt3DTexture();
@@ -365,7 +366,10 @@ function onMouseMove(event) {
         }
 
         // Update starting point for next frame
-        startPoint.copy(currentPoint);
+        // For move operations, don't update to maintain origin reference
+        if (transformMode !== 'move') {
+            startPoint.copy(currentPoint);
+        }
     }
 }
 
@@ -382,7 +386,23 @@ function updateTransformControlsPosition() {
             const top = selectedObject.top + (selectedObject.height / 2);
             
             // Use transform for GPU acceleration instead of left/top
-            controlsElement.style.transform = `translate(${left}px, ${top}px)`;
+            controlsElement.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+            
+            // If the object is also being visually represented in the canvas,
+            // we need to force a high-priority visual update
+            if (window._visualUpdateTimeout) {
+                clearTimeout(window._visualUpdateTimeout);
+            }
+            
+            window._visualUpdateTimeout = setTimeout(() => {
+                // Force a repaint using a minimal-effort drawing update
+                const ctx = canvasData.context;
+                if (ctx) {
+                    // Only redraw this object quickly while moving
+                    drawObjectToCanvas(selectedObject);
+                }
+                window._visualUpdateTimeout = null;
+            }, 8); // Very short timeout for responsive feel (about 120fps)
         }
     }
 }
@@ -396,6 +416,16 @@ function onMouseUp(event) {
     if (window._updateAnimationFrame) {
         cancelAnimationFrame(window._updateAnimationFrame);
         window._updateAnimationFrame = null;
+    }
+    
+    if (window._moveTextureUpdate) {
+        clearTimeout(window._moveTextureUpdate);
+        window._moveTextureUpdate = null;
+    }
+    
+    if (window._visualUpdateTimeout) {
+        clearTimeout(window._visualUpdateTimeout);
+        window._visualUpdateTimeout = null;
     }
     
     // Force a final update
@@ -424,10 +454,7 @@ function onMouseUp(event) {
         
         // Reset moving state variables when operation is complete
         if (transformMode === 'move' && selectedObject) {
-            delete selectedObject._lastMovePosition;
-            delete selectedObject._startPosition;
-            delete selectedObject._startLeft;
-            delete selectedObject._startTop;
+            delete selectedObject._moveData;
         }
         
         // Done with transformation, but still in edit mode
@@ -833,49 +860,121 @@ function moveObject(object, deltaX, deltaY) {
     const uv = intersects[0].uv;
     const x = uv.x * canvasData.width;
     const y = uv.y * canvasData.height;
+    
+    // Get object center for reference
+    const centerX = object.left + object.width / 2;
+    const centerY = object.top + object.height / 2;
 
-    // Store initial position when beginning a new move action
-    // This exactly matches the pattern from rotateObject
-    if (object._lastMovePosition === undefined) {
-        object._lastMovePosition = { x: x, y: y };
-        object._startPosition = { x: x, y: y };
-        object._startLeft = object.left;
-        object._startTop = object.top;
+    // Calculate delta movement from mouse position - similar to rotation tracking
+    if (!object._moveData) {
+        // Initialize tracking data on first move
+        object._moveData = {
+            startX: x,
+            startY: y,
+            startLeft: object.left,
+            startTop: object.top,
+            lastX: x,
+            lastY: y,
+            // For physics-based movement
+            velocity: { x: 0, y: 0 },
+            // For interpolation
+            current: { left: object.left, top: object.top }
+        };
         return;
     }
-
-    // Calculate the position difference (analogous to angle difference in rotate)
-    const moveX = x - object._lastMovePosition.x;
-    const moveY = y - object._lastMovePosition.y;
-
-    // Apply a movement speed adjustment (like rotationSpeed in rotateObject)
-    const moveSpeed = 1.0;
-    const adjustedMoveX = moveX * moveSpeed;
-    const adjustedMoveY = moveY * moveSpeed;
-
-    // Calculate new position based on total change from start position
-    // This matches how rotation calculates angle from startAngle
-    // The key to smoothness is calculating from original position each time
-    const totalMoveX = (x - object._startPosition.x) * moveSpeed;
-    const totalMoveY = (y - object._startPosition.y) * moveSpeed;
     
-    object.left = object._startLeft + totalMoveX;
-    object.top = object._startTop + totalMoveY;
-
-    // Update the last position for next calculation (like lastRotationAngle)
-    object._lastMovePosition = { x: x, y: y };
+    // Movement parameters - based on empirical testing
+    const settings = {
+        // Direct movement speed (1.0 = follow cursor exactly)
+        speed: 1.0,
+        
+        // Velocity calculation parameters
+        velocitySmoothing: 0.3,
+        
+        // Interpolation parameters for smooth movement
+        minEasing: 0.3,     // Minimum easing factor (more lag, smoother movement)
+        maxEasing: 0.6,     // Maximum easing factor (less lag, more responsive)
+        speedThreshold: 5   // Speed at which we reach maximum responsiveness
+    };
     
-    // Apply boundary constraints
+    // Calculate movement delta since start - for absolute positioning
+    const moveFromStartX = (x - object._moveData.startX) * settings.speed;
+    const moveFromStartY = (y - object._moveData.startY) * settings.speed;
+    
+    // Calculate instantaneous velocity using frame delta
+    const instantVelocityX = x - object._moveData.lastX;
+    const instantVelocityY = y - object._moveData.lastY;
+    
+    // Update smoothed velocity with exponential smoothing
+    object._moveData.velocity.x = object._moveData.velocity.x * (1 - settings.velocitySmoothing) + 
+                                  instantVelocityX * settings.velocitySmoothing;
+    object._moveData.velocity.y = object._moveData.velocity.y * (1 - settings.velocitySmoothing) + 
+                                  instantVelocityY * settings.velocitySmoothing;
+    
+    // Calculate speed (magnitude of velocity)
+    const speed = Math.sqrt(
+        object._moveData.velocity.x * object._moveData.velocity.x + 
+        object._moveData.velocity.y * object._moveData.velocity.y
+    );
+    
+    // Calculate target position based on absolute movement from start
+    const targetLeft = object._moveData.startLeft + moveFromStartX;
+    const targetTop = object._moveData.startTop + moveFromStartY;
+    
+    // Calculate adaptive easing based on speed
+    // This creates a natural feel - responsive when moving quickly, smoother when moving slowly
+    const adaptiveEasing = settings.minEasing + 
+        (settings.maxEasing - settings.minEasing) * Math.min(1.0, speed / settings.speedThreshold);
+    
+    // Apply interpolation towards target position
+    object._moveData.current.left += (targetLeft - object._moveData.current.left) * adaptiveEasing;
+    object._moveData.current.top += (targetTop - object._moveData.current.top) * adaptiveEasing;
+    
+    // Apply position to the object
+    object.left = object._moveData.current.left;
+    object.top = object._moveData.current.top;
+    
+    // Store current position for next velocity calculation
+    object._moveData.lastX = x;
+    object._moveData.lastY = y;
+    
+    // Apply boundary constraints with smooth clamping
     const uvRect = viewConfig.uvRect;
     const minX = uvRect.u1 * canvasData.width;
     const maxX = uvRect.u2 * canvasData.width;
     const minY = uvRect.v1 * canvasData.height;
     const maxY = uvRect.v2 * canvasData.height;
     
-    if (object.left < minX) object.left = minX;
-    if (object.left + object.width > maxX) object.left = maxX - object.width;
-    if (object.top < minY) object.top = minY;
-    if (object.top + object.height > maxY) object.top = maxY - object.height;
+    // Left boundary
+    if (object.left < minX) {
+        object.left = minX;
+        object._moveData.current.left = minX;
+        // Reset velocity when hitting boundary
+        object._moveData.velocity.x = 0;
+    }
+    // Right boundary
+    if (object.left + object.width > maxX) {
+        object.left = maxX - object.width;
+        object._moveData.current.left = maxX - object.width;
+        object._moveData.velocity.x = 0;
+    }
+    // Top boundary
+    if (object.top < minY) {
+        object.top = minY;
+        object._moveData.current.top = minY;
+        object._moveData.velocity.y = 0;
+    }
+    // Bottom boundary
+    if (object.top + object.height > maxY) {
+        object.top = maxY - object.height;
+        object._moveData.current.top = maxY - object.height;
+        object._moveData.velocity.y = 0;
+    }
+    
+    // Immediately update visual representation for maximum responsiveness
+    updateTransformControlsPosition();
+    
+    return true;
 }
 
 /**
