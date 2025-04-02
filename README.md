@@ -13,85 +13,95 @@ This application provides an advanced 3D clothing customization platform where u
 - Generate AI-powered design textures using DALL-E API
 - Download their custom creations
 
-The system uses sophisticated texture mapping algorithms to accurately display designs on 3D garment models with realistic fabric simulation and lighting effects.
-
 ## Core Features
 
-### 3D Visualization
+### 3D Visualization and Editor (`3d-editor.js`)
+- Advanced 3D model manipulation and rendering
+- Real-time fabric simulation
+- Camera controls and view management
+- Lighting and material system
+- Model transformation and animation
 
-- Interactive 3D models with multiple views (front, back, left, right)
-- Support for multiple garment types (T-shirt, hoodie)
-- Real-time fabric simulations with physically-based rendering
-- Realistic lighting and materials with bump mapping
+### Scene Management (`scene.js`)
+- Three.js scene setup and configuration
+- Model loading and management
+- Lighting setup
+- Camera controls
+- Render loop management
 
-### Basic Customization
+### User Interface (`ui.js`)
+- Interactive control panels
+- Color picker interface
+- Design upload interface
+- AI generation interface
+- View controls
+- Responsive layout management
 
-- Color picker for changing base garment color
-- Multiple garment type selection
-- Image upload for custom designs
-- Zoom and rotate model controls
+### Texture Mapping (`texture-mapper.js`)
+- Advanced UV mapping
+- Texture coordinate transformation
+- Multi-area texture application
+- Real-time texture preview
+- Texture distortion correction
 
-### Advanced Texture Mapping
+### State Management (`state.js`)
+- Application state tracking
+- History management
+- Undo/redo functionality
+- Model state persistence
+- Event handling
 
-- Multi-area customization (front, back, sleeves)
-- Drag, rotate, and scale controls for precise design positioning
-- Position presets for perfect image placement
-- Real-time UV coordinate transformation with bilinear interpolation
-- Complex mathematical algorithms for accurate texture placement on curved surfaces
-- Perspective-correct texture mapping at all viewing angles
-- Camera-aware interface with quaternion-based transformations
+### Color Management (`color-manager.js`)
+- Color palette management
+- Color transformation
+- Material color updates
+- Color history
+- Color preset management
 
-### AI-Powered Design Generation
+### Fabric Integration (`fabric-integration.js`)
+- Canvas manipulation
+- Image processing
+- Design transformation
+- Pattern creation
+- Texture generation
 
-- Integration with OpenAI's DALL-E API
-- Custom design generation from text prompts
-- One-click application of AI-generated designs
-- Example prompts for optimal results
+### AI Integration (`ai-integration.js`)
+- DALL-E API integration
+- Prompt management
+- Image generation
+- Result processing
+- Error handling
 
-### User Interface
-
-- Modern, intuitive UI with responsive design
-- Light/dark theme support
-- Specialized control panels for different functions
-- Real-time preview of all customizations
-
-## Technical Implementation
-
-The application uses the following technologies and techniques:
-
-- **Three.js** for 3D rendering and WebGL integration
-- **Fabric.js** for 2D image manipulation
-- **Matrix Transformation Pipeline** for texture placement
-- **Quaternion-Based Rotation** for smooth, gimbal-lock free rotation
-- **UV Distortion Correction** using elasticity coefficients
-- **Advanced Barycentric Coordinate System** for precise texture mapping
-- **Node.js backend** for AI feature integration
-- **OpenAI API** for generating design textures
+### Utility Functions (`utils.js`)
+- Helper functions
+- Math utilities
+- File handling
+- Data conversion
+- Validation functions
 
 ## Project Structure
 
 ```
 /
-├── assets/                     # Images and static assets
 ├── css/                        # CSS stylesheets
-│   └── style.css               # Main stylesheet
-├── models/                     # 3D model files
-│   ├── tshirt.glb              # 3D T-shirt model
-│   └── hoodie.glb              # 3D hoodie model
 ├── js/                         # JavaScript modules
-│   ├── main.js                 # Main application entry point
-│   ├── scene.js                # Three.js scene setup
-│   ├── state.js                # State management
-│   ├── ui.js                   # UI components and interactions
-│   ├── texture-mapper.js       # Advanced texture mapping system
-│   ├── fabric-integration.js   # Fabric.js integration
-│   ├── advanced-calculations.js # Advanced mathematical calculations
-│   ├── utils.js                # Utility functions
-│   └── ai-integration.js       # AI integration
-├── server/                     # Backend for AI features
-│   ├── index.js                # Express server setup
-│   └── package.json            # Node.js dependencies
-└── index.html                  # Main HTML file
+│   ├── 3d-editor.js           # Main 3D editor functionality
+│   ├── scene.js               # Three.js scene management
+│   ├── ui.js                  # User interface components
+│   ├── texture-mapper.js      # Texture mapping system
+│   ├── state.js               # State management
+│   ├── color-manager.js       # Color management system
+│   ├── fabric-integration.js  # Fabric.js integration
+│   ├── ai-integration.js      # AI feature integration
+│   ├── utils.js               # Utility functions
+│   └── main.js                # Application entry point
+├── models/                     # 3D model files
+├── server/                     # Backend server
+│   ├── routes/                # API routes
+│   ├── index.js               # Server entry point
+│   ├── test-falai-key.js      # API key testing
+│   └── package.json           # Dependencies
+└── index.html                 # Main HTML file
 ```
 
 ## Getting Started
@@ -99,87 +109,102 @@ The application uses the following technologies and techniques:
 ### Prerequisites
 
 - Modern web browser with WebGL support
-- Node.js (version 14 or higher) for AI features
-- OpenAI API key (for AI design generation)
+- Node.js (version 14 or higher)
+- OpenAI API key (for AI features)
 
-### Basic Setup
+### Setup Instructions
 
-1. **Clone the repository**:
-
-   ```
+1. Clone the repository:
+   ```bash
    git clone https://github.com/yourusername/3D_Clothes_Project.git
    cd 3D_Clothes_Project
    ```
 
-2. **Launch the application**:
-   Open `index.html` in a modern web browser with WebGL support.
+2. Set up the server:
+   ```bash
+   cd server
+   npm install
+   ```
 
-### AI Feature Setup
-
-1. Navigate to the server directory: `cd server`
-2. Install dependencies: `npm install`
-3. Create a `.env` file with your OpenAI API key:
+3. Create a `.env` file in the server directory:
    ```
    OPENAI_API_KEY=your_openai_api_key_here
    ```
-4. Start the server: `npm start`
 
-## How to Use
+4. Start the server:
+   ```bash
+   npm start
+   ```
 
-### Viewing Controls
+5. Open `index.html` in your web browser
 
-- **Rotate the model**: Click and drag on the 3D view
-- **Zoom**: Use the mouse wheel or pinch gestures
-- **Switch views**: Use the view buttons (front, back, left, right)
+## Usage Guide
 
-### Basic Customization
+### Basic Controls
+- Rotate: Click and drag
+- Zoom: Mouse wheel
+- Pan: Right-click and drag
+- Reset view: Double-click
 
-- **Change color**: Use the color picker in the sidebar
-- **Switch models**: Select between T-shirt and hoodie in the sidebar
+### Customization Features
+1. Color Change:
+   - Use the color picker in the sidebar
+   - Select from preset colors
+   - Input custom RGB/HEX values
 
-### Adding Custom Designs
+2. Design Upload:
+   - Click "Upload Design"
+   - Select image file
+   - Use transform controls to position
 
-1. Click the "Upload" tab in the sidebar
-2. Select an image file from your device
-3. The image will appear on the current view of the model
-4. Use the bounding box controls to position, rotate, and scale your design
+3. AI Generation:
+   - Enter prompt in AI tab
+   - Click "Generate"
+   - Apply generated design
 
-### Using AI-Generated Designs
+4. Texture Mapping:
+   - Select target area (front/back/sleeves)
+   - Upload or generate texture
+   - Adjust position and scale
 
-1. Click the "AI Design" tab in the sidebar
-2. Enter a descriptive prompt (e.g., "Abstract watercolor pattern with blue tones")
-3. Click "Generate" and wait for the AI to create your design
-4. Click "Apply to Shirt" to use the generated image
+## Technical Details
 
-### Using the Texture Mapper
+### Rendering Pipeline
+- WebGL-based rendering
+- PBR materials
+- Real-time shadows
+- Post-processing effects
 
-- **Move design**: Click and drag inside the bounding box
-- **Rotate design**: Use the rotate handle (top-right corner)
-- **Scale design**: Use the scale handle (bottom-right corner)
-- **Position presets**: Use the presets in the Position & Alignment panel
-- **Multi-area customization**: Add different designs to different areas
+### Texture System
+- UV mapping
+- Multi-texture support
+- Real-time texture updates
+- Texture compression
 
-### Saving Your Creation
-
-- Click the "Download" button to save your customized garment as an image
+### State Management
+- Event-driven architecture
+- State persistence
+- History tracking
+- Real-time updates
 
 ## Troubleshooting
 
-- **Performance issues**: Ensure your browser has WebGL enabled and updated graphics drivers
-- **AI generation errors**: Verify your OpenAI API key and server connection
-- **Image not appearing**: Try using a different image format or adjusting the size
-- **Controls not responding**: Check for console errors and refresh the page
+Common Issues:
+1. Performance Issues
+   - Check WebGL support
+   - Update graphics drivers
+   - Reduce texture sizes
 
-## Example AI Prompts
+2. AI Generation
+   - Verify API key
+   - Check server connection
+   - Validate prompt format
 
-Try these prompts for great AI-generated designs:
-
-- "A watercolor painting of mountain landscapes"
-- "Minimalist line art of faces in a continuous line style"
-- "Japanese-inspired wave pattern with koi fish"
-- "Retro 80s geometric pattern with bright colors"
-- "Abstract color gradient with flowing shapes"
+3. Texture Mapping
+   - Check image format
+   - Verify UV coordinates
+   - Adjust texture size
 
 ## License
 
-[MIT License](LICENSE)
+[MIT License](LICENSE) 

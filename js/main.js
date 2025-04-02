@@ -266,18 +266,13 @@ function setupModelSelector() {
                     titleElement.textContent = `Customize Your ${newModel === 'hoodie' ? 'Hoodie' : 'Shirt'}`;
                 }
 
-                // Change the 3D model
+                // Change the 3D model - this will now handle customization preservation
                 changeModel(newModel)
                     .then(() => {
-                        Logger.info(`Changed model to ${newModel}`);
-
-                        // Restore textures if needed
-                        if (fullTextureVisible && currentFullDecal) updateShirtTexture(currentFullDecal, 'full');
-
-                        toggleTexture('full', fullTextureVisible);
-
-                        // Reset camera to default position for this model type
-                        window.dispatchEvent(new CustomEvent('camera-reset'));
+                        // Toggle full texture state if it was active before
+                        if (fullTextureVisible) {
+                            toggleTexture('full', true);
+                        }
 
                         // Hide loading overlay with a fade effect
                         setTimeout(() => {

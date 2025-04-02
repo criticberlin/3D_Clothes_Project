@@ -148,6 +148,11 @@ export function init3DEditor(threeScene, threeCamera, threeRenderer, targetMesh)
         console.log('Applying delayed initial color:', initialColor);
         updateShirtColor(initialColor);
     }, 100);
+    
+    // Expose methods to window for cross-module access
+    window.getEditorState = getEditorState;
+    window.restoreEditorState = restoreEditorState;
+    window.setModelType = setModelType;
 }
 
 /**
@@ -3141,7 +3146,20 @@ function drawEditableAreas(ctx) {
  * @returns {string|null} - The view name or null if not in any view
  */
 function detectViewFromUV(uv) {
-    const views = modelConfig[state.currentModel].views;
+    // Get the current model type from state
+    const currentModel = state.currentModel || 'tshirt';
+    
+    // Make sure the model type exists in the configuration
+    if (!modelConfig[currentModel]) {
+        console.warn(`Model type ${currentModel} not found in configuration, falling back to tshirt`);
+        currentModel = 'tshirt';
+    }
+    
+    // Get the views for the current model
+    const views = modelConfig[currentModel].views;
+    
+    // Log for debugging
+    console.log(`Detecting view in ${currentModel} model at UV (${uv.x.toFixed(3)}, ${uv.y.toFixed(3)})`);
 
     // Check each view's UV rectangle
     for (const [viewName, viewConfig] of Object.entries(views)) {
@@ -3156,10 +3174,12 @@ function detectViewFromUV(uv) {
         
         if (uv.x >= uMin && uv.x <= uMax && 
             uv.y >= vMin && uv.y <= vMax) {
+            console.log(`Detected view: ${viewName}`);
             return viewName;
         }
     }
 
+    console.log('No specific view detected at this UV coordinate');
     return null; // Not in any defined view
 }
 
@@ -3441,6 +3461,9 @@ function showDropOverlay(show) {
  * @returns {string} The name of the view or null if not over any view
  */
 function detectViewFromMousePosition() {
+    // Get the current model type
+    const currentModel = state.currentModel || 'tshirt';
+    
     // Cast a ray from the mouse position
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObject(shirtMesh);
@@ -3448,10 +3471,35 @@ function detectViewFromMousePosition() {
     if (intersects.length > 0) {
         // Get the UV coordinates at the intersection point
         const uv = intersects[0].uv;
-        return detectViewFromUV(uv);
+        
+        // First try to detect the view from UV coordinates
+        const viewFromUV = detectViewFromUV(uv);
+        if (viewFromUV) {
+            return viewFromUV;
+        }
+        
+        // If UV detection fails, try to use position-based detection
+        // This is useful for models with complex UV mappings
+        try {
+            // Calculate normalized screen position
+            const screenPos = {
+                x: (mouse.x + 1) / 2,  // Convert from (-1, 1) to (0, 1)
+                y: (-mouse.y + 1) / 2  // Convert from (-1, 1) to (0, 1) with Y flipped
+            };
+            
+            // Import and use the position-based detection if available
+            if (typeof window.detectViewFromPosition === 'function') {
+                const viewFromPosition = window.detectViewFromPosition(screenPos.x, screenPos.y, currentModel);
+                if (viewFromPosition) {
+                    return viewFromPosition;
+                }
+            }
+        } catch (error) {
+            console.warn('Error in position-based view detection:', error);
+        }
     }
 
-    // Default to current camera view if no intersection
+    // Default to current camera view if no detection method works
     return state.cameraView || 'front';
 }
 
@@ -5211,4 +5259,137 @@ export function init(container, modelType = 'tshirt') {
     camera.position.set(0, 0, 400);
 
     // Rest of init function continues...
+}
+
+/**
+ * Get the current editor state for transferring to another model
+ * @returns {Array} - Array of serializable objects representing the editor state
+ */
+export function getEditorState() {
+    // Clone objects to ensure we're not mutating the originals
+    return JSON.parse(JSON.stringify(canvasData.objects));
+}
+
+/**
+ * Restore editor state from a previously saved state
+ * @param {Array} objects - Objects to restore
+ * @returns {boolean} - Success status
+ */
+export function restoreEditorState(objects) {
+    if (!Array.isArray(objects) || objects.length === 0) {
+        console.warn('No valid objects to restore');
+        return false;
+    }
+    
+    // First clear existing objects
+    clearCanvas();
+    
+    // Create new array to hold restored objects
+    const restoredObjects = [];
+    
+    // Process each object from the saved state
+    const promises = objects.map(obj => {
+        return new Promise((resolve) => {
+            // Handle each object type
+            if (obj.type === 'image') {
+                // For images, we need to reload the image
+                if (obj.src) {
+                    // Use a slightly modified version of addImage with preserved properties
+                    addImage(obj.src, {
+                        view: obj.view || 'front',
+                        left: obj.left,
+                        top: obj.top,
+                        width: obj.width,
+                        height: obj.height,
+                        angle: obj.angle || 0,
+                        isDecal: obj.isDecal || false,
+                        isAIGenerated: obj.isAIGenerated || false,
+                        removeColor: obj.removeColor || false,
+                        currentFilters: obj.currentFilters || ''
+                    }).then(newObj => {
+                        resolve(newObj);
+                    }).catch(() => {
+                        console.warn(`Failed to restore image from ${obj.src}`);
+                        resolve(null);
+                    });
+                } else {
+                    resolve(null);
+                }
+            } else if (obj.type === 'text') {
+                // For text, we can recreate directly
+                addText(obj.text, {
+                    view: obj.view || 'front',
+                    left: obj.left,
+                    top: obj.top,
+                    width: obj.width,
+                    height: obj.height,
+                    color: obj.color || '#000000',
+                    fontSize: obj.fontSize || 30,
+                    font: obj.font || 'Arial',
+                    angle: obj.angle || 0
+                }).then(newObj => {
+                    resolve(newObj);
+                }).catch(() => {
+                    console.warn(`Failed to restore text: ${obj.text}`);
+                    resolve(null);
+                });
+            } else if (obj.type === 'shape') {
+                // For shapes, recreate with stored properties
+                addShape(obj.shape, {
+                    view: obj.view || 'front',
+                    left: obj.left,
+                    top: obj.top,
+                    width: obj.width,
+                    height: obj.height,
+                    color: obj.color || '#000000',
+                    angle: obj.angle || 0
+                }).then(newObj => {
+                    resolve(newObj);
+                }).catch(() => {
+                    console.warn(`Failed to restore shape: ${obj.shape}`);
+                    resolve(null);
+                });
+            } else {
+                // Unknown object type
+                console.warn(`Unknown object type: ${obj.type}`);
+                resolve(null);
+            }
+        });
+    });
+    
+    // Wait for all objects to be restored
+    return Promise.all(promises)
+        .then(results => {
+            // Filter out null results
+            const validObjects = results.filter(obj => obj !== null);
+            console.log(`Restored ${validObjects.length} objects out of ${objects.length}`);
+            
+            // Update the 3D texture
+            updateShirt3DTexture();
+            
+            // Save initial state to history
+            historyStack.saveState();
+            
+            return true;
+        })
+        .catch(error => {
+            console.error('Error restoring editor state:', error);
+            return false;
+        });
+}
+
+/**
+ * Update the current model type for the editor
+ * @param {string} modelType - The model type (tshirt, hoodie, etc.)
+ */
+export function setModelType(modelType) {
+    if (typeof window.setModelType === 'function') {
+        window.setModelType(modelType);
+    }
+    
+    // Update internal state with the current model type
+    updateState({ currentModel: modelType });
+    
+    // Refresh texture canvas to account for any differences in UV mapping
+    updateShirt3DTexture();
 }

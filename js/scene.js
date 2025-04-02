@@ -1054,7 +1054,7 @@ function loadModel(modelPath) {
             return;
         }
 
-        // Show loading indicator
+        // Show loading overlay
         const loadingOverlay = document.querySelector('.loading-overlay');
         if (loadingOverlay) {
             loadingOverlay.style.display = 'flex';
@@ -1067,6 +1067,18 @@ function loadModel(modelPath) {
         // Determine model type from path
         currentModelType = modelPath.includes('hoodie') ? 'hoodie' : 'tshirt';
         console.log(`Loading model type: ${currentModelType}, path: ${modelPath}`);
+
+        // Store current customization state before switching models
+        const currentCustomState = {
+            objects: [],
+            fullDecal: fullDecal,
+            isFullTexture: isFullTexture,
+        };
+
+        // If 3D editor is initialized, save its current objects
+        if (window.getEditorState) {
+            currentCustomState.objects = window.getEditorState();
+        }
 
         // Reset references to avoid duplicates
         fullDecal = null;
@@ -1493,14 +1505,15 @@ function processLoadedModel(gltf, settings, color) {
             shirtMesh.remove(child);
         }
         
+        // Initialize 3D editor with the current model mesh
         init3DEditor(scene, camera, renderer, shirtMesh);
-        Logger.log('3D editor initialized with shirt mesh');
+        Logger.log(`3D editor initialized with ${currentModelType} mesh`);
 
         // Set a clean initial color with a slight delay to ensure proper initialization
         setTimeout(() => {
             // Get the stored color from state or use default
             const initialColor = state.color || '#FFFFFF';
-            console.log('Applying delayed initial color:', initialColor);
+            console.log('Applying initial color:', initialColor);
             updateShirtColor(initialColor);
         }, 100);
     }
@@ -1835,18 +1848,43 @@ export function changeModel(modelType) {
 
     // Already on this model, no need to change
     if (modelType === currentModelType && shirtMesh) {
-        console.log(`Already on ${modelType} model, no need to change`);
+        console.log(`Already on ${modelType} model`);
         if (loadingOverlay) {
             loadingOverlay.style.display = 'none';
         }
         return Promise.resolve();
     }
 
-    // Save the current model state
-    const savedColor = shirtMaterial ? shirtMaterial.color.clone() : null;
+    // Store current customization state for transfer to new model
+    let currentObjects = [];
+    let currentDecals = [];
+    let currentColor = null;
+    
+    // Save the current model state for transferring to the new model
+    if (shirtMaterial) {
+        currentColor = shirtMaterial.color.clone();
+    }
+    
+    // Save decals and customization state (if available)
+    if (window.getEditorState) {
+        try {
+            currentObjects = window.getEditorState();
+            console.log(`Preserved ${currentObjects.length} customizations for transfer to new model`);
+        } catch (e) {
+            console.warn('Could not preserve customization state:', e);
+        }
+    }
 
     // Update current model type before loading
     currentModelType = modelType;
+    
+    // Update state with the new model type
+    updateState({ currentModel: modelType });
+    
+    // Update texture mapper to use the new model type
+    if (window.setModelType) {
+        window.setModelType(modelType);
+    }
 
     // Try loading the new model
     return loadModel(modelPath)
@@ -1854,8 +1892,8 @@ export function changeModel(modelType) {
             console.log(`Model changed to ${modelType}`);
 
             // Restore saved color if available
-            if (savedColor && shirtMaterial) {
-                shirtMaterial.color.copy(savedColor);
+            if (currentColor && shirtMaterial) {
+                shirtMaterial.color.copy(currentColor);
                 shirtMaterial.needsUpdate = true;
                 console.log('Restored color after model change');
             } else if (state.color && shirtMaterial) {
@@ -1864,6 +1902,19 @@ export function changeModel(modelType) {
                 shirtMaterial.needsUpdate = true;
                 console.log('Applied state color after model change');
             }
+            
+            // After a short delay to ensure the model is fully loaded and initialized
+            setTimeout(() => {
+                // Transfer saved customization objects to the new model if available
+                if (currentObjects && currentObjects.length > 0 && window.restoreEditorState) {
+                    try {
+                        window.restoreEditorState(currentObjects);
+                        console.log(`Transferred ${currentObjects.length} customizations to new model`);
+                    } catch (e) {
+                        console.warn('Error transferring customizations to new model:', e);
+                    }
+                }
+            }, 300);
 
             // Reset camera
             resetCameraPosition();
@@ -1881,18 +1932,14 @@ export function changeModel(modelType) {
             // Show error in loading overlay
             if (loadingOverlay) {
                 loadingOverlay.innerHTML = `
-                                        <div class="error">
-                                            <i class="fas fa-exclamation-triangle"></i>
+                    <div class="error">
+                        <i class="fas fa-exclamation-triangle"></i>
                         <p>Error loading ${modelType} model</p>
                         <p class="error-details">${error.message}</p>
-                                        </div>
-                                    `;
+                    </div>
+                `;
             }
 
-            // Revert to previous model type
-            currentModelType = modelType === 'tshirt' ? 'hoodie' : 'tshirt';
-
-            // Reject the promise
             return Promise.reject(error);
         });
 }

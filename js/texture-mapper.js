@@ -108,6 +108,16 @@ export const modelConfig = {
                     "rotation": 0,
                     "offset": { "x": 0, "y": 0 }
                 }
+            },
+            "hood": {
+                "bounds": { "x": 0.35, "y": 0.15, "width": 0.3, "height": 0.2 },
+                "defaultScale": 0.25,
+                "uvRect": { "u1": 0.35, "v1": 0.05, "u2": 0.65, "v2": 0.2 },
+                "transformMatrix": {
+                    "scale": { "x": 1, "y": 1 },
+                    "rotation": 0,
+                    "offset": { "x": 0, "y": 0 }
+                }
             }
         },
     }
@@ -137,21 +147,30 @@ const viewDetectionMatrix = {
     }
 };
 
-
-
 /**
  * Initialize texture mapper with base textures
+ * @param {string} baseTexturePath - Path to base texture (optional)
+ * @param {string} bumpMapPath - Path to bump/normal map (optional)
  * @param {string} modelType - Type of model ('tshirt', 'hoodie', etc)
+ * @returns {Promise} - A promise that resolves with the loaded textures
  */
-export function initTextureMapper(modelType = 'tshirt') {
-    textureState.currentModel = modelType;
-    console.log('Texture mapper initialized - 3D Editor Mode');
+export function initTextureMapper(baseTexturePath = null, bumpMapPath = null, modelType = null) {
+    // Use the provided model type or get it from state, or fallback to tshirt
+    const currentModelType = modelType || state.currentModel || 'tshirt';
+    textureState.currentModel = currentModelType;
+    
+    console.log(`Texture mapper initialized for model type: ${currentModelType}`);
 
     // Enable advanced features by default
     toggleSmartPlacement(true);
     toggleAutoAdjustment(true);
 
-    Logger.log('Texture Mapper initialized with advanced features');
+    Logger.log(`Texture Mapper initialized for ${currentModelType} with advanced features`);
+    
+    // Expose important functions to window object for cross-module access
+    window.detectViewFromPosition = detectViewFromPosition;
+    window.modelConfig = modelConfig;
+    window.setModelType = setModelType;
 
     return Promise.resolve({
         baseTexture: null,
@@ -201,6 +220,11 @@ export function setModelType(modelType) {
     if (modelConfig[modelType]) {
         textureState.currentModel = modelType;
         console.log(`Model type set to: ${modelType}`);
+        
+        // Update state to ensure consistency
+        updateState({ currentModel: modelType });
+    } else {
+        console.warn(`Unknown model type: ${modelType}, using defaults`);
     }
 }
 
