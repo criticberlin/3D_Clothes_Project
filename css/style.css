@@ -433,20 +433,23 @@ body {
 
 /* AI Generator */
 .ai-input-container {
-	margin-bottom: 1.25rem;
+    margin-bottom: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 #ai-prompt {
-	width: 100%;
-	min-height: 100px;
-	padding: 0.75rem;
-	border-radius: var(--border-radius);
-	border: 1px solid var(--border-color);
-	background-color: var(--bg-primary);
-	color: var(--text-primary);
-	resize: vertical;
-	margin-bottom: 0.75rem;
-	font-size: 0.875rem;
+    width: 100%;
+    min-height: 100px;
+    padding: 0.75rem;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    resize: vertical;
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
 }
 
 #ai-prompt:focus {
@@ -459,10 +462,26 @@ body {
 	background-color: var(--bg-primary);
 	border: 1px solid var(--border-color);
 	min-height: 200px;
-	overflow: hidden;
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	overflow: visible; /* Changed from overflow:hidden to allow images to maintain their ratio */
+	height: auto; /* Allow height to adapt to content */
+}
+
+.ai-preview .ai-result {
+	width: 100%;
+	height: auto; /* Changed from 100% to auto to adapt to image size */
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.ai-preview .ai-result img {
+	max-width: 100%;
+	height: auto;
+	object-fit: contain; /* Ensures the image maintains its aspect ratio */
+	display: block;
 }
 
 .empty-state {
@@ -1376,12 +1395,16 @@ body {
 	left: 100px;
 	top: 50%;
 	transform: translateY(-50%);
-	width: 300px;
+	width: 380px; /* Increased from 300px */
 	max-height: 80vh;
-	background-color: var(--bg-secondary);
-	border-radius: var(--border-radius);
-	border: 1px solid var(--border-color);
-	box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+	background: linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	backdrop-filter: blur(20px);
+	-webkit-backdrop-filter: blur(20px);
+	box-shadow: 0 25px 45px rgba(0, 0, 0, 0.2),
+				0 0 30px rgba(0, 0, 0, 0.1),
+				inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+	border-radius: 24px;
 	z-index: 1000;
 	overflow: hidden;
 	display: none;
@@ -1398,6 +1421,15 @@ body {
 	visibility: visible;
 }
 
+/* Make the panel change with theme */
+:root.light-theme .floating-panel {
+	background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.5));
+	border: 1px solid rgba(255, 255, 255, 0.3);
+	box-shadow: 0 25px 45px rgba(0, 0, 0, 0.05), 
+				0 0 30px rgba(0, 0, 0, 0.08),
+				inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
 /* Ensure all floating panels have consistent styling */
 #text-edit-panel,
 #shape-edit-panel,
@@ -1406,26 +1438,22 @@ body {
 #photo-panel,
 #text-panel,
 #shape-panel,
-#ai-panel,
-#download-panel {
+#download-panel,
+#photo-edit-panel,
+.view-selection-container {
 	position: fixed;
 	left: 100px;
 	top: 50%;
 	transform: translateY(-50%);
-	width: 300px;
+	width: 380px; /* Increased from 300px */
 	max-height: 80vh;
-	background-color: var(--bg-secondary);
-	border-radius: var(--border-radius);
-	border: 1px solid var(--border-color);
-	box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-	z-index: 1000;
+	border-radius: 24px;
 	overflow: hidden;
 	display: none;
 	flex-direction: column;
 	opacity: 0;
 	visibility: hidden;
-	transition: opacity 0.3s ease, visibility 0.3s ease;
-	pointer-events: auto;
+	z-index: 1000;
 }
 
 #text-edit-panel.active,
@@ -1435,28 +1463,38 @@ body {
 #photo-panel.active,
 #text-panel.active,
 #shape-panel.active,
-#ai-panel.active,
-#download-panel.active {
+#download-panel.active,
+#photo-edit-panel.active,
+.view-selection-container.active {
 	display: flex !important;
 	opacity: 1;
 	visibility: visible;
 }
 
 .panel-content {
-	padding: 1rem;
+	padding: 1.2rem;
 	overflow-y: auto;
 	pointer-events: auto;
+	position: relative;
+	z-index: 1;
 }
 
 .panel-header {
+	background: linear-gradient(90deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+	border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+	padding: 1.2rem 1.5rem;
+	border-radius: 24px 24px 0 0;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 1rem;
-	border-bottom: 1px solid var(--border-color);
-	background-color: var(--bg-secondary);
 	z-index: 1001;
 	pointer-events: auto;
+}
+
+/* Header theme responsiveness */
+:root.light-theme .panel-header {
+	background: linear-gradient(90deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.4));
+	border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .panel-header h3 {
@@ -1467,25 +1505,23 @@ body {
 }
 
 .panel-close {
-	background: none;
-	border: none;
-	color: var(--text-secondary);
-	cursor: pointer;
-	padding: 0.5rem;
+	background: rgba(255, 255, 255, 0.05);
+	color: rgba(255, 255, 255, 0.7);
 	border-radius: 50%;
-	transition: var(--transition);
+	width: 32px;
+	height: 32px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	transition: all 0.3s ease;
+	border: none;
+	cursor: pointer;
 }
 
 .panel-close:hover {
-	background-color: var(--bg-tertiary);
-	color: var(--text-primary);
-}
-
-.panel-close i {
-	font-size: 1.1rem;
+	background-color: rgba(255, 255, 255, 0.1);
+	color: rgba(255, 255, 255, 0.9);
+	transform: rotate(90deg);
 }
 
 /* Mobile styles for floating panels */
@@ -1499,15 +1535,17 @@ body {
 	#text-panel,
 	#shape-panel,
 	#ai-panel,
-	#download-panel {
+	#download-panel,
+	#photo-edit-panel,
+	.view-selection-container {
 		left: 50%;
 		top: auto;
 		bottom: 80px;
 		transform: translateX(-50%);
-		width: 90%;
-		max-width: 320px;
+		width: 95%;
+		max-width: 400px; /* Increased from 320px */
 		max-height: 70%;
-		border-radius: var(--border-radius) var(--border-radius) 0 0;
+		border-radius: 24px 24px 0 0;
 	}
 
 	.floating-panel.active,
@@ -1519,29 +1557,10 @@ body {
 	#text-panel.active,
 	#shape-panel.active,
 	#ai-panel.active,
-	#download-panel.active {
+	#download-panel.active,
+	#photo-edit-panel.active,
+	.view-selection-container.active {
 		animation: panelSlideUp 0.3s ease;
-	}
-}
-
-@media (max-width: 480px) {
-	.floating-controls {
-		bottom: 15px;
-		padding: 8px;
-		gap: 8px;
-	}
-
-	.floating-controls .floating-btn,
-	.floating-controls .control-btn,
-	.floating-controls .model-control-btn {
-		width: 35px;
-		height: 35px;
-	}
-
-	.floating-controls .floating-btn i,
-	.floating-controls .control-btn i,
-	.floating-controls .model-control-btn i {
-		font-size: 1rem;
 	}
 }
 
@@ -1822,10 +1841,10 @@ body.dark-theme #editor-mode-toggle:hover {
         top: auto;
         bottom: 80px;
         transform: translateX(-50%);
-        width: 90%;
-        max-width: 320px;
+        width: 95%;
+        max-width: 400px; /* Increased from 320px */
         max-height: 70%;
-        border-radius: var(--border-radius) var(--border-radius) 0 0;
+        border-radius: 24px 24px 0 0;
     }
 
     .view-selection-container.active {
@@ -2877,4 +2896,2192 @@ body.dark-theme #editor-mode-toggle:hover {
 
 .item-use-btn {
     background-color: var(--success-color) !important;
+}
+
+/* Make sure decal lighting toggle is visible */
+.decal-lighting-toggle {
+    position: absolute;
+    top: 80px; /* Position below the theme toggle */
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    transition: var(--transition);
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.decal-lighting-toggle:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    transform: scale(1.1);
+    box-shadow: var(--shadow-md);
+}
+
+.decal-lighting-toggle i {
+    font-size: 1.2rem;
+}
+
+/* Active states - when lighting effects are enabled */
+.decal-lighting-toggle.active {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+    border-color: var(--primary-color) !important;
+}
+
+/* Light theme specific styles for the decal toggle button */
+:root.light-theme .decal-lighting-toggle {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+/* Dark theme specific styles for the decal toggle button */
+:root:not(.light-theme) .decal-lighting-toggle {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+/* Canvas container in preview mode */
+.canvas-container.preview-mode {
+    cursor: not-allowed;
+}
+
+/* Enhanced button lock indicators - just dim them without lock icons */
+.floating-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+    position: relative;
+    filter: grayscale(70%);
+    transform: none !important;
+    transition: none !important;
+    box-shadow: none !important;
+}
+
+/* AI Button Special Styling */
+#ai-generator-btn {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+    color: white;
+    border: none;
+    position: relative;
+    overflow: hidden;
+    transform-style: preserve-3d;
+    transition: all 0.3s cubic-bezier(0.2, 0.85, 0.4, 1.275);
+    box-shadow: 0 5px 15px rgba(236, 72, 153, 0.3);
+}
+
+#ai-generator-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    animation: shine 4s infinite;
+    z-index: 1;
+}
+
+#ai-generator-btn .sparkle-icon {
+    position: relative;
+    z-index: 2;
+    font-size: 1.6rem;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 1), 0 0 15px rgba(255, 255, 255, 1);
+    filter: drop-shadow(0 0 15px rgba(255, 255, 255, 1)) brightness(2);
+    color: white !important;
+    display: inline-block;
+    animation: sparkle 6s infinite;
+    background: white;
+    background-clip: border-box;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: #fff0;
+}
+
+#ai-generator-btn:hover {
+    transform: scale(1.15) translateY(-2px) rotateZ(3deg);
+    box-shadow: 0 8px 25px rgba(236, 72, 153, 0.5);
+}
+
+#ai-generator-btn:active {
+    transform: scale(1.05) translateY(0);
+    box-shadow: 0 4px 8px rgba(236, 72, 153, 0.4);
+}
+
+@keyframes sparkle {
+    0%, 100% { 
+        opacity: 1; 
+        transform: scale(1) rotate(0deg);
+        filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.5));
+    }
+    25% {
+        opacity: 0.8;
+        transform: scale(0.9) rotate(5deg);
+        filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.3));
+    }
+    50% { 
+        opacity: 0.7; 
+        transform: scale(0.8) rotate(-5deg);
+        filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.6));
+    }
+    75% { 
+        opacity: 0.9; 
+        transform: scale(1.1) rotate(3deg);
+        filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.8));
+    }
+}
+
+/* Ultra-Modern AI Floating Panel */
+#ai-panel {
+    background: linear-gradient(135deg, rgba(103, 82, 245, 0.05), rgba(236, 72, 153, 0.05));
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    box-shadow: 0 25px 45px rgba(0, 0, 0, 0.2),
+                0 0 40px rgba(103, 82, 245, 0.2),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    border-radius: 30px;
+    max-width: 420px; /* Increased from 350px */
+    overflow: visible;
+    text-align: center;
+    transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+    position: fixed;
+    left: 100px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 9000;
+    opacity: 0;
+    visibility: hidden;
+    display: none;
+    max-height: 95vh; /* Limit maximum height to prevent scrolling */
+    overflow: auto; /* Allow scrolling if needed */
+}
+
+#ai-panel.active {
+    display: flex !important;
+    opacity: 1;
+    visibility: visible;
+    animation: ai-panel-appear 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes ai-panel-appear {
+    0% {
+        opacity: 0;
+        transform: translateY(-50%) scale(0.95);
+    }
+    70% {
+        opacity: 1;
+        transform: translateY(-50%) scale(1.02);
+    }
+    100% {
+        transform: translateY(-50%) scale(1);
+    }
+}
+
+/* Make the panel change with theme */
+:root.light-theme #ai-panel {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.6));
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 25px 45px rgba(0, 0, 0, 0.05), 
+                0 0 40px rgba(103, 82, 245, 0.15),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
+#ai-panel::before {
+    content: '';
+    position: absolute;
+    top: -120%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at top right, 
+                rgba(103, 82, 245, 0.5), 
+                rgba(236, 72, 153, 0.5),
+                transparent 70%);
+    z-index: -1;
+    opacity: 0.3;
+    filter: blur(80px);
+    pointer-events: none;
+    animation: aurora 15s infinite alternate;
+}
+
+/* Add a second glow element */
+#ai-panel::after {
+    content: '';
+    position: absolute;
+    bottom: -50%;
+    right: -20%;
+    width: 150%;
+    height: 150%;
+    background: radial-gradient(circle at bottom left, 
+                rgba(56, 189, 248, 0.4), 
+                rgba(103, 82, 245, 0.3),
+                transparent 60%);
+    z-index: -2;
+    opacity: 0.3;
+    filter: blur(60px);
+    pointer-events: none;
+    animation: aurora2 20s infinite alternate-reverse;
+}
+
+@keyframes aurora2 {
+    0%, 100% {
+        opacity: 0.2;
+        transform: rotate(0deg) translate(0%, 0%) scale(1);
+    }
+    35% {
+        opacity: 0.3;
+        transform: rotate(-5deg) translate(-5%, 3%) scale(1.1);
+    }
+    70% {
+        opacity: 0.4;
+        transform: rotate(7deg) translate(3%, -2%) scale(0.8);
+    }
+}
+
+@keyframes aurora {
+    0%, 100% {
+        opacity: 0.3;
+        transform: rotate(0deg) translate(0%, 0%) scale(1);
+    }
+    25% {
+        opacity: 0.4;
+        transform: rotate(5deg) translate(2%, -3%) scale(1.1);
+    }
+    50% {
+        opacity: 0.5;
+        transform: rotate(-3deg) translate(-2%, -1%) scale(0.9);
+    }
+    75% {
+        opacity: 0.4;
+        transform: rotate(10deg) translate(1%, 5%) scale(1.05);
+    }
+}
+
+/* Enhanced AI panel header */
+#ai-panel .panel-header {
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    padding: 1.4rem 1.5rem;
+    border-radius: 30px 30px 0 0;
+    text-align: center;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+:root.light-theme #ai-panel .panel-header {
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.5));
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+#ai-panel .panel-header h3 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    background: linear-gradient(90deg, #6366f1, #8b5cf6, #ec4899);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    letter-spacing: -0.01em;
+    text-shadow: 0 2px 10px rgba(236, 72, 153, 0.2);
+}
+
+#ai-panel .panel-header h3::before {
+    content: '✨';
+    font-size: 1.8rem;
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.7));
+    animation: sparkle 6s infinite;
+    color: white !important;
+}
+
+@keyframes sparkle {
+    /* Animation still defined but not used */
+    0%, 100% { 
+        opacity: 1; 
+        transform: scale(1) rotate(0deg);
+        filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.5));
+    }
+    25% {
+        opacity: 0.8;
+        transform: scale(0.9) rotate(5deg);
+        filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.3));
+    }
+    50% { 
+        opacity: 0.7; 
+        transform: scale(0.8) rotate(-5deg);
+        filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.6));
+    }
+    75% { 
+        opacity: 0.9; 
+        transform: scale(1.1) rotate(3deg);
+        filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.8));
+    }
+}
+
+/* Special styling for AI panel close button */
+#ai-panel .panel-close {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+    border-radius: 50%;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    border: none;
+    position: absolute;
+    right: 15px;
+    top: 15px;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+#ai-panel .panel-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    transform: rotate(90deg) scale(1.1);
+    box-shadow: 0 0 15px rgba(103, 82, 245, 0.3);
+}
+
+/* Enhanced AI panel content */
+#ai-panel .panel-content {
+    padding: 1.7rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    max-height: calc(95vh - 60px); /* Account for header height */
+    display: flex;
+    flex-direction: column;
+    justify-content: start;
+    overflow-y: auto; /* Allow vertical scrolling if needed */
+    padding: 20px;
+    gap: 15px; /* Space between elements */
+}
+
+/* Ultra-modern AI preview styling */
+#ai-panel .ai-preview {
+    order: -1; /* Forces the preview to be the first item */
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    overflow: hidden;
+    margin-bottom: 15px;
+    position: relative;
+    min-height: 200px; /* Reduced from 250px to save space */
+    max-height: 35vh; /* Limit maximum height to fit screen */
+    width: 100%;
+    height: auto; /* Allow height to adapt to content */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+#ai-panel .ai-preview img {
+    max-width: 100%;
+    width: auto; /* Changed from 100% to auto to preserve aspect ratio */
+    height: auto;
+    object-fit: contain; /* Ensure the entire image is visible while maintaining aspect ratio */
+    display: block;
+    border-radius: 16px;
+    margin: 0 auto;
+}
+
+#ai-panel .ai-preview .ai-result {
+    width: 100%;
+    height: auto; /* Changed from 100% to auto to adapt to image size */
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#ai-panel .ai-preview .ai-result img {
+    max-width: 100%;
+    width: auto; /* Changed from 100% to auto to preserve aspect ratio */
+    height: auto;
+    object-fit: contain;
+    display: block;
+    border-radius: 16px;
+}
+
+/* Hide the buttons inside the ai-result as they will now be shown in preview-actions instead */
+#ai-panel .ai-preview .ai-buttons {
+    display: none;
+}
+
+/* Default hide the preview actions, they will be shown after generation */
+.ai-preview-actions {
+    display: none;
+    margin-top: 15px;
+    width: 100%;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+/* Show the preview actions when needed */
+.ai-preview-actions.visible {
+    display: flex !important; /* Use !important to override any other display properties */
+}
+
+:root.light-theme #ai-panel .ai-preview {
+    background: rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(103, 82, 245, 0.1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+:root.light-theme #ai-panel .ai-preview:hover {
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08),
+                0 0 20px rgba(103, 82, 245, 0.15),
+                inset 0 0 0 1px rgba(103, 82, 245, 0.2);
+}
+
+/* Add a subtle separator between preview and input */
+.ai-input-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px; /* Reduced from 15px */
+    position: relative;
+    padding-top: 8px;
+}
+
+.ai-input-container::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 15%;
+    right: 15%;
+    height: 1px;
+    background: linear-gradient(90deg, 
+        transparent, 
+        rgba(103, 82, 245, 0.3), 
+        transparent);
+}
+
+/* Action buttons under preview */
+.ai-preview-actions {
+    margin-top: 15px;
+    width: 100%;
+    display: none; /* Hidden by default */
+    justify-content: center; /* Center the buttons */
+    gap: 10px; /* Equal spacing between buttons */
+}
+
+/* Show the preview actions when needed */
+.ai-preview-actions.visible {
+    display: flex !important; /* Use flex to show buttons in a row */
+}
+
+.ai-preview-actions .apply-button,
+.ai-preview-actions .download-button {
+    flex: 1; /* Both buttons take equal space */
+    border-radius: 12px; /* Same radius for both buttons */
+    padding: 12px 16px; /* Same padding for both buttons */
+    font-size: 0.9rem; /* Same font size */
+    height: 45px; /* Fixed height for both buttons */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    text-align: center;
+    cursor: pointer;
+}
+
+.ai-preview-actions .apply-button {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.ai-preview-actions .apply-button:hover,
+.ai-preview-actions .download-button:hover {
+    transform: translateY(-2px);
+}
+
+.ai-preview-actions .apply-button:hover {
+    box-shadow: 0 6px 15px rgba(59, 130, 246, 0.4);
+}
+
+.ai-preview-actions .download-button {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.ai-preview-actions .download-button:hover {
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
+}
+
+:root.light-theme .ai-preview-actions .download-button {
+    background: rgba(0, 0, 0, 0.05);
+    color: rgba(0, 0, 0, 0.8);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+:root.light-theme .ai-preview-actions .download-button:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+/* Mobile styles for AI panel */
+@media (max-width: 768px) {
+    #ai-panel {
+        position: fixed;
+        top: auto;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        max-width: 100%;
+        border-radius: 30px 30px 0 0;
+        transform: translateY(100%);
+        margin: 0;
+    }
+    
+    #ai-panel.active {
+        transform: translateY(0);
+        animation: ai-panel-slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    
+    @keyframes ai-panel-slide-up {
+        0% {
+            transform: translateY(100%);
+        }
+        70% {
+            transform: translateY(-5%);
+        }
+        100% {
+            transform: translateY(0);
+        }
+    }
+}
+
+#ai-panel .section-title {
+    text-align: center;
+    margin-bottom: 10px; /* Reduced from 15px */
+    width: 100%;
+    order: -2; /* Places it above the ai-preview */
+}
+
+#ai-panel .section-title h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 5px;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+#ai-panel .section-title p {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+:root.light-theme #ai-panel .section-title h3 {
+    color: rgba(0, 0, 0, 0.9);
+}
+
+:root.light-theme #ai-panel .section-title p {
+    color: rgba(0, 0, 0, 0.6);
+}
+
+/* Enhance AI prompt input */
+#ai-panel #ai-prompt {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 14px;
+    color: rgba(255, 255, 255, 0.9);
+    resize: none;
+    transition: all 0.3s ease;
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.05);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    min-height: 80px; /* Reduced from 120px to save space */
+    max-height: 20vh; /* Limit maximum height */
+}
+
+#ai-panel #ai-prompt:focus {
+    outline: none;
+    border-color: rgba(103, 82, 245, 0.4);
+    box-shadow: 0 0 0 3px rgba(103, 82, 245, 0.15), 
+                inset 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+:root.light-theme #ai-panel #ai-prompt {
+    background: rgba(255, 255, 255, 0.6);
+    color: rgba(0, 0, 0, 0.8);
+    border-color: rgba(103, 82, 245, 0.1);
+}
+
+/* Enhance AI generate button */
+#ai-panel .button.primary {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+    border: none;
+    padding: 12px 24px;
+    border-radius: 50px;
+    color: white;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 5px 15px rgba(236, 72, 153, 0.3);
+}
+
+#ai-panel .button.primary::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    animation: shine 4s infinite;
+    z-index: 1;
+}
+
+#ai-panel .button.primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(236, 72, 153, 0.4);
+}
+
+#ai-panel .button.primary:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 10px rgba(236, 72, 153, 0.3);
+}
+
+/* AI preview container that holds both the preview and action buttons */
+.ai-preview-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px; /* Ensures consistent spacing between preview and buttons */
+    margin-bottom: 15px;
+}
+
+#ai-panel .ai-preview {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    position: relative;
+    min-height: 250px;
+    max-height: none; /* Remove max height restriction */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px; /* Add padding to ensure image has space */
+    overflow: visible; /* Changed from hidden to visible to ensure image can maintain aspect ratio */
+}
+
+/* Action buttons under preview - ensure they appear after generation */
+.ai-preview-actions {
+    margin-top: 15px;
+    width: 100%;
+    display: none; /* Hidden by default, will be shown via JavaScript when needed */
+    justify-content: space-between;
+    gap: 12px;
+    position: relative; /* Ensure proper positioning in the container */
+}
+
+.ai-preview-actions .button {
+    flex: 1;
+    padding: 12px;
+    font-size: 0.9rem;
+    text-align: center;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+}
+
+.ai-preview-actions .button.primary {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    border: none;
+}
+
+.ai-preview-actions .button.secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.ai-preview-actions .button.primary:hover {
+    background: linear-gradient(135deg, #5258f0, #7c4af5);
+    transform: translateY(-2px);
+}
+
+.ai-preview-actions .button.secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
+}
+
+#ai-panel .ai-preview {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    position: relative;
+    min-height: 250px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px; /* Add padding to ensure image has space */
+    overflow: visible; /* Changed from hidden to visible to ensure image maintains aspect ratio */
+}
+
+#ai-panel .ai-preview img {
+    max-width: 100%;
+    width: auto; /* Changed from 100% to auto to preserve aspect ratio */
+    height: auto;
+    object-fit: contain;
+    display: block;
+    border-radius: 16px;
+}
+
+#ai-panel .ai-preview .ai-result {
+    width: 100%;
+    height: auto; /* Changed from 100% to auto */
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#ai-panel #ai-generate {
+    margin-top: 8px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+    border: none;
+    transition: all 0.3s ease;
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+    padding: 8px 16px; /* Reduced from 0.7rem 1.2rem */
+    min-height: 36px; /* To match other buttons */
+    font-size: 0.95rem; /* To match other buttons */
+    border-radius: 40px; /* To match other buttons */
+}
+
+#ai-panel #ai-generate .sparkle-icon {
+    margin-left: 8px;
+    color: white !important;
+    display: inline-block;
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.7));
+    animation: sparkle 6s infinite;
+    background: white;
+    background-clip: border-box;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: #fff0;
+    font-size: 1.4rem;
+}
+
+#ai-panel #ai-generate:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 7px 20px rgba(103, 82, 245, 0.3);
+}
+
+@keyframes shine {
+    0% {
+        left: -100%;
+    }
+    20% {
+        left: 100%;
+    }
+    100% {
+        left: 100%;
+    }
+}
+
+@keyframes sparkle {
+    0%, 100% { 
+        opacity: 1; 
+        transform: scale(1) rotate(0deg);
+        filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.5));
+    }
+    25% {
+        opacity: 0.8;
+        transform: scale(0.9) rotate(5deg);
+        filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.3));
+    }
+    50% { 
+        opacity: 0.7; 
+        transform: scale(0.8) rotate(-5deg);
+        filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.6));
+    }
+    75% { 
+        opacity: 0.9; 
+        transform: scale(1.1) rotate(3deg);
+        filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.8));
+    }
+}
+
+.sparkle-icon {
+    color: white !important;
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Specific overrides for AI button sparkle */
+#ai-generator-btn .sparkle-icon {
+    position: relative;
+    z-index: 2;
+    font-size: 1.6rem;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 1), 0 0 15px rgba(255, 255, 255, 1);
+    filter: drop-shadow(0 0 15px rgba(255, 255, 255, 1)) brightness(2);
+    color: white !important;
+    display: inline-block;
+    animation: sparkle 6s infinite;
+    background: white;
+    background-clip: border-box;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: #fff0;
+}
+
+/* Specific override for AI panel sparkle */
+#ai-panel .panel-header h3::before {
+    content: '✨';
+    font-size: 1.8rem;
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.7));
+    animation: sparkle 6s infinite;
+    color: white !important;
+}
+
+/* Action buttons under preview - ensure they appear after generation */
+.ai-preview-actions {
+    margin: 15px 0;
+    width: 100%;
+    display: flex; /* Make visible by default */
+    justify-content: space-between;
+    gap: 12px;
+    position: relative; /* Ensure proper positioning in the container */
+}
+
+#ai-panel {
+    max-height: 95vh;
+    height: auto; /* Allow panel to shrink to fit content */
+    overflow: visible;
+    scrollbar-width: none; /* Hide scrollbar by default for Firefox */
+}
+
+#ai-panel::-webkit-scrollbar {
+    display: none; /* Hide scrollbar by default for Chrome/Safari/Edge */
+}
+
+#ai-panel .panel-content {
+    max-height: calc(95vh - 60px);
+    display: flex;
+    flex-direction: column;
+    justify-content: start;
+    align-items: center;
+    overflow-y: visible; /* Changed from auto to visible */
+    overflow-x: hidden;
+    scrollbar-width: none;
+    padding: 20px;
+    gap: 12px;
+}
+
+#ai-panel .panel-content::-webkit-scrollbar {
+    display: none;
+}
+
+/* Make placeholder text smaller */
+#ai-panel #ai-prompt::placeholder {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+:root.light-theme #ai-panel #ai-prompt::placeholder {
+    color: rgba(0, 0, 0, 0.4);
+}
+
+/* Improve button styling to match UI */
+.ai-preview-actions .apply-button,
+.ai-preview-actions .download-button {
+    flex: 1;
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 0.9rem;
+    height: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    text-align: center;
+    cursor: pointer;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+.ai-preview-actions .apply-button {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.ai-preview-actions .download-button {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Perfect alignment for the entire panel */
+.ai-preview-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin: 0 auto;
+}
+
+#ai-panel .section-title {
+    text-align: center;
+    margin-bottom: 10px;
+    width: 100%;
+    padding: 0 10px;
+}
+
+.ai-input-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+    margin-top: 5px;
+}
+
+/* Fix display issue with .ai-preview-actions */
+.ai-preview-actions {
+    margin-top: 10px;
+    width: 100%;
+    display: none;
+    justify-content: center;
+    gap: 10px;
+    padding: 0 5px;
+}
+
+.ai-preview-actions.visible {
+    display: flex !important;
+}
+
+/* Reduce minimum height of preview area */
+#ai-panel .ai-preview {
+    min-height: 150px; /* Reduced from 180px */
+    max-height: 30vh; /* Slightly smaller */
+}
+
+/* Reduce minimum height of input textarea */
+#ai-panel #ai-prompt {
+    min-height: 60px; /* Reduced from 80px */
+    max-height: 15vh;
+}
+
+#ai-panel .ai-preview {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    position: relative;
+    min-height: 150px;
+    max-height: 30vh;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    overflow: hidden !important; /* Force hidden to prevent image from overflowing */
+}
+
+#ai-panel .ai-preview img {
+    max-width: 100%;
+    max-height: 28vh !important; /* Slightly less than container to ensure it fits */
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+    border-radius: 16px;
+}
+
+#ai-panel .ai-preview .ai-result {
+    width: 100%;
+    max-height: 28vh !important;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden !important; /* Ensure image stays within container */
+}
+
+#ai-panel .ai-preview .ai-result img {
+    max-width: 100%;
+    max-height: 28vh !important;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+    border-radius: 16px;
+}
+
+#ai-panel .ai-preview {
+    width: 100%;
+    aspect-ratio: 16/9; /* Maintain consistent aspect ratio */
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    position: relative;
+    min-height: 0; /* Remove min-height to respect aspect ratio */
+    max-height: none; /* Let aspect ratio control the height */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    overflow: hidden !important; /* Force hidden to prevent image from overflowing */
+}
+
+#ai-panel .ai-preview img,
+#ai-panel .ai-preview .ai-result img {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+    border-radius: 12px;
+}
+
+#ai-panel .ai-preview .ai-result {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden !important;
+}
+
+/* Make apply and download buttons match generate button */
+.ai-preview-actions .apply-button,
+.ai-preview-actions .download-button {
+    flex: 1;
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    height: 48px; /* Match generate button height */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    text-align: center;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+}
+
+.ai-preview-actions .apply-button {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.ai-preview-actions .download-button {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px; /* Match apply button */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Style the button icons consistently */
+.ai-preview-actions .apply-button i,
+.ai-preview-actions .download-button i {
+    margin-right: 8px;
+    font-size: 1.1rem;
+}
+
+/* Update loading indicator to match new UI */
+#ai-panel .ai-preview .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+}
+
+#ai-panel .ai-preview .empty-state i {
+    font-size: 2.5rem;
+    margin-bottom: 15px;
+    color: rgba(255, 255, 255, 0.7);
+    text-shadow: 0 0 15px rgba(103, 82, 245, 0.6);
+    animation: pulse 2s infinite ease-in-out;
+}
+
+#ai-panel .ai-preview .empty-state p {
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.7);
+    max-width: 80%;
+    line-height: 1.4;
+}
+
+@keyframes pulse {
+    0%, 100% { 
+        opacity: 0.7;
+        transform: scale(1);
+    }
+    50% { 
+        opacity: 1;
+        transform: scale(1.1);
+        text-shadow: 0 0 20px rgba(103, 82, 245, 0.8);
+    }
+}
+
+#ai-panel .ai-preview {
+    width: 100%;
+    aspect-ratio: 1/1; /* Changed to 1:1 aspect ratio */
+    max-width: 1024px; /* Set maximum width to 1024px */
+    height: auto; /* Height will be controlled by aspect ratio */
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    position: relative;
+    min-height: 0; /* Remove min-height to respect aspect ratio */
+    max-height: none; /* Let aspect ratio control the height */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    overflow: hidden !important; /* Force hidden to prevent image from overflowing */
+    margin: 0 auto; /* Center the container */
+}
+
+/* Make apply and download buttons match generate button */
+.ai-preview-actions .apply-button,
+.ai-preview-actions .download-button {
+    flex: 1;
+    border-radius: 50px; /* Match generate button border-radius */
+    padding: 12px 24px; /* Match generate button padding */
+    font-size: 1.1rem; /* Match generate button font size */
+    font-weight: 600; /* Match generate button font weight */
+    height: auto; /* Auto height to match content */
+    min-height: 48px; /* Minimum height to match generate button */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); /* Match generate button transition */
+    text-align: center;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+}
+
+.ai-preview-actions .apply-button {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    border: none;
+    box-shadow: 0 5px 15px rgba(99, 102, 241, 0.3);
+}
+
+.ai-preview-actions .download-button {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 50px; /* Match apply button and generate button */
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Style the button icons consistently */
+.ai-preview-actions .apply-button i,
+.ai-preview-actions .download-button i {
+    margin-right: 8px;
+    font-size: 1.1rem; /* Match generate button icon size */
+}
+
+/* Hover effects to match generate button */
+.ai-preview-actions .apply-button:hover,
+.ai-preview-actions .download-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+}
+
+.ai-preview-actions .apply-button:active,
+.ai-preview-actions .download-button:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
+}
+
+/* Update loading indicator to match new UI */
+#ai-panel .ai-preview .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+    width: 100%;
+    height: 100%;
+}
+
+#ai-panel .ai-preview .empty-state i {
+    font-size: 3rem;
+    margin-bottom: 20px;
+    color: rgba(255, 255, 255, 0.7);
+    text-shadow: 0 0 20px rgba(103, 82, 245, 0.8);
+    animation: pulse 2s infinite ease-in-out;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+#ai-panel .ai-preview .empty-state p {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.8);
+    max-width: 80%;
+    line-height: 1.5;
+    font-weight: 500;
+}
+
+/* Update loading animation to match AI panel */
+#ai-panel .ai-preview .loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+    width: 100%;
+    height: 100%;
+}
+
+#ai-panel .ai-preview .loading i {
+    font-size: 2.5rem !important; /* Reduced from 3.5rem to match empty state */
+    margin-bottom: 15px !important; /* Reduced from 20px to match empty state */
+    color: rgba(255, 255, 255, 0.95);
+    animation: spin-pulse 2s infinite ease-in-out;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 15px rgba(103, 82, 245, 0.7));
+}
+
+#ai-panel .ai-preview .loading p {
+    font-size: 0.9rem !important; /* Reduced from 1.2rem to match empty state */
+    color: rgba(255, 255, 255, 0.95);
+    font-weight: 600;
+    max-width: 90%;
+    text-align: center;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes spin-pulse {
+    0% {
+        transform: rotate(0deg) scale(1);
+        opacity: 0.8;
+    }
+    50% {
+        transform: rotate(180deg) scale(1.2);
+        opacity: 1;
+        filter: drop-shadow(0 0 20px rgba(103, 82, 245, 0.8));
+    }
+    100% {
+        transform: rotate(360deg) scale(1);
+        opacity: 0.8;
+    }
+}
+
+/* Match photo container to AI preview size */
+.preview-container, 
+#photo-preview,
+#ai-panel .ai-preview {
+    width: 100%;
+    max-width: 1024px;
+    aspect-ratio: 1/1; /* 1:1 square aspect ratio */
+    height: auto;
+    margin: 0 auto;
+    border-radius: 16px;
+    overflow: auto !important;
+    position: relative;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+/* Unified styling for images in both containers */
+#photo-preview,
+#ai-panel .ai-preview img,
+#ai-panel .ai-preview .ai-result img {
+    width: 100%;
+    height: 100%;
+    max-width: 1024px;
+    max-height: 1024px;
+    object-fit: cover;
+    display: block;
+    border-radius: 0;
+}
+
+/* Ensure the AI result container has correct dimensions */
+#ai-panel .ai-preview .ai-result {
+    width: 100%;
+    height: 100%;
+    max-width: 1024px;
+    max-height: 1024px;
+}
+
+/* Make sure the loading and empty states still display properly */
+#ai-panel .ai-preview .empty-state,
+#ai-panel .ai-preview .loading {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+/* Make apply and download buttons match generate button but smaller */
+.ai-preview-actions .apply-button,
+.ai-preview-actions .download-button {
+    flex: 1;
+    border-radius: 40px; /* Slightly reduced from 50px */
+    padding: 8px 16px; /* Reduced from 12px 24px */
+    font-size: 0.95rem; /* Reduced from 1.1rem */
+    font-weight: 600; 
+    height: auto;
+    min-height: 36px; /* Reduced from 48px */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    text-align: center;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+}
+
+/* Make the AI generate button smaller to match */
+#ai-panel #ai-generate {
+    margin-top: 8px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+    border: none;
+    transition: all 0.3s ease;
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+    padding: 8px 16px; /* Reduced from 0.7rem 1.2rem */
+    min-height: 36px; /* To match other buttons */
+    font-size: 0.95rem; /* To match other buttons */
+    border-radius: 40px; /* To match other buttons */
+}
+
+/* Make AI prompt input bigger */
+#ai-panel #ai-prompt {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 14px;
+    color: rgba(255, 255, 255, 0.9);
+    resize: none;
+    transition: all 0.3s ease;
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.05);
+    font-size: 1rem; /* Increased from 0.95rem */
+    line-height: 1.5;
+    min-height: 90px; /* Increased from 80px */
+    max-height: 25vh; /* Increased from 20vh */
+    width: 100%;
+    /* Hide scrollbar but keep functionality */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+#ai-panel #ai-prompt::-webkit-scrollbar {
+    display: none;
+}
+
+/* Ensure AI preview shows full image */
+#ai-panel .ai-preview {
+    width: 100%;
+    aspect-ratio: 1/1; /* Maintain square aspect ratio */
+    max-width: 1024px;
+    height: auto;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    position: relative;
+    min-height: 0; /* Remove min-height to respect aspect ratio */
+    max-height: none; /* Let aspect ratio control the height */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px; /* Reduced padding to maximize image space */
+    overflow: hidden !important; /* Force hidden to prevent image from overflowing */
+    margin: 0 auto; /* Center the container */
+}
+
+/* When section-title is hidden, allow the preview to be taller */
+#ai-panel .section-title[style*="display: none"] ~ .ai-preview-container .ai-preview {
+    max-height: calc(50vh - 100px); /* Larger max-height when section-title is hidden */
+    aspect-ratio: auto; /* Allow natural aspect ratio */
+    transition: max-height 0.3s ease;
+}
+
+/* Ensure image fits perfectly within the preview */
+#ai-panel .ai-preview img,
+#ai-panel .ai-preview .ai-result img {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+    border-radius: 12px;
+}
+
+/* When section-title is hidden, make the image larger */
+#ai-panel .section-title[style*="display: none"] ~ .ai-preview-container .ai-preview img,
+#ai-panel .section-title[style*="display: none"] ~ .ai-preview-container .ai-preview .ai-result img {
+    max-height: calc(50vh - 100px);
+}
+
+#ai-panel .ai-preview {
+    width: 100%;
+    max-width: none; /* Remove max-width to allow flexible sizing */
+    aspect-ratio: auto; /* Allow natural aspect ratio instead of forcing 1:1 */
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    position: relative;
+    min-height: 0; /* Remove min-height constraint */
+    max-height: 80vh; /* Maximize height while keeping some space for UI */
+    height: auto;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0; /* Remove padding to maximize image space */
+    overflow: hidden !important; 
+    margin: 0 auto; /* Center the container */
+}
+
+#ai-panel .ai-preview img,
+#ai-panel .ai-preview .ai-result img {
+    max-width: 100%;
+    max-height: 80vh; /* Match container max-height */
+    width: auto; /* Allow natural width */
+    height: auto; /* Allow natural height */
+    object-fit: contain;
+    display: block;
+    border-radius: 12px;
+}
+
+#ai-panel .ai-preview .ai-result {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible !important; /* Allow image to determine the size */
+}
+
+/* When section-title is hidden, make the image even larger */
+#ai-panel .section-title[style*="display: none"] ~ .ai-preview-container .ai-preview {
+    max-height: 90vh; /* Even larger when section title is hidden */
+    transition: max-height 0.3s ease;
+}
+
+/* When section-title is hidden, make the image larger */
+#ai-panel .section-title[style*="display: none"] ~ .ai-preview-container .ai-preview img,
+#ai-panel .section-title[style*="display: none"] ~ .ai-preview-container .ai-preview .ai-result img {
+    max-height: 90vh; /* Match the larger container height */
+}
+
+/* Ensure the AI preview container adapts to the image size after generation */
+.ai-preview-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+/* Make sure the ai-result container adapts to the image dimensions */
+#ai-panel .ai-preview .ai-result:has(img) {
+    width: auto;
+    height: auto;
+}
+
+.ai-preview-actions .button.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+    filter: grayscale(40%);
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* Enhanced empty state appearance for better UI */
+#ai-panel .ai-preview .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 16px;
+}
+
+#ai-panel .ai-preview .empty-state i {
+    font-size: 3.5rem;
+    margin-bottom: 20px;
+    color: rgba(255, 255, 255, 0.8);
+    text-shadow: 0 0 20px rgba(103, 82, 245, 0.8);
+    animation: pulse 2s infinite ease-in-out;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.ai-preview-container {
+    width: 100%;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+    min-height: 200px; /* Reduced minimum height */
+}
+
+#ai-panel .ai-preview {
+    width: 100%;
+    max-width: none;
+    aspect-ratio: auto;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    position: relative;
+    min-height: 300px; /* Increased from 200px for bigger display */
+    max-height: 90vh; /* Maximum height when showing generated image */
+    height: auto;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    overflow: hidden !important;
+    margin: 0 auto;
+}
+
+/* Smaller size for empty state and generating state */
+#ai-panel .ai-preview:has(.empty-state),
+#ai-panel .ai-preview:has(.loading) {
+    min-height: 250px; /* Increased from 200px */
+    max-height: 300px; /* Increased from 250px */
+}
+
+/* Normal size for result state */
+#ai-panel .ai-preview:has(.ai-result img) {
+    min-height: unset !important;
+    height: auto !important;
+    max-height: none !important;
+    width: auto !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+#ai-panel .ai-preview .ai-result {
+    width: auto !important;
+    height: auto !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+}
+
+#ai-panel .ai-preview .ai-result img {
+    max-width: 230px !important;
+    min-width: 230px !important;
+    width: 230px !important;
+    height: auto !important;
+    max-height: none !important;
+    object-fit: contain !important;
+    display: block !important;
+    margin: 0 auto !important;
+    border-radius: 8px !important;
+    transform: none !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Make empty state match loading state */
+#ai-panel .ai-preview .empty-state {
+    padding: 20px;
+    min-height: 250px;
+    width: 100%;
+    height: 100%;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.15);
+    border-radius: 16px;
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 10;
+    border: none;
+    text-align: center;
+}
+
+#ai-panel .ai-preview .empty-state::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(103, 82, 245, 0.1), rgba(236, 72, 153, 0.1));
+    border-radius: 16px;
+    z-index: -1;
+    animation: pulse-loading 2s infinite; /* Match loading animation timing */
+}
+
+#ai-panel .ai-preview .empty-state i {
+    font-size: 2.5rem !important; /* Keep consistent size */
+    margin-bottom: 15px !important; /* Keep consistent margin */
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 0 20px rgba(103, 82, 245, 0.8);
+    animation: pulse 2s infinite ease-in-out;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 15px rgba(103, 82, 245, 0.7));
+}
+
+#ai-panel .ai-preview .empty-state p {
+    font-size: 0.9rem !important; /* Keep consistent size */
+    color: rgba(255, 255, 255, 0.95);
+    font-weight: 600;
+    max-width: 90%;
+    text-align: center;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    line-height: 1.5;
+}
+
+/* Make robot icon animation smoother */
+#ai-panel .ai-preview .empty-state i {
+    font-size: 3.5rem;
+    margin-bottom: 20px;
+    color: rgba(255, 255, 255, 0.95);
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 15px rgba(103, 82, 245, 0.7));
+    animation: robot-float 4s ease-in-out infinite;
+}
+
+@keyframes robot-float {
+    0% {
+        transform: translateY(0) rotate(0deg);
+        filter: drop-shadow(0 0 10px rgba(103, 82, 245, 0.6));
+    }
+    50% {
+        transform: translateY(-10px) rotate(5deg);
+        filter: drop-shadow(0 0 20px rgba(103, 82, 245, 0.8));
+    }
+    100% {
+        transform: translateY(0) rotate(0deg);
+        filter: drop-shadow(0 0 10px rgba(103, 82, 245, 0.6));
+    }
+}
+
+#ai-panel .ai-preview .empty-state p {
+    font-size: 1.2rem;
+    color: rgba(255, 255, 255, 0.95);
+    font-weight: 600;
+    max-width: 90%;
+    text-align: center;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Enhanced empty state appearance */
+#ai-panel .ai-preview .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 15px;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 16px;
+}
+
+#ai-panel .ai-preview .empty-state i {
+    font-size: 2.5rem; /* Smaller icon for empty state */
+    margin-bottom: 10px;
+    color: rgba(255, 255, 255, 0.8);
+    text-shadow: 0 0 20px rgba(103, 82, 245, 0.8);
+    animation: pulse 2s infinite ease-in-out;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+#ai-panel .ai-preview .empty-state p {
+    font-size: 0.9rem; /* Smaller text for empty state */
+    color: rgba(255, 255, 255, 0.8);
+    max-width: 90%;
+    line-height: 1.4;
+}
+
+/* Loading state should also be smaller */
+#ai-panel .ai-preview .loading {
+    padding: 15px;
+    max-height: 250px; /* Increased for better visibility */
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+#ai-panel .ai-preview .loading i {
+    font-size: 3.5rem; /* Match robot icon size */
+    margin-bottom: 20px;
+    color: rgba(255, 255, 255, 0.95);
+    animation: spin-pulse 2s infinite ease-in-out;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 15px rgba(103, 82, 245, 0.7));
+}
+
+#ai-panel .ai-preview .loading p {
+    font-size: 1.2rem; /* Match robot text size */
+    color: rgba(255, 255, 255, 0.95);
+    font-weight: 600;
+    max-width: 90%;
+    text-align: center;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Fix container sizing to accommodate larger images */
+.ai-preview-container {
+    width: 100%;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+    min-height: 250px; /* Increased from 200px */
+}
+
+#ai-panel .ai-preview .loading {
+    padding: 15px;
+    max-height: 250px; /* Increased from 200px */
+    width: 100%;
+    height: 100%;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 16px;
+}
+
+#ai-panel .ai-preview .loading i {
+    font-size: 3rem; /* Increased from 2.5rem */
+    margin-bottom: 15px;
+    color: rgba(255, 255, 255, 0.9);
+    animation: spin-pulse 2s infinite ease-in-out;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+#ai-panel .ai-preview .loading p {
+    font-size: 1rem; /* Increased from 0.9rem */
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 500;
+    max-width: 90%;
+}
+
+#ai-panel .ai-preview .loading {
+    padding: 20px;
+    min-height: 250px;
+    width: 100%;
+    height: 100%;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.15);
+    border-radius: 16px;
+    position: relative;
+    z-index: 10;
+    text-align: center;
+}
+
+#ai-panel .ai-preview .loading::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(103, 82, 245, 0.1), rgba(236, 72, 153, 0.1));
+    border-radius: 16px;
+    z-index: -1;
+    animation: pulse-loading 2s infinite;
+}
+
+@keyframes pulse-loading {
+    0% {
+        opacity: 0.6;
+    }
+    50% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0.6;
+    }
+}
+
+#ai-panel .ai-preview .loading i {
+    font-size: 3.5rem; /* Larger icon */
+    margin-bottom: 20px;
+    color: rgba(255, 255, 255, 0.95);
+    animation: spin-pulse 2s infinite ease-in-out;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 15px rgba(103, 82, 245, 0.7));
+}
+
+#ai-panel .ai-preview .loading p {
+    font-size: 1.2rem; /* Larger text */
+    color: rgba(255, 255, 255, 0.95);
+    font-weight: 600;
+    max-width: 90%;
+    text-align: center;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+#ai-panel .ai-preview .loading i {
+    /* Styling handled by more specific rule below */
+    font-size: 3.5rem;
+    margin-bottom: 20px;
+}
+
+#ai-panel .ai-preview .loading p {
+    /* Styling handled by more specific rule below */
+    font-size: 1.2rem;
+    margin-bottom: 0;
+}
+
+#ai-panel .ai-preview .loading i {
+    font-size: 3.5rem !important; /* Force consistent size */
+    margin-bottom: 20px !important;
+    color: rgba(255, 255, 255, 0.95);
+    animation: spin-pulse 2s infinite ease-in-out;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+#ai-panel .ai-preview .loading p {
+    font-size: 1.2rem !important; /* Force consistent size */
+    color: rgba(255, 255, 255, 0.95);
+    font-weight: 600;
+    max-width: 90%;
+}
+
+#ai-panel .ai-preview .empty-state i {
+    font-size: 2.5rem !important; /* Keep consistent size */
+    margin-bottom: 15px !important; /* Keep consistent margin */
+    color: rgba(255, 255, 255, 0.8);
+    text-shadow: 0 0 20px rgba(103, 82, 245, 0.8);
+    animation: pulse 2s infinite ease-in-out;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+#ai-panel .ai-preview .empty-state p {
+    font-size: 0.9rem !important; /* Keep consistent size */
+    color: rgba(255, 255, 255, 0.8);
+    max-width: 90%;
+    line-height: 1.4;
+}
+
+#ai-panel .ai-preview .loading i {
+    font-size: 2.5rem !important; /* Match empty state icon size */
+    margin-bottom: 15px !important; /* Match empty state margin */
+    color: rgba(255, 255, 255, 0.95);
+    animation: spin-pulse 2s infinite ease-in-out;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 15px rgba(103, 82, 245, 0.7));
+}
+
+#ai-panel .ai-preview .loading p {
+    font-size: 0.9rem !important; /* Match empty state text size */
+    color: rgba(255, 255, 255, 0.95);
+    font-weight: 600;
+    max-width: 90%;
+    text-align: center;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Force AI generated image to be exactly 230px */
+#ai-panel .panel-content .ai-preview-container .ai-preview .ai-result img {
+    max-width: 230px !important;
+    min-width: 230px !important;
+    width: 230px !important;
+    height: 230px !important;
+    object-fit: contain !important;
+    display: block !important;
+    margin: 0 auto !important;
+    border-radius: 8px !important;
+    transform: none !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35) !important;
+}
+
+#ai-panel .ai-preview .empty-state {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 15px;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 16px;
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 10;
+}
+
+/* Fix empty state positioning to fill container */
+#ai-panel .panel-content .ai-preview-container .ai-preview .ai-result .empty-state {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background-color: rgba(0, 0, 0, 0.15) !important;
+    border-radius: 16px !important;
+    z-index: 10 !important;
+    text-align: center !important;
+    padding: 15px !important;
+}
+
+/* Fix loading state positioning to fill container */
+#ai-panel .panel-content .ai-preview-container .ai-preview .ai-result .loading {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background-color: rgba(0, 0, 0, 0.15) !important;
+    border-radius: 16px !important;
+    z-index: 10 !important;
+    text-align: center !important;
+    padding: 15px !important;
+}
+
+#ai-panel .ai-preview .ai-result {
+    position: relative !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+#ai-panel .ai-preview .empty-state {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    text-align: center;
+    inset: 0;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+#ai-panel .ai-preview .empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 15px;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 16px;
+    z-index: 10;
+}
+
+#ai-panel .ai-preview .empty-state {
+    position: absolute !important;
+    inset: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    padding: 15px !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: rgba(0, 0, 0, 0.5) !important;
+    border-radius: 16px !important;
+    z-index: 10 !important;
+}
+
+#ai-panel .ai-preview .empty-state {
+    position: absolute !important;
+    inset: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    padding: 15px !important;
+    width: 100% !important;
+    height: 100% !important;
+    background-color: rgba(0, 0, 0, 0.15) !important;
+    border-radius: 16px !important;
+    z-index: 10 !important;
+    position: relative !important;
+}
+
+#ai-panel .ai-preview .empty-state::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(103, 82, 245, 0.1), rgba(236, 72, 153, 0.1));
+    border-radius: 16px;
+    z-index: -1;
+    animation: pulse-loading 2s infinite;
 }

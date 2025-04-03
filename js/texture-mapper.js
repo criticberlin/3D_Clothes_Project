@@ -24,8 +24,13 @@ const textureState = {
 // Configuration for different model types
 export const modelConfig = {
     "tshirt": {
+        "name": "T-Shirt",
+        "glbPath": "./models/tshirt.glb",
+        "defaultColor": "#FFFFFF",
+        "defaultScale": 1.0,
         "views": {
             "front": {
+                "name": "Front",
                 "bounds": { "x": 0.15, "y": 0.45, "width": 0.7, "height": 0.8 },
                 "defaultScale": 1,
                 "uvRect": { "u1": 0.08, "v1": 0.08, "u2": 0.45, "v2": 0.65 },
@@ -36,6 +41,7 @@ export const modelConfig = {
                 }
             },
             "back": {
+                "name": "Back",
                 "bounds": { "x": 0.25, "y": 0.52, "width": 0.45, "height": 0.45 },
                 "defaultScale": 1,
                 "uvRect": { "u1": 0.55, "v1": 0.08, "u2": 0.92, "v2": 0.65 },
@@ -46,6 +52,7 @@ export const modelConfig = {
                 }
             },
             "left_arm": {
+                "name": "Left Sleeve",
                 "bounds": { "x": 0.16, "y": 0.35, "width": 0.14, "height": 0.22 },
                 "defaultScale": 0.25,
                 "uvRect": { "u1": 0.08, "v1": 0.78, "u2": 0.42, "v2": 0.92 },
@@ -56,6 +63,7 @@ export const modelConfig = {
                 }
             },
             "right_arm": {
+                "name": "Right Sleeve",
                 "bounds": { "x": 0.76, "y": 0.35, "width": 0.14, "height": 0.22 },
                 "defaultScale": 0.25,
                 "uvRect": { "u1": 0.58, "v1": 0.78, "u2": 0.92, "v2": 0.92 },
@@ -66,10 +74,22 @@ export const modelConfig = {
                 }
             }
         },
+        "textureSettings": {
+            "canvasWidth": 1024,
+            "canvasHeight": 1024,
+            "baseColor": "#FFFFFF",
+            "acceptsFullTexture": true,
+            "acceptsDecals": true
+        }
     },
     "hoodie": {
+       "name": "Hoodie",
+       "glbPath": "./models/hoodie.glb",
+       "defaultColor": "#FFFFFF",
+       "defaultScale": 1.0,
        "views": {
             "front": {
+                "name": "Front",
                 "bounds": { "x": 0.15, "y": 0.45, "width": 0.7, "height": 0.8 },
                 "defaultScale": 1,
                 "uvRect": { "u1": 0.08, "v1": 0.08, "u2": 0.45, "v2": 0.65 },
@@ -80,6 +100,7 @@ export const modelConfig = {
                 }
             },
             "back": {
+                "name": "Back",
                 "bounds": { "x": 0.25, "y": 0.52, "width": 0.45, "height": 0.45 },
                 "defaultScale": 1,
                 "uvRect": { "u1": 0.55, "v1": 0.08, "u2": 0.92, "v2": 0.65 },
@@ -90,6 +111,7 @@ export const modelConfig = {
                 }
             },
             "left_arm": {
+                "name": "Left Sleeve",
                 "bounds": { "x": 0.16, "y": 0.35, "width": 0.14, "height": 0.22 },
                 "defaultScale": 0.25,
                 "uvRect": { "u1": 0.08, "v1": 0.78, "u2": 0.42, "v2": 0.92 },
@@ -100,6 +122,7 @@ export const modelConfig = {
                 }
             },
             "right_arm": {
+                "name": "Right Sleeve",
                 "bounds": { "x": 0.76, "y": 0.35, "width": 0.14, "height": 0.22 },
                 "defaultScale": 0.25,
                 "uvRect": { "u1": 0.58, "v1": 0.78, "u2": 0.92, "v2": 0.92 },
@@ -110,6 +133,7 @@ export const modelConfig = {
                 }
             },
             "hood": {
+                "name": "Hood",
                 "bounds": { "x": 0.35, "y": 0.15, "width": 0.3, "height": 0.2 },
                 "defaultScale": 0.25,
                 "uvRect": { "u1": 0.35, "v1": 0.05, "u2": 0.65, "v2": 0.2 },
@@ -120,6 +144,13 @@ export const modelConfig = {
                 }
             }
         },
+        "textureSettings": {
+            "canvasWidth": 1024,
+            "canvasHeight": 1024,
+            "baseColor": "#FFFFFF",
+            "acceptsFullTexture": true,
+            "acceptsDecals": true
+        }
     }
 };
 
@@ -157,20 +188,31 @@ const viewDetectionMatrix = {
 export function initTextureMapper(baseTexturePath = null, bumpMapPath = null, modelType = null) {
     // Use the provided model type or get it from state, or fallback to tshirt
     const currentModelType = modelType || state.currentModel || 'tshirt';
-    textureState.currentModel = currentModelType;
     
-    console.log(`Texture mapper initialized for model type: ${currentModelType}`);
+    // Validate that the model type exists
+    if (!modelConfig[currentModelType]) {
+        console.warn(`Unknown model type: ${currentModelType}, falling back to tshirt`);
+        textureState.currentModel = 'tshirt';
+    } else {
+        textureState.currentModel = currentModelType;
+    }
+    
+    console.log(`Texture mapper initialized for model type: ${textureState.currentModel}`);
 
     // Enable advanced features by default
     toggleSmartPlacement(true);
     toggleAutoAdjustment(true);
 
-    Logger.log(`Texture Mapper initialized for ${currentModelType} with advanced features`);
+    Logger.log(`Texture Mapper initialized for ${textureState.currentModel} with advanced features`);
     
     // Expose important functions to window object for cross-module access
     window.detectViewFromPosition = detectViewFromPosition;
     window.modelConfig = modelConfig;
     window.setModelType = setModelType;
+    window.registerModelType = registerModelType;
+    window.getAvailableModels = getAvailableModels;
+    window.getModelConfig = getModelConfig;
+    window.getCurrentModelType = () => textureState.currentModel;
 
     return Promise.resolve({
         baseTexture: null,
@@ -187,11 +229,17 @@ export function initTextureMapper(baseTexturePath = null, bumpMapPath = null, mo
  */
 export function loadCustomImage(imageUrl, view = 'front', options = {}) {
     return new Promise((resolve, reject) => {
-        // Check if view is valid
-        if (!modelConfig[state.currentModel].views[view]) {
-            showToast(`Invalid view "${view}". Using "front" instead.`);
-            view = 'front';
+        // Get the current model type from options or state
+        const currentModelType = options.modelType || state.currentModel || 'tshirt';
+        
+        // Check if view is valid for the current model
+        if (!modelConfig[currentModelType] || !modelConfig[currentModelType].views[view]) {
+            const fallbackView = 'front';
+            showToast(`Invalid view "${view}" for ${currentModelType}. Using "${fallbackView}" instead.`);
+            view = fallbackView;
         }
+        
+        console.log(`Loading custom image for ${currentModelType} - ${view} view`);
 
         // Use the 3D editor's addImage function with smart placement
         addImage(imageUrl, {
@@ -199,9 +247,10 @@ export function loadCustomImage(imageUrl, view = 'front', options = {}) {
             center: true,
             smartPlacement: true,
             autoAdjust: true,
+            isAIGenerated: options.isAIGenerated || false,
             ...options
         }).then(imageObj => {
-            Logger.log(`Custom image loaded for ${view}`);
+            Logger.log(`Custom image loaded for ${currentModelType} ${view}`);
             showToast(`Image added to ${view} view`);
             resolve(imageObj);
         }).catch(error => {
@@ -231,11 +280,16 @@ export function setModelType(modelType) {
 /**
  * Clear custom images from views
  * @param {string} view - The view to clear or 'all' to clear all views
+ * @param {string} modelType - The model type to clear images from
  */
-export function clearCustomImage(view = 'all') {
+export function clearCustomImage(view = 'all', modelType = null) {
+    const currentModelType = modelType || state.currentModel || 'tshirt';
+    
+    // Call the 3D editor's clearObjectsByView function
     clearObjectsByView(view);
-    Logger.log(`Cleared custom images from ${view === 'all' ? 'all views' : view}`);
-    showToast(`Cleared ${view === 'all' ? 'all' : view} view${view === 'all' ? 's' : ''}`);
+    
+    Logger.log(`Cleared custom images from ${view === 'all' ? 'all views' : view} on ${currentModelType}`);
+    showToast(`Cleared ${view === 'all' ? 'all' : view} view${view === 'all' ? 's' : ''} on ${currentModelType}`);
 }
 
 /**
@@ -351,4 +405,96 @@ export function detectViewFromPosition(x, y, model = state.currentModel) {
 
     // Default to the current camera view if no matching zone
     return state.cameraView || 'front';
+}
+
+/**
+ * Register a new model type in the system
+ * @param {string} modelType - ID for the model (e.g., 'oversized_tshirt')
+ * @param {object} config - Configuration object for the model
+ * @returns {boolean} - Success status
+ */
+export function registerModelType(modelType, config) {
+    if (!modelType || typeof modelType !== 'string') {
+        console.error('Invalid model type: must be a non-empty string');
+        return false;
+    }
+
+    if (!config || typeof config !== 'object') {
+        console.error('Invalid model configuration: must be an object');
+        return false;
+    }
+
+    // Validate required configuration properties
+    if (!config.name || !config.glbPath || !config.views) {
+        console.error('Invalid model configuration: missing required properties (name, glbPath, views)');
+        return false;
+    }
+
+    // Ensure each view has required properties
+    const views = config.views;
+    if (!views || typeof views !== 'object' || Object.keys(views).length === 0) {
+        console.error('Invalid model configuration: views must be a non-empty object');
+        return false;
+    }
+
+    for (const [viewName, viewConfig] of Object.entries(views)) {
+        if (!viewConfig.bounds || !viewConfig.uvRect) {
+            console.error(`Invalid view configuration for "${viewName}": missing required properties (bounds, uvRect)`);
+            return false;
+        }
+    }
+
+    // Check if model already exists
+    if (modelConfig[modelType]) {
+        console.warn(`Model "${modelType}" already exists and will be overwritten`);
+    }
+
+    // Add default values if missing
+    const finalConfig = {
+        ...config,
+        defaultColor: config.defaultColor || "#FFFFFF",
+        defaultScale: config.defaultScale || 1.0,
+        textureSettings: {
+            canvasWidth: config.textureSettings?.canvasWidth || 1024,
+            canvasHeight: config.textureSettings?.canvasHeight || 1024,
+            baseColor: config.textureSettings?.baseColor || "#FFFFFF",
+            acceptsFullTexture: config.textureSettings?.acceptsFullTexture !== false,
+            acceptsDecals: config.textureSettings?.acceptsDecals !== false
+        }
+    };
+
+    // Register the model
+    modelConfig[modelType] = finalConfig;
+    console.log(`Registered model type: ${modelType}`);
+
+    // Register view detection matrix if provided
+    if (config.viewDetection && Array.isArray(config.viewDetection.zones)) {
+        viewDetectionMatrix[modelType] = {
+            zones: config.viewDetection.zones
+        };
+        console.log(`Registered view detection zones for ${modelType}`);
+    }
+
+    return true;
+}
+
+/**
+ * Get available models in the system
+ * @returns {Array} - Array of model type objects with id and name
+ */
+export function getAvailableModels() {
+    return Object.entries(modelConfig).map(([id, config]) => ({
+        id,
+        name: config.name || id,
+        path: config.glbPath
+    }));
+}
+
+/**
+ * Get model configuration for a specific model type
+ * @param {string} modelType - The model type to get configuration for
+ * @returns {object|null} - Model configuration or null if not found
+ */
+export function getModelConfig(modelType) {
+    return modelConfig[modelType] || null;
 } 

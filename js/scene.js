@@ -457,7 +457,8 @@ function initializeScene() {
     renderer = new THREE.WebGLRenderer({
         antialias: true,
         preserveDrawingBuffer: true,
-        alpha: true
+        alpha: true,
+        powerPreference: 'high-performance'
     });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -466,13 +467,14 @@ function initializeScene() {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.shadowMap.autoUpdate = true;
-    renderer.outputEncoding = THREE.sRGBEncoding;
+    
+    // Fix deprecated properties warnings by using recommended new properties
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;  // Increased for better color vibrancy
+    renderer.toneMappingExposure = 1.2; // Increased for better color vibrancy
 
-    // Disable shadow mapping completely to fix dark shadow issues
-    // renderer.shadowMap.enabled = false;
-    // renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Enable physically correct lighting for more realistic appearance
+    renderer.physicallyCorrectLights = true;
 
     // Apply saved theme preference if available
     if (window.currentThemeIsDark !== undefined) {
@@ -487,11 +489,6 @@ function initializeScene() {
         renderer.setClearColor(0x111827);
     }
 
-    // Fix deprecated properties warnings by using recommended new properties
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;  // Increased for better color vibrancy
-
     // Clear previous canvas if exists
     while (container.firstChild) {
         container.removeChild(container.firstChild);
@@ -505,6 +502,32 @@ function initializeScene() {
 
     // Set theme based on current state
     updateThemeBackground(state.darkMode !== false);
+
+    // Initialize decal lighting state
+    if (window.decalsAffectedByLighting === undefined) {
+        window.decalsAffectedByLighting = false;
+    }
+
+    // Make sure controls reflect the current state
+    if (window.updateDecalLightingToggle) {
+        window.updateDecalLightingToggle(window.decalsAffectedByLighting);
+    }
+    
+    // Ensure controls are locked/unlocked based on lighting state
+    // Use force=true to ensure it runs regardless of state
+    if (typeof toggleDecalControlsLock === 'function') {
+        console.log('Initializing decal controls lock state');
+        toggleDecalControlsLock(window.decalsAffectedByLighting || false, true);
+    }
+
+    // Also ensure the button is visible
+    const decalToggleBtn = document.getElementById('decal-lighting-toggle');
+    if (decalToggleBtn) {
+        decalToggleBtn.style.display = 'flex';
+        decalToggleBtn.style.visibility = 'visible';
+        decalToggleBtn.style.opacity = '1';
+        console.log('Ensuring decal lighting toggle button is visible');
+    }
 }
 
 // Helper to ensure the canvas container exists
@@ -538,57 +561,67 @@ function ensureCanvasContainerExists() {
 }
 
 function setupLighting() {
-    // Clear any existing lights
+    console.log('Setting up tailored fabric-friendly lighting');
+    
+    // Clear existing lights first to prevent stacking
     scene.children.forEach(child => {
         if (child.isLight) {
             scene.remove(child);
         }
     });
-
-    // Create physically-based studio lighting for fabric rendering
-
-    // Ambient light for base illumination (increased for better visibility of details)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);  // Increased for better texture visibility
-    scene.add(ambientLight);
-
-    // Main key light (simulating window/studio key light)
-    const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);  // Increased for better highlights
-    mainLight.position.set(5, 10, 7);
-    mainLight.castShadow = true;  // Enable shadows
-    mainLight.shadow.mapSize.width = 2048;  // Higher resolution shadows
-    mainLight.shadow.mapSize.height = 2048;
-    mainLight.shadow.camera.near = 0.5;
-    mainLight.shadow.camera.far = 50;
-    mainLight.shadow.bias = -0.0001;  // Reduce shadow acne
-    scene.add(mainLight);
-
-    // Fill light (simulating bounce light from environment)
-    const fillLight = new THREE.DirectionalLight(0xe6f0ff, 0.6);  // Increased for better texture visibility
-    fillLight.position.set(-6, 4, -5);
+    
+    // Studio-style lighting setup optimized for fabric rendering
+    
+    // Main key light - slightly warmer white for natural look
+    const keyLight = new THREE.DirectionalLight(0xfff5e6, 1.0);
+    keyLight.position.set(2, 2, 2);
+    keyLight.castShadow = true;
+    
+    // Configure high-quality shadows
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.camera.near = 0.1;
+    keyLight.shadow.camera.far = 10;
+    keyLight.shadow.camera.left = -2;
+    keyLight.shadow.camera.right = 2;
+    keyLight.shadow.camera.top = 2;
+    keyLight.shadow.camera.bottom = -2;
+    keyLight.shadow.bias = -0.0001;
+    keyLight.shadow.normalBias = 0.02; // Prevents shadow acne on fabric
+    scene.add(keyLight);
+    
+    // Fill light - cooler tint from opposite side
+    const fillLight = new THREE.DirectionalLight(0xe6f0ff, 0.6);
+    fillLight.position.set(-2, 0, -2);
+    fillLight.castShadow = false;
     scene.add(fillLight);
-
-    // Add rim/back light for fabric highlighting
-    const rimLight = new THREE.DirectionalLight(0xfff0e6, 0.5);  // Increased for better edge highlights
-    rimLight.position.set(0, 6, -10);
+    
+    // Rim light - for fabric edge definition
+    const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    rimLight.position.set(0, 3, -3);
+    rimLight.castShadow = false;
     scene.add(rimLight);
-
-    // Add a warm ground bounce light
-    const groundLight = new THREE.DirectionalLight(0xfff0db, 0.3);  // Increased for better texture visibility
-    groundLight.position.set(0, -5, 0);
-    scene.add(groundLight);
-
-    // Add very subtle hemisphere light for overall fill
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.25);  // Increased for better fill
+    
+    // Bottom fill light - subtle uplight to prevent total shadows underneath
+    const bottomLight = new THREE.DirectionalLight(0xffffee, 0.2);
+    bottomLight.position.set(0, -3, 0);
+    bottomLight.castShadow = false;
+    scene.add(bottomLight);
+    
+    // Very subtle ambient light - allows shadows to be more defined
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+    scene.add(ambientLight);
+    
+    // Add hemisphere light for natural environment simulation
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xc4c4c4, 0.3);
     hemiLight.position.set(0, 10, 0);
     scene.add(hemiLight);
-
-    // Try to create an environment map with compatibility checks
-    try {
-        createEnvironmentMap();
-    } catch (error) {
-        console.error("Failed to create environment map, using fallback:", error);
-        createFallbackEnvironment();
-    }
+    
+    // Enable shadows globally with high quality
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    
+    console.log('Fabric-optimized lighting setup complete');
 }
 
 /**
@@ -608,66 +641,66 @@ function createEnvironmentMap() {
     // Use HalfFloatType only if supported
     const textureType = isWebGL2 ? THREE.HalfFloatType : THREE.UnsignedByteType;
 
-    // Reduce size on mobile or lower-end devices
-    const isLowPerfDevice = !isWebGL2 || window.innerWidth < 768 || navigator.hardwareConcurrency < 4;
-    const cubeMapSize = isLowPerfDevice ? 128 : 256;
+    // Higher resolution environment maps for better fabric reflections
+    const cubeMapSize = isWebGL2 ? 512 : 256;
 
     try {
-        // Create an environment map for realistic reflections
+        // Create an environment map optimized for fabric materials
         const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(cubeMapSize, {
             generateMipmaps: true,
             minFilter: THREE.LinearMipmapLinearFilter,
-            magFilter: THREE.LinearFilter
+            magFilter: THREE.LinearFilter,
+            type: textureType,
+            encoding: THREE.sRGBEncoding
         });
-        cubeRenderTarget.texture.type = textureType;
 
         // Create cube camera for environment map
         const cubeCamera = new THREE.CubeCamera(0.1, 1000, cubeRenderTarget);
         scene.add(cubeCamera);
 
-        // Create a realistic studio environment for better fabric rendering
+        // Create a realistic studio environment for fabric rendering
         const envScene = new THREE.Scene();
 
         // Create a larger box for environment
         const envGeometry = new THREE.BoxGeometry(200, 200, 200);
 
-        // Create distinct materials for each face to simulate a photography studio environment - using less bright colors
+        // Create materials that simulate a soft photo studio with gentle gradients
         const materials = [
-            // Right side - softer light
+            // Right side - soft warm light
             new THREE.MeshBasicMaterial({
                 side: THREE.BackSide,
-                color: 0xf0f0f0, // Dimmer white
-                onBeforeCompile: (shader) => addGradientToShader(shader, 0xf0f0f0, 0xe0e0e0, 'y')
+                color: 0xfff8f0, // Very slight warm tone
+                onBeforeCompile: (shader) => addGradientToShader(shader, 0xfff8f0, 0xffeedd, 'y')
             }),
-            // Left side - softer light
+            // Left side - soft cool light
             new THREE.MeshBasicMaterial({
                 side: THREE.BackSide,
-                color: 0xf0f0f0, // Dimmer white
-                onBeforeCompile: (shader) => addGradientToShader(shader, 0xf0f0f0, 0xe0e0e0, 'y')
+                color: 0xf0f8ff, // Very slight cool tone
+                onBeforeCompile: (shader) => addGradientToShader(shader, 0xf0f8ff, 0xe6f0ff, 'y')
             }),
-            // Top - softer light
+            // Top - bright but diffused light
             new THREE.MeshBasicMaterial({
                 side: THREE.BackSide,
-                color: 0xf5f5f5, // Dimmer white
-                onBeforeCompile: (shader) => addGradientToShader(shader, 0xf5f5f5, 0xe8e8e8, 'z', true)
+                color: 0xffffff, // Pure white for top light
+                onBeforeCompile: (shader) => addGradientToShader(shader, 0xffffff, 0xf8f8f8, 'z', true)
             }),
-            // Bottom - more gentle floor
+            // Bottom - soft gradient floor for subtle reflections
             new THREE.MeshBasicMaterial({
                 side: THREE.BackSide,
-                color: 0xe0e0e0, // Dimmer gray
-                onBeforeCompile: (shader) => addGradientToShader(shader, 0xeeeeee, 0xd0d0d0, 'x')
+                color: 0xeeeeee, // Light gray
+                onBeforeCompile: (shader) => addGradientToShader(shader, 0xf5f5f5, 0xe0e0e0, 'x')
             }),
-            // Back - softer backdrop
+            // Back - clean backdrop
             new THREE.MeshBasicMaterial({
                 side: THREE.BackSide,
-                color: 0xf0f0f0, // Dimmer white
-                onBeforeCompile: (shader) => addGradientToShader(shader, 0xf0f0f0, 0xe0e0e0, 'y')
+                color: 0xf7f7f7, // Off-white
+                onBeforeCompile: (shader) => addGradientToShader(shader, 0xf7f7f7, 0xeeeeee, 'y')
             }),
-            // Front - softer
+            // Front - clean gradient
             new THREE.MeshBasicMaterial({
                 side: THREE.BackSide,
-                color: 0xf0f0f0, // Dimmer white
-                onBeforeCompile: (shader) => addGradientToShader(shader, 0xf0f0f0, 0xe0e0e0, 'y')
+                color: 0xf7f7f7, // Off-white
+                onBeforeCompile: (shader) => addGradientToShader(shader, 0xf7f7f7, 0xeeeeee, 'y')
             })
         ];
 
@@ -684,7 +717,7 @@ function createEnvironmentMap() {
             const bottomG = bottomColorVec.g.toFixed(5);
             const bottomB = bottomColorVec.b.toFixed(5);
 
-            // Replace the fragment shader
+            // Replace the fragment shader with a smooth gradient
             shader.fragmentShader = shader.fragmentShader.replace(
                 'gl_FragColor = vec4( outgoingLight, diffuseColor.a );',
                 `
@@ -704,7 +737,7 @@ function createEnvironmentMap() {
                 // Map from [-1, 1] to [0, 1]
                 gradientFactor = gradientFactor * 0.5 + 0.5;
                 
-                // Apply smoothstep for better falloff
+                // Apply smoothstep for softer gradient transitions
                 gradientFactor = smoothstep(0.0, 1.0, gradientFactor);
                 
                 // Mix colors
@@ -719,38 +752,85 @@ function createEnvironmentMap() {
         const envMesh = new THREE.Mesh(envGeometry, materials);
         envScene.add(envMesh);
 
-        // Add lighting for better reflections
+        // Add soft lighting to the environment scene
+        // Main overhead light for soft fabric-friendly light
         const envLight = new THREE.DirectionalLight(0xffffff, 1.5);
-        envLight.position.set(0, 10, 10);
+        envLight.position.set(0, 10, 0);
         envScene.add(envLight);
+        
+        // Secondary light for fill
+        const envLight2 = new THREE.DirectionalLight(0xfff5e6, 0.8);
+        envLight2.position.set(5, 3, 5);
+        envScene.add(envLight2);
+        
+        // Tertiary light from opposite side
+        const envLight3 = new THREE.DirectionalLight(0xf0f8ff, 0.6);
+        envLight3.position.set(-5, 3, -5);
+        envScene.add(envLight3);
+        
+        // Ambient light to prevent completely dark areas
+        const envAmbient = new THREE.AmbientLight(0xffffff, 0.4);
+        envScene.add(envAmbient);
 
         // Update the environment map
         cubeCamera.update(renderer, envScene);
 
-        // Add the environment map to the scene
+        // Add the environment map to the scene with adjusted intensity for fabric
         scene.environment = cubeRenderTarget.texture;
+        // Reduce intensity for minimal reflections in fabric
+        scene.environmentIntensity = 0.5; 
+        
+        // Apply environment map to all materials in the scene
+        scene.traverse((obj) => {
+            if (obj.isMesh && obj.material) {
+                // For physical materials, configure for fabric
+                if (obj.material.isMeshPhysicalMaterial) {
+                    obj.material.envMap = cubeRenderTarget.texture;
+                    obj.material.envMapIntensity = 0.15; // Very subtle reflections for fabric
+                    obj.material.needsUpdate = true;
+                }
+                // For standard materials
+                else if (obj.material.isMeshStandardMaterial) {
+                    obj.material.envMap = cubeRenderTarget.texture;
+                    obj.material.envMapIntensity = 0.15; // Very subtle reflections
+                    obj.material.needsUpdate = true;
+                }
+            }
+        });
 
-        console.log("Enhanced studio environment map created successfully");
+        console.log("Fabric-optimized environment map created successfully");
     } catch (error) {
         console.error("Error creating environment map:", error);
-        throw error;
+        createFallbackEnvironment();
     }
 }
 
 /**
- * Create a simpler fallback environment when advanced features aren't supported
+ * Create a fabric-friendly fallback environment when advanced features aren't supported
  */
 function createFallbackEnvironment() {
-    // Load a static environment map or create a simpler one
-    const fallbackEnvScene = new THREE.Scene();
-    fallbackEnvScene.background = new THREE.Color(0xf0f0f0);
-
-    // Add basic hemispheric lighting for ambient illumination
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8);
-    hemiLight.position.set(0, 200, 0);
+    // Create a simpler but still effective environment for fabric
+    console.log("Creating fabric-friendly fallback environment lighting");
+    
+    // Add hemisphere light with sky/ground colors for natural fabric lighting
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xf0f0f0, 1.0);
+    hemiLight.position.set(0, 10, 0);
     scene.add(hemiLight);
 
-    console.log("Using fallback environment lighting");
+    // Add directional lights to simulate soft studio lighting
+    const mainLight = new THREE.DirectionalLight(0xfff5e6, 0.8); // Warm main light
+    mainLight.position.set(1, 1, 1);
+    scene.add(mainLight);
+    
+    const fillLight = new THREE.DirectionalLight(0xf0f8ff, 0.4); // Cool fill light
+    fillLight.position.set(-1, 0.5, -1);
+    scene.add(fillLight);
+    
+    // Add subtle ambient light for base illumination
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+    scene.add(ambientLight);
+    
+    console.log("Fallback fabric lighting configured");
 }
 
 function setupControls() {
@@ -1167,9 +1247,8 @@ function loadModel(modelPath) {
         // Get model settings based on current type
         const settings = modelSettings[currentModelType] || modelSettings.tshirt;
 
-        // Get current color from state
-        const currentColor = state.color || '#FFFFFF';
-        const modelColor = new THREE.Color(currentColor);
+        // Always use white as base color
+        const modelColor = new THREE.Color(0xffffff);
 
         // Clear the existing model and decals
         if (group && group.children.length > 0) {
@@ -1201,6 +1280,12 @@ function loadModel(modelPath) {
         // Update the currentModelPath to prevent reloading
         currentModelPath = modelPath;
 
+        // Special preprocessing for hoodie model
+        const isHoodie = currentModelType === 'hoodie';
+        if (isHoodie) {
+            console.log('Special preprocessing for hoodie model to ensure clean materials');
+        }
+
         // Check if file exists before loading
         fetch(modelPath, { method: 'HEAD' })
             .then(response => {
@@ -1213,6 +1298,53 @@ function loadModel(modelPath) {
                 console.log(`Model file exists: ${modelPath}`);
 
                 const gltfLoader = new GLTFLoader();
+                
+                // For hoodie model, modify the onLoad function to ensure clean materials
+                if (isHoodie) {
+                    console.log('Using hoodie-specific loader settings');
+                    
+                    // Add a preprocessing step for the hoodie model
+                    const originalOnLoad = gltfLoader.onLoad;
+                    gltfLoader.onLoad = function(gltf) {
+                        console.log('Preprocessing hoodie model before finalizing load');
+                        
+                        // Important: Just remove textures, don't replace materials
+                        gltf.scene.traverse((obj) => {
+                            if (obj.isMesh && obj.material) {
+                                console.log(`Preprocessing hoodie mesh: ${obj.name}`);
+                                
+                                // Keep the original material but remove textures
+                                if (obj.material.map) {
+                                    obj.material.map.dispose();
+                                    obj.material.map = null;
+                                }
+                                
+                                if (obj.material.normalMap) {
+                                    obj.material.normalMap.dispose();
+                                    obj.material.normalMap = null;
+                                }
+                                
+                                if (obj.material.roughnessMap) {
+                                    obj.material.roughnessMap.dispose();
+                                    obj.material.roughnessMap = null;
+                                }
+                                
+                                if (obj.material.bumpMap) {
+                                    obj.material.bumpMap.dispose();
+                                    obj.material.bumpMap = null;
+                                }
+                                
+                                // Force material to update
+                                obj.material.needsUpdate = true;
+                            }
+                        });
+                        
+                        // Call the original onLoad function
+                        if (originalOnLoad) {
+                            originalOnLoad(gltf);
+                        }
+                    };
+                }
 
                 console.log(`Starting to load 3D model: ${modelPath}`);
 
@@ -1331,66 +1463,115 @@ function processLoadedModel(gltf, settings, color) {
     shirtMesh = null;
     shirtMaterial = null;
     
-    // Check if any meshes have existing materials and identify the shirt mesh
-    model.traverse((obj) => {
-        if (obj.isMesh && obj.material) {
-            console.log('Original mesh material found:', {
-                name: obj.name,
-                type: obj.material.type,
-                color: obj.material.color ? '#' + obj.material.color.getHexString() : 'No color',
-                map: obj.material.map ? 'Has texture map' : 'No texture map'
-            });
-            
-            // Explicitly disable shadows on all meshes
-            obj.castShadow = false;
-            obj.receiveShadow = false;
-            
-            // Set the shirt mesh if we haven't found one yet
-            if (!shirtMesh) {
-                console.log(`Setting shirt mesh to first found mesh: ${obj.name}`);
-                shirtMesh = obj;
+    // Get current model type
+    const currentModelType = state.currentModel || 'tshirt';
+    console.log(`Processing model type: ${currentModelType}`);
+    
+    // Create a standard cloth material for all models
+    const clothMaterial = new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,  // Base white color
+        roughness: 0.65,  // Lower roughness for smoother appearance
+        metalness: 0.0,   // No metallic properties for fabric
+        side: THREE.DoubleSide,
+        depthWrite: true,
+        depthTest: true,
+        transparent: false,
+        
+        // Cloth-specific properties
+        sheen: 0.4,                // Slight sheen for fabric microfibers
+        sheenRoughness: 0.8,       // How rough the sheen is (higher = more diffuse)
+        sheenColor: new THREE.Color(0xffffff), // Color of the sheen highlight
+        
+        // Reduced clearcoat for less reflective surface
+        clearcoat: 0.03,           // Very minimal clearcoat
+        clearcoatRoughness: 0.9,   // Very rough clearcoat for minimal specular reflections
+        
+        // Reduced reflections
+        reflectivity: 0.08,        // Minimal reflections
+        envMapIntensity: 0.2,      // Very subtle environment reflections
+        
+        // Additional properties
+        flatShading: false,        // Smooth shading
+        wireframe: false,
+        
+        // Turn off any emissive properties
+        emissive: 0x000000,
+        emissiveIntensity: 0,
+        
+        // No maps initially
+            map: null,
+            normalMap: null,
+            roughnessMap: null,
+            metalnessMap: null,
+            bumpMap: null
+        });
+        
+    console.log(`Created standard cloth material for ${currentModelType} model`);
+        
+        // Track all meshes we find
+        const allMeshes = [];
+        
+        // Apply material to ALL meshes in the model
+        model.traverse((obj) => {
+            if (obj.isMesh) {
+                console.log(`Found mesh in model: ${obj.name}`);
+                allMeshes.push(obj);
                 
-                // Initially set the shirt visible - changed from invisible
+                // Make the mesh visible
                 obj.visible = true;
                 
-                // Use a simple standard material with optimized properties for a base layer
-                const simpleMaterial = new THREE.MeshStandardMaterial({
-                    color: color || 0xffffff,
-                    roughness: 0.9,  // Increased from 0.7 for more fabric-like appearance
-                    metalness: 0.0,   // Reduced from 0.1 since fabric has no metallic properties
-                    side: THREE.DoubleSide,
-                    // Set this to render first with proper depth writing
-                    depthWrite: true,
-                    depthTest: true,
-                    // Set base render order
-                    renderOrder: 0,
-                    // Add subtle emissive color to prevent it from looking too dark
-                    emissive: 0x111111,
-                    emissiveIntensity: 0.05
-                });
+            // Enable shadows for all meshes (consistent across all models)
+            obj.castShadow = true;
+            obj.receiveShadow = true;
                 
-                // Apply the simple material
-                shirtMaterial = simpleMaterial;
-                shirtMesh.material = simpleMaterial;
-                // Set render order for base shirt
-                shirtMesh.renderOrder = 0;
-                
-                // Ensure clean geometry for proper decal rendering
-                if (shirtMesh.geometry) {
-                    // Make sure normals are computed for proper lighting
-                    shirtMesh.geometry.computeVertexNormals();
+                // Dispose of existing material and textures
+                if (obj.material) {
+                    // Log the original material
+                    console.log(`Original material on ${obj.name}:`, {
+                        type: obj.material.type,
+                        color: obj.material.color ? '#' + obj.material.color.getHexString() : 'No color',
+                        hasMap: !!obj.material.map,
+                        hasNormalMap: !!obj.material.normalMap,
+                        hasRoughnessMap: !!obj.material.roughnessMap
+                    });
                     
-                    // Make sure UVs are clean
-                    if (!shirtMesh.geometry.attributes.uv) {
-                        console.warn('Shirt mesh has no UV coordinates - this may cause decal issues');
-                    }
+                    // Dispose all textures
+                    if (obj.material.map) obj.material.map.dispose();
+                    if (obj.material.normalMap) obj.material.normalMap.dispose();
+                    if (obj.material.roughnessMap) obj.material.roughnessMap.dispose();
+                    if (obj.material.metalnessMap) obj.material.metalnessMap.dispose();
+                    if (obj.material.bumpMap) obj.material.bumpMap.dispose();
+                    if (obj.material.emissiveMap) obj.material.emissiveMap.dispose();
+                    if (obj.material.aoMap) obj.material.aoMap.dispose();
+                    if (obj.material.specularMap) obj.material.specularMap.dispose();
+                    if (obj.material.envMap) obj.material.envMap.dispose();
+                    
+                    // Dispose the material itself
+                    obj.material.dispose();
                 }
                 
-                // Store a reference to this simplified material
-                window.originalShirtMaterial = simpleMaterial.clone();
+            // Apply a clone of our standard cloth material to each mesh
+            obj.material = clothMaterial.clone();
+                obj.material.needsUpdate = true;
+                
+                // Set the first mesh as our main reference
+                if (!shirtMesh) {
+                    shirtMesh = obj;
+                    shirtMaterial = obj.material;
+                obj.name = 'base-model';
+                    
+                    // Store a reference to this material
+                    window.originalShirtMaterial = obj.material.clone();
+                }
+                
+                // Ensure clean geometry
+                if (obj.geometry) {
+                    obj.geometry.computeVertexNormals();
+                }
             }
-        }
-    });
+        });
+        
+    console.log(`Applied standard cloth material to ${allMeshes.length} meshes in the ${currentModelType} model`);
 
     // Apply model settings
     model.scale.set(
@@ -1421,39 +1602,23 @@ function processLoadedModel(gltf, settings, color) {
     // Log children count after addition
     console.log(`Scene group now has ${group.children.length} children`);
 
-    // Track all meshes in the model
-    const meshes = [];
-
-    // Find all meshes in the model
-    model.traverse((obj) => {
-        if (obj.isMesh) {
-            meshes.push(obj);
-
-            // Clear any existing children to prevent duplicate layers
-            if (obj.children && obj.children.length > 0) {
-                const childrenToRemove = [...obj.children];
-                childrenToRemove.forEach((child) => {
-                    obj.remove(child);
-                    // Dispose resources
-                    if (child.geometry) child.geometry.dispose();
-                    if (child.material) {
-                        if (child.material.map) child.material.map.dispose();
-                        child.material.dispose();
-                    }
-                });
-            }
-        }
-    });
-
+    // Clear any existing children to prevent duplicate layers
     if (shirtMesh) {
-        // Clone and store the original material
-        shirtMaterial = shirtMesh.material.clone();
-        
-        // Mark the shirt mesh with a name for identification
-        shirtMesh.name = 'base-shirt';
+        if (shirtMesh.children && shirtMesh.children.length > 0) {
+            const childrenToRemove = [...shirtMesh.children];
+            childrenToRemove.forEach((child) => {
+                shirtMesh.remove(child);
+                // Dispose resources
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) {
+                    if (child.material.map) child.material.map.dispose();
+                    child.material.dispose();
+                }
+            });
+        }
     }
 
-    // If there was a fullDecal previously, make sure it's removed from the old shirt mesh
+    // If there was a fullDecal previously, make sure it's removed
     if (fullDecal) {
         if (fullDecal.parent) {
             fullDecal.parent.remove(fullDecal);
@@ -1473,8 +1638,11 @@ function processLoadedModel(gltf, settings, color) {
     // Reset the full texture state to false
     isFullTexture = false;
     updateState({ isFullTexture: false, fullDecal: null });
-
-    console.log('Model processed successfully with simplified materials');
+    
+    // Force a render update
+    if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+    }
 
     // Store original camera positions for all views
     if (settings && settings.cameraPositions) {
@@ -1517,8 +1685,14 @@ function processLoadedModel(gltf, settings, color) {
             updateShirtColor(initialColor);
         }, 100);
     }
+    
+    // Apply lighting state to any existing decals after a short delay
+    if (window.decalsAffectedByLighting !== undefined) {
+        setTimeout(() => {
+            updateExistingDecalsMaterial(window.decalsAffectedByLighting);
+        }, 300);
+    }
 }
-
 
 /**
  * Update the shirt color with the specified hex color
@@ -1526,76 +1700,59 @@ function processLoadedModel(gltf, settings, color) {
  * @param {string} color - Hex color code (e.g. '#FF0000')
  */
 export function updateShirtColor(color) {
-    console.log(`Updating shirt color to ${color}`);
-
-    // Validate color to prevent issues
-    if (!color || color === 'undefined' || color === 'null') {
-        console.error('Invalid color value:', color);
-        color = '#FFFFFF'; // Default to white if invalid
-    }
-
-    if (!shirtMesh) {
-        console.error('Shirt mesh not available - cannot update color');
+    if (!shirtMesh || !shirtMaterial) {
+        console.error('Model mesh not available, cannot update color');
         return;
     }
-
-    // Convert to THREE color
-    const threeColor = new THREE.Color(color);
     
-    // Make black slightly lighter for better visibility
-    if (color.toUpperCase() === '#000000') {
-        threeColor.setHex(0x1a1a1a); // A very dark gray instead of pure black
+    // Get current model type
+    const currentModelType = state.currentModel || 'tshirt';
+    
+    // Convert color to Three.js color if needed
+    if (typeof color === 'string') {
+        color = new THREE.Color(color);
     }
     
-    // Create a new material optimized for cotton fabric
-    const newMaterial = new THREE.MeshStandardMaterial({
-        color: threeColor,
-        // Cotton-specific properties
-        roughness: 0.85,  // Cotton has a medium-high roughness
-        metalness: 0.0,   // Cotton has no metallic properties
-        side: THREE.DoubleSide,
-        // Add subtle fabric texture
-        normalScale: new THREE.Vector2(0.2, 0.2),  // Increased for more visible fabric texture
-        // Add subtle ambient occlusion for better depth
-        aoMapIntensity: 0.8,  // Increased for better fabric folds
-        // Add subtle environment map intensity for realistic reflections
-        envMapIntensity: 0.3,  // Slightly increased for better fabric sheen
-        // Add subtle emissive color to prevent it from looking too dark
-        emissive: 0x111111,
-        emissiveIntensity: 0.02,
-        // Add clearcoat for subtle sheen
-        clearcoat: 0.1,
-        clearcoatRoughness: 0.8,
-        // Add sheen for fabric-like appearance
-        sheen: 0.2,
-        sheenRoughness: 0.8,
-        // Add anisotropy for fabric-like reflections
-        anisotropy: 0.5,
-        anisotropyRotation: 0.5,
-        // Add subsurface scattering for better light penetration
-        subsurface: 0.1,
-        // Add transmission for better light interaction
-        transmission: 0.1,
-        // Add thickness for better light interaction
-        thickness: 0.5,
-        // Add attenuation for better light absorption
-        attenuationColor: threeColor,
-        attenuationDistance: 1.0
-    });
+    // Special handling for hoodie model
+    if (currentModelType === 'hoodie') {
+        console.log('Updating hoodie colors while preserving original materials');
+        
+        if (group) {
+            // For the hoodie, we need to update colors for all parts
+            group.traverse((obj) => {
+                if (obj.isMesh && obj.material) {
+                    // Only update the color of the main body parts (non-white parts)
+                    const lowerName = obj.name.toLowerCase();
+                    const isTrim = lowerName.includes('cuff') || 
+                                   lowerName.includes('hood') || 
+                                   lowerName.includes('pocket') ||
+                                   lowerName.includes('white');
+                    
+                    // Don't change white trim parts
+                    if (!isTrim) {
+                        // Set color but keep everything else
+                        obj.material.color = color.clone();
+                        obj.material.needsUpdate = true;
+                    }
+                }
+            });
+        }
+    } else {
+        // Normal behavior for t-shirt
+        if (shirtMaterial) {
+            // Update color
+            shirtMaterial.color = color;
+            shirtMaterial.needsUpdate = true;
+        }
+    }
     
-    // Apply the material to the shirt
-    shirtMesh.material = newMaterial;
-    shirtMaterial = newMaterial;
+    // Update state
+    updateState({ color: '#' + color.getHexString() });
     
-    // Update state to remember the color
-    updateState({ color: color });
-    
-    // Refresh the canvas texture to ensure decals are properly displayed
+    // Force a render update
     if (renderer && scene && camera) {
         renderer.render(scene, camera);
     }
-    
-    console.log(`Shirt color updated to: ${color}`);
 }
 
 /**
@@ -1661,13 +1818,15 @@ function ensureShirtLayer(layerName, material = null) {
 }
 
 /**
- * Update the 3D editor canvas texture on the shirt
- * Completely redesigned for perfect decal rendering
+ * Update the 3D editor canvas texture on the current model
+ * Works with any model type, not just t-shirt
  */
 export function updateEditorCanvasTexture(texture) {
     if (!shirtMesh) return;
     
-    console.log('Applying enhanced canvas texture to shirt');
+    // Get current model type for logging
+    const modelType = state.currentModel || 'tshirt';
+    console.log(`Applying canvas texture to ${modelType} model`);
     
     // Remove all existing canvas layers first
     const layersToRemove = shirtMesh.children.filter(child => 
@@ -1686,52 +1845,91 @@ export function updateEditorCanvasTexture(texture) {
         shirtMesh.remove(layer);
     }
     
-    // Optimize the texture for best quality and performance
+    // Standardized texture settings for all clothing models
     texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-    texture.minFilter = THREE.LinearMipmapLinearFilter; // Use trilinear filtering for best quality
-    texture.magFilter = THREE.LinearFilter; // Use linear filtering for upscaling
-    texture.premultiplyAlpha = false; // Better alpha blending with decals
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.premultiplyAlpha = false;
     texture.needsUpdate = true;
-    
-    // Apply correct UV transformation to prevent flipping/mirroring
-    texture.flipY = false; // Prevent automatic Y-flip that THREE.js applies
-    texture.matrixAutoUpdate = false; // We'll set the matrix manually
-    texture.matrix.identity(); // Reset matrix
-    
-    // Set color space to preserve saturation and vibrancy
+    texture.flipY = false;
+    texture.matrixAutoUpdate = false;
+    texture.matrix.identity();
     texture.colorSpace = THREE.SRGBColorSpace;
     
-    // Create material that only renders on the outside face with enhanced settings
-    const material = new THREE.MeshBasicMaterial({
+    // Determine which material to use based on lighting toggle
+    let material;
+    
+    if (decalsAffectedByLighting) {
+        // Generate a normal map for lighting effects
+        const normalMap = generateNormalMapFromTexture(texture);
+        
+        // Create a physical material that responds to lighting
+        material = new THREE.MeshPhysicalMaterial({
         map: texture,
         transparent: true,
         opacity: 1.0,
-        side: THREE.FrontSide, // Only show on front faces (outside of shirt)
+        side: THREE.FrontSide,
+            
+            // Normal map for depth and light interaction
+            normalMap: normalMap,
+            normalScale: new THREE.Vector2(0.3, 0.3),
+            
+            // Physical properties for the decal
+            roughness: 0.6,
+            metalness: 0.0,
+            clearcoat: 0.1,
+            clearcoatRoughness: 0.8,
+            
+            // Shadows
+            shadowSide: THREE.FrontSide,
+            
+            // Depth settings
+            alphaTest: 0.01,
+            depthTest: true,
+            depthWrite: true,
+            
+            // Additional settings
+            envMapIntensity: 0.2,
+            sheen: 0.1,
+            sheenRoughness: 0.8,
+            sheenColor: new THREE.Color(0xffffff)
+        });
+    } else {
+        // Create a basic material that ignores lighting
+        material = new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            opacity: 1.0,
+            side: THREE.FrontSide,
+            
+            // Blending settings
         blending: THREE.CustomBlending,
         blendSrc: THREE.SrcAlphaFactor,
         blendDst: THREE.OneMinusSrcAlphaFactor,
         blendEquation: THREE.AddEquation,
+            
+            // Depth settings
         depthTest: true,
         depthWrite: false,
         alphaTest: 0.001,
-        // Set color space to preserve vibrancy
+            
+            // Color settings
         colorSpace: THREE.SRGBColorSpace,
-        // Add high-quality texture settings
         toneMapped: false,
-        // Ensure maximum texture quality
-        dithering: true,
-        // Add subtle depth for better quality perception
-        depthTest: true,
-        depthWrite: false
+        dithering: true
     });
+    }
     
-    // Add enhanced settings to preserve colors
-    material.toneMapped = false;
     material.needsUpdate = true;
     
-    // Create new layer
-    const frontLayer = ensureShirtLayer('canvas-layer-front', material);
+    // Create new layer with standardized settings
+    const frontLayer = ensureModelLayer('canvas-layer-front', material);
     frontLayer.renderOrder = 15;
+    frontLayer.userData.modelType = modelType;
+    
+    // Set shadow properties based on lighting toggle
+    frontLayer.castShadow = decalsAffectedByLighting;
+    frontLayer.receiveShadow = decalsAffectedByLighting;
     
     // Render the updated scene
     if (renderer && scene && camera) {
@@ -1739,13 +1937,87 @@ export function updateEditorCanvasTexture(texture) {
         renderer.render(scene, camera);
     }
     
-    console.log('Canvas texture applied to outside of shirt only with enhanced vibrancy settings');
+    console.log(`Applied texture to ${modelType} model with lighting: ${decalsAffectedByLighting}`);
 }
 
-// Update shirt texture with proper UV mapping
+// Helper function to generate normal maps from textures
+function generateNormalMapFromTexture(texture) {
+    // Create a canvas to process the texture
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Make sure texture has an image
+    if (!texture.image) {
+        console.warn('Cannot generate normal map: texture has no image');
+        return null;
+    }
+    
+    // Set canvas size to match texture
+    canvas.width = texture.image.width;
+    canvas.height = texture.image.height;
+    
+    // Draw the texture to the canvas
+    ctx.drawImage(texture.image, 0, 0);
+    
+    // Get image data for processing
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    
+    // Create new image data for the normal map
+    const normalData = ctx.createImageData(canvas.width, canvas.height);
+    const normalPixels = normalData.data;
+    
+    // Simple sobel operator for edge detection - basis of normal map
+    for (let y = 1; y < canvas.height - 1; y++) {
+        for (let x = 1; x < canvas.width - 1; x++) {
+            // Get pixel indices
+            const idx = (y * canvas.width + x) * 4;
+            const idxLeft = (y * canvas.width + (x - 1)) * 4;
+            const idxRight = (y * canvas.width + (x + 1)) * 4;
+            const idxUp = ((y - 1) * canvas.width + x) * 4;
+            const idxDown = ((y + 1) * canvas.width + x) * 4;
+            
+            // Calculate alpha gradients for the sobel operator
+            const alphaLeft = data[idxLeft + 3];
+            const alphaRight = data[idxRight + 3];
+            const alphaUp = data[idxUp + 3];
+            const alphaDown = data[idxDown + 3];
+            
+            // Calculate X and Y gradients
+            const gradX = ((alphaRight - alphaLeft) / 255) * 0.5 + 0.5;
+            const gradY = ((alphaDown - alphaUp) / 255) * 0.5 + 0.5;
+            
+            // Store normal map values (RGB format)
+            normalPixels[idx] = Math.floor(gradX * 255);     // R (X+)
+            normalPixels[idx + 1] = Math.floor(gradY * 255); // G (Y+)
+            normalPixels[idx + 2] = 255;                     // B (Z+) fully blue for minimal depth
+            normalPixels[idx + 3] = data[idx + 3];           // Keep original alpha
+        }
+    }
+    
+    // Put the normal data back to the canvas
+    ctx.putImageData(normalData, 0, 0);
+    
+    // Create a new texture from the canvas
+    const normalTexture = new THREE.CanvasTexture(canvas);
+    normalTexture.needsUpdate = true;
+    
+    // Use same settings as the original texture
+    normalTexture.anisotropy = texture.anisotropy;
+    normalTexture.minFilter = texture.minFilter;
+    normalTexture.magFilter = texture.magFilter;
+    normalTexture.wrapS = texture.wrapS;
+    normalTexture.wrapT = texture.wrapT;
+    normalTexture.flipY = texture.flipY;
+    normalTexture.colorSpace = THREE.LinearSRGBColorSpace; // Normal maps should be linear
+    
+    return normalTexture;
+}
+
+// Update model texture with proper UV mapping
 export function updateShirtTexture(imageUrl, type) {
     if (!shirtMesh) {
-        console.error('Shirt mesh not available');
+        console.error('Model mesh not available');
         return null;
     }
 
@@ -1754,40 +2026,200 @@ export function updateShirtTexture(imageUrl, type) {
         return null;
     }
     
-    console.log(`Updating shirt texture with: ${imageUrl}, type: ${type}`);
+    // Get current model type for logging
+    const modelType = state.currentModel || 'tshirt';
+    console.log(`Updating ${modelType} texture with: ${imageUrl}, type: ${type}`);
     
-    // Full texture mode has been completely disabled due to rendering issues
+    // Check model config to see if this model accepts full textures
+    const modelConfig = window.getModelConfig ? window.getModelConfig(modelType) : null;
+    const acceptsFullTexture = modelConfig?.textureSettings?.acceptsFullTexture !== false;
+    
     if (type === 'full') {
-        console.log('Full texture mode has been disabled due to material rendering issues');
+        if (!acceptsFullTexture) {
+            console.warn(`Full texture mode not supported for ${modelType}`);
+            return null;
+        }
+        
+        // Create a texture loader
+        const textureLoader = new THREE.TextureLoader();
+        
+        textureLoader.load(
+            imageUrl,
+            function(texture) {
+                console.log(`Full texture loaded for ${modelType}`);
+                
+                // Process texture
+                texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                texture.minFilter = THREE.LinearMipmapLinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                texture.colorSpace = THREE.SRGBColorSpace;
+                texture.needsUpdate = true;
+                
+                // Determine which material to use based on lighting toggle
+                let fullMaterial;
+                
+                if (decalsAffectedByLighting) {
+                    // Generate normal map for texture
+                    const normalMap = generateNormalMapFromTexture(texture);
+                    
+                    // Create a light-responsive material
+                    fullMaterial = new THREE.MeshPhysicalMaterial({
+                        map: texture,
+                        transparent: true,
+                        opacity: 1.0,
+                        side: THREE.FrontSide,
+                        
+                        // Depth settings
+                        alphaTest: 0.01,
+                        depthTest: true,
+                        depthWrite: true,
+                        
+                        // Light interaction properties
+                        normalMap: normalMap,
+                        normalScale: new THREE.Vector2(0.3, 0.3),
+                        roughness: 0.6,
+                        metalness: 0.0,
+                        
+                        // Physical properties
+                        clearcoat: 0.1,
+                        clearcoatRoughness: 0.8,
+                        
+                        // Environment map interaction
+                        envMapIntensity: 0.2,
+                        
+                        // Fabric-like properties
+                        sheen: 0.1,
+                        sheenRoughness: 0.8,
+                        sheenColor: new THREE.Color(0xffffff)
+                    });
+                } else {
+                    // Create a basic material that ignores lighting
+                    fullMaterial = new THREE.MeshBasicMaterial({
+                    map: texture,
+                    transparent: true,
+                    opacity: 1.0,
+                    side: THREE.FrontSide,
+                    depthTest: true,
+                    depthWrite: false
+                });
+                }
+                
+                // Find and remove any existing full texture layer
+                const existingFullLayer = shirtMesh.children.find(child => child.name === 'full-texture-layer');
+                if (existingFullLayer) {
+                    if (existingFullLayer.material.map) {
+                        existingFullLayer.material.map.dispose();
+                    }
+                    if (existingFullLayer.material.normalMap) {
+                        existingFullLayer.material.normalMap.dispose();
+                    }
+                    if (existingFullLayer.material) {
+                        existingFullLayer.material.dispose();
+                    }
+                    shirtMesh.remove(existingFullLayer);
+                }
+                
+                // Create the full texture layer
+                const fullTextureLayer = new THREE.Mesh(
+                    shirtMesh.geometry,
+                    fullMaterial
+                );
+                
+                fullTextureLayer.name = 'full-texture-layer';
+                fullTextureLayer.renderOrder = 10;
+                
+                // Set shadow properties based on lighting toggle
+                fullTextureLayer.castShadow = decalsAffectedByLighting;
+                fullTextureLayer.receiveShadow = decalsAffectedByLighting;
+                
+                // Record this in fullDecal for later reference
+                fullDecal = fullTextureLayer;
+                
+                // Add the layer to the model
+                shirtMesh.add(fullTextureLayer);
+                
+                // Update the state
+                updateState({
+                    fullDecal: imageUrl,
+                    isFullTexture: true,
+                    stylish: true
+                });
+                
+                // Render the scene
+                if (renderer && scene && camera) {
+                    renderer.render(scene, camera);
+                }
+                
+                return fullTextureLayer;
+            },
+            undefined,
+            function(error) {
+                console.error('Error loading full texture:', error);
+                return null;
+            }
+        );
+    } else {
+        console.log(`Unsupported texture type: ${type}`);
         return null;
     }
 }
 
-// Toggle texture visibility - completely disabled
+// Toggle texture visibility
 export function toggleTexture(type, active) {
     if (!shirtMesh) return;
 
+    const modelType = state.currentModel || 'tshirt';
+    
     if (type === 'full') {
-        // This functionality has been completely disabled
-        console.log('Full texture overlay functionality has been completely disabled due to rendering issues');
-        return;
+        // Check model config to see if this model accepts full textures
+        const modelConfig = window.getModelConfig ? window.getModelConfig(modelType) : null;
+        const acceptsFullTexture = modelConfig?.textureSettings?.acceptsFullTexture !== false;
+        
+        if (!acceptsFullTexture) {
+            console.warn(`Full texture mode not supported for ${modelType}`);
+            return;
+        }
+        
+        console.log(`Toggling full texture visibility on ${modelType} to ${active}`);
+        
+        if (fullDecal && fullDecal.parent === shirtMesh) {
+            fullDecal.visible = active;
+            
+            // Update state to reflect texture visibility
+            updateState({ 
+                isFullTexture: active,
+                stylish: active 
+            });
+            
+            // Re-render to show changes
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        } else if (active && state.fullDecal) {
+            // If trying to enable but fullDecal is not attached, try to reapply the texture
+            updateShirtTexture(state.fullDecal, 'full');
+        }
     }
 }
 
 // Completely remove the full-decal layer
 export function removeFullDecalLayer() {
-    if (!shirtMesh) return false;
+    if (!shirtMesh) {
+        console.warn('No model mesh available, cannot remove texture layers');
+        return false;
+    }
+
+    console.log(`Removing texture layers from current ${state.currentModel || 'tshirt'} model`);
     
-    // Find and remove any layers that might be causing issues
-    const layersToRemove = [];
+    // Find any existing full texture layers by name
+    const layersToRemove = shirtMesh.children.filter(child => 
+        child.name === 'full-decal' || 
+        child.name === 'full-texture-layer'
+    );
     
-    shirtMesh.children.forEach(child => {
-        if (child.name === 'full-decal' || child.name.includes('decal')) {
-            layersToRemove.push(child);
-        }
-    });
+    console.log(`Found ${layersToRemove.length} texture layers to remove`);
     
-    // Remove all problematic layers
+    // Remove each layer with proper cleanup
     for (const layer of layersToRemove) {
         // Dispose of material resources to prevent memory leaks
         if (layer.material) {
@@ -1797,7 +2229,7 @@ export function removeFullDecalLayer() {
             layer.material.dispose();
         }
         
-        // Remove from parent (the shirt mesh)
+        // Remove from parent mesh
         shirtMesh.remove(layer);
     }
     
@@ -1810,7 +2242,7 @@ export function removeFullDecalLayer() {
         renderer.render(scene, camera);
     }
     
-    console.log('All problematic decal layers completely removed');
+    console.log('All texture layers completely removed');
     return true;
 }
 
@@ -1819,23 +2251,15 @@ export function changeModel(modelType) {
     console.log(`Changing model to: ${modelType}`);
 
     // First check if the modelType is valid
-    if (modelType !== 'tshirt' && modelType !== 'hoodie') {
+    // We should make this more extensible for future models
+    const validModels = ['tshirt', 'hoodie']; // Add more models here as they are created
+    if (!validModels.includes(modelType)) {
         console.error(`Invalid model type: ${modelType}`);
         return Promise.reject(new Error(`Invalid model type: ${modelType}`));
     }
 
-    // Get the model path from state
-    let modelPath;
-    if (modelType === 'tshirt') {
-        modelPath = './models/tshirt.glb'; // Fixed path to match actual file location
-    } else if (modelType === 'hoodie') {
-        modelPath = './models/hoodie.glb'; // Fixed path to match actual file location
-    }
-
-    if (!modelPath) {
-        console.error('Model path not found for type:', modelType);
-        return Promise.reject(new Error('Model path not found'));
-    }
+    // Get the model path based on the model type
+    const modelPath = `./models/${modelType}.glb`;
 
     console.log(`Model path resolved to: ${modelPath}`);
 
@@ -1855,17 +2279,16 @@ export function changeModel(modelType) {
         return Promise.resolve();
     }
 
-    // Store current customization state for transfer to new model
+    // Store current state for transfer to new model
     let currentObjects = [];
-    let currentDecals = [];
     let currentColor = null;
     
-    // Save the current model state for transferring to the new model
+    // Save the current model color for transferring to the new model
     if (shirtMaterial) {
         currentColor = shirtMaterial.color.clone();
     }
     
-    // Save decals and customization state (if available)
+    // Save customization state (if available)
     if (window.getEditorState) {
         try {
             currentObjects = window.getEditorState();
@@ -1874,6 +2297,9 @@ export function changeModel(modelType) {
             console.warn('Could not preserve customization state:', e);
         }
     }
+
+    // Save current lighting state
+    const currentLightingState = window.decalsAffectedByLighting;
 
     // Update current model type before loading
     currentModelType = modelType;
@@ -1886,26 +2312,25 @@ export function changeModel(modelType) {
         window.setModelType(modelType);
     }
 
-    // Try loading the new model
+    // Load the new model with standardized settings
     return loadModel(modelPath)
         .then(() => {
             console.log(`Model changed to ${modelType}`);
 
-            // Restore saved color if available
+            // Apply the saved color to ensure consistent appearance
             if (currentColor && shirtMaterial) {
                 shirtMaterial.color.copy(currentColor);
                 shirtMaterial.needsUpdate = true;
-                console.log('Restored color after model change');
+                console.log('Applied preserved color to new model');
             } else if (state.color && shirtMaterial) {
                 // Use color from state
                 shirtMaterial.color.copy(new THREE.Color(state.color));
                 shirtMaterial.needsUpdate = true;
-                console.log('Applied state color after model change');
+                console.log('Applied state color to new model');
             }
             
-            // After a short delay to ensure the model is fully loaded and initialized
+            // Transfer customizations after a short delay to ensure model is fully loaded
             setTimeout(() => {
-                // Transfer saved customization objects to the new model if available
                 if (currentObjects && currentObjects.length > 0 && window.restoreEditorState) {
                     try {
                         window.restoreEditorState(currentObjects);
@@ -1914,9 +2339,20 @@ export function changeModel(modelType) {
                         console.warn('Error transferring customizations to new model:', e);
                     }
                 }
+                
+                // Ensure lighting effects are properly applied
+                if (currentLightingState !== undefined) {
+                    window.decalsAffectedByLighting = currentLightingState;
+                    updateExistingDecalsMaterial(currentLightingState);
+                    
+                    // Update UI if necessary
+                    if (window.updateDecalLightingToggle) {
+                        window.updateDecalLightingToggle(currentLightingState);
+                    }
+                }
             }, 300);
 
-            // Reset camera
+            // Reset camera to standard position for the new model
             resetCameraPosition();
 
             // Notify that model has changed
@@ -2203,82 +2639,49 @@ let isRendering = true; // Flag to control rendering
 
 // Animation loop with optimizations
 function animate(currentTime) {
-    // Only request animation frame if rendering is active
-    if (isRendering) {
-        animationFrameId = requestAnimationFrame(animate);
+    requestAnimationFrame(animate);
+    
+    // Performance optimization - Don't render if not visible
+    if (!renderer.domElement.offsetParent) {
+        return;
     }
-
-    // Limit frame rate for better performance
-    const elapsed = currentTime - lastFrameTime;
-    if (elapsed < frameInterval) return;
-
-    // Calculate actual FPS
-    const actualFPS = 1000 / elapsed;
-    lastFrameTime = currentTime - (elapsed % frameInterval);
-
-    // Track performance metrics
-    if (window.performanceMetrics) {
-        // Track slow frames (frames taking longer than 50ms, which is 20fps)
-        if (elapsed > 50) {
-            window.performanceMetrics.slowFrames++;
-        }
-
-        // Keep a rolling average of recent frame rates
-        window.performanceMetrics.frameRates.push(actualFPS);
-        if (window.performanceMetrics.frameRates.length > 60) {
-            window.performanceMetrics.frameRates.shift();
-        }
+    
+    // Update controls
+    if (controls) {
+        controls.update();
     }
-
-    // Increment performance check counter
-    performanceCheckCounter++;
-
-    // Check for performance issues periodically
+    
+    // Check if we're in a view transition
+    if (isInViewTransition()) {
+        animateViewTransition();
+    }
+    
+    // Handle auto-rotation if enabled
+    if (isAutoRotating && group && !isViewTransitioning && !manualRotationActive && !editorMode) {
+        // Rotate around the updated axis
+        const rotationAxis = updateRotationAxisForCurrentView();
+        group.rotateOnAxis(rotationAxis, rotationSpeed);
+    }
+    
+    // Performance monitoring
     checkPerformance();
 
-    // Start performance measurement
-    Performance.start('render-frame');
-
-    // Check if we're in editing mode (use editorMode flag directly)
-    const isInEditingMode = editorMode;
-
-    // Only update camera if needed (rotation active or during transitions)
-    // AND not in editing mode (unless it's a view transition)
-    const needsCameraUpdate = (window.GLOBAL_ROTATION_ENABLED === true ||
-        isInViewTransition() ||
-        (controls && controls.autoRotate)) &&
-        (!isInEditingMode || isInViewTransition());
-
-    // Only update and render if something has changed
-    if (needsCameraUpdate && group) {
-        // Only update camera position if auto-rotation is enabled
-        if (window.GLOBAL_ROTATION_ENABLED === true && group && !isInEditingMode) {
-            // Update rotation based on elapsed time (for smooth animation)
-            const rotationSpeed = 0.005 * (elapsed / 16); // Normalized for ~60fps
-            group.rotateOnWorldAxis(rotationAxis, rotationSpeed);
+    // Improved render quality settings
+    if (renderer && scene && camera) {
+        // Check if shadows need updating
+        if (renderer.shadowMap.enabled && renderer.shadowMap.needsUpdate) {
+            renderer.shadowMap.needsUpdate = false;
         }
-
-        // Update controls
-        if (controls) {
-            controls.update();
-        }
-    }
-
-    // Always render the scene if it exists
-    if (scene && camera && renderer) {
+        
+        // Apply any pending material updates
+        scene.traverse((obj) => {
+            if (obj.isMesh && obj.material && obj.material.needsUpdate) {
+                obj.material.needsUpdate = false;
+            }
+        });
+        
+        // Render with better quality
         renderer.render(scene, camera);
-    }
-
-    // End performance measurement
-    Performance.end('render-frame');
-
-    // Force garbage collection on some browsers (Chrome)
-    if (performanceCheckCounter % 300 === 0 && window.gc) {
-        try {
-            window.gc();
-        } catch (e) {
-            // Garbage collection not available
-        }
     }
 }
 
@@ -2854,9 +3257,248 @@ function toggleRotation() {
 
 // Add a new function to set fabric type and update material
 export function setFabricType(fabricType) {
-    // Function has been removed - this is a placeholder for compatibility
-    console.log(`Fabric type functionality has been removed.`);
-    // The default cotton fabric is used
+    console.log(`Setting fabric type: ${fabricType}`);
+    
+    // Ensure we have a shirt mesh to work with
+    if (!shirtMesh || !shirtMaterial) {
+        console.warn('Cannot set fabric type: model not loaded');
+        return;
+    }
+    
+    // Get current model type
+    const currentModelType = state.currentModel || 'tshirt';
+    
+    // Accurate material properties for different fabric types
+    // Based on real-world material properties
+    const fabricProperties = {
+        cotton: {
+            roughness: 0.7,
+            metalness: 0.0,
+            sheen: 0.3,
+            sheenRoughness: 0.9,
+            sheenColor: new THREE.Color(0xffffff),
+            clearcoat: 0.02,           // Reduced
+            clearcoatRoughness: 0.9,
+            reflectivity: 0.05,        // Reduced
+            envMapIntensity: 0.12,     // Reduced
+            normalScale: 0.6
+        },
+        silk: {
+            roughness: 0.3,
+            metalness: 0.0,
+            sheen: 0.7,
+            sheenRoughness: 0.5,
+            sheenColor: new THREE.Color(0xffffff),
+            clearcoat: 0.1,            // Reduced
+            clearcoatRoughness: 0.4,
+            reflectivity: 0.15,        // Reduced
+            envMapIntensity: 0.2,      // Reduced
+            normalScale: 0.3
+        },
+        polyester: {
+            roughness: 0.5,
+            metalness: 0.0,
+            sheen: 0.4,
+            sheenRoughness: 0.7,
+            sheenColor: new THREE.Color(0xffffff),
+            clearcoat: 0.05,           // Reduced
+            clearcoatRoughness: 0.6,
+            reflectivity: 0.1,         // Reduced
+            envMapIntensity: 0.15,     // Reduced
+            normalScale: 0.5
+        },
+        wool: {
+            roughness: 0.8,
+            metalness: 0.0,
+            sheen: 0.2,
+            sheenRoughness: 1.0,
+            sheenColor: new THREE.Color(0xefefef),
+            clearcoat: 0.01,           // Reduced
+            clearcoatRoughness: 1.0,
+            reflectivity: 0.02,        // Reduced
+            envMapIntensity: 0.05,     // Reduced
+            normalScale: 0.8
+        },
+        denim: {
+            roughness: 0.75,
+            metalness: 0.0,
+            sheen: 0.1,
+            sheenRoughness: 0.9,
+            sheenColor: new THREE.Color(0xe0e0e0),
+            clearcoat: 0.02,           // Reduced
+            clearcoatRoughness: 0.9,
+            reflectivity: 0.05,        // Reduced
+            envMapIntensity: 0.08,     // Reduced
+            normalScale: 1.2
+        },
+        leather: {
+            roughness: 0.6,
+            metalness: 0.0,
+            sheen: 0.5,
+            sheenRoughness: 0.7,
+            sheenColor: new THREE.Color(0xd0d0d0),
+            clearcoat: 0.15,           // Reduced
+            clearcoatRoughness: 0.6,
+            reflectivity: 0.1,         // Reduced
+            envMapIntensity: 0.15,     // Reduced
+            normalScale: 0.7
+        },
+        linen: {
+            roughness: 0.75,
+            metalness: 0.0,
+            sheen: 0.25,
+            sheenRoughness: 0.9,
+            sheenColor: new THREE.Color(0xfafafa),
+            clearcoat: 0.01,           // Reduced
+            clearcoatRoughness: 1.0,
+            reflectivity: 0.05,        // Reduced
+            envMapIntensity: 0.08,     // Reduced
+            normalScale: 0.7
+        }
+    };
+    
+    // Default to cotton if fabric type not found
+    const properties = fabricProperties[fabricType] || fabricProperties.cotton;
+    
+    // Apply material properties based on model type
+    if (currentModelType === 'hoodie') {
+        console.log(`Applying realistic ${fabricType} material to hoodie model`);
+        
+        // Process all hoodie meshes
+        if (group) {
+            group.traverse((obj) => {
+                if (obj.isMesh && obj.material) {
+                    try {
+                        // Create new MeshPhysicalMaterial for each mesh
+                        const physicalMaterial = new THREE.MeshPhysicalMaterial({
+                            color: obj.material.color ? obj.material.color.clone() : new THREE.Color(0xffffff),
+                            map: obj.material.map,
+                            normalMap: obj.material.normalMap,
+                            roughnessMap: obj.material.roughnessMap,
+                            metalnessMap: obj.material.metalnessMap,
+                            
+                            // Apply fabric-specific properties
+                            roughness: properties.roughness,
+                            metalness: properties.metalness,
+                            sheen: properties.sheen,
+                            sheenRoughness: properties.sheenRoughness,
+                            sheenColor: properties.sheenColor.clone(),
+                            clearcoat: properties.clearcoat,
+                            clearcoatRoughness: properties.clearcoatRoughness,
+                            reflectivity: properties.reflectivity,
+                            envMapIntensity: properties.envMapIntensity,
+                            
+                            // Keep original material properties
+                            transparent: obj.material.transparent,
+                            opacity: obj.material.opacity,
+                            side: THREE.DoubleSide
+                        });
+                        
+                        // Set normal scale if normalMap exists
+                        if (obj.material.normalMap && physicalMaterial.normalScale) {
+                            physicalMaterial.normalScale.set(properties.normalScale, properties.normalScale);
+                        }
+                        
+                        // Replace material
+                        obj.material.dispose();
+                        obj.material = physicalMaterial;
+                        obj.material.needsUpdate = true;
+                        
+                        // Enable shadows
+                        obj.castShadow = true;
+                        obj.receiveShadow = true;
+                        
+                        // If this is the main shirt mesh, update reference
+                        if (obj === shirtMesh) {
+                            shirtMaterial = physicalMaterial;
+                        }
+                    } catch (e) {
+                        console.warn(`Couldn't create physical material for mesh: ${e.message}`);
+                        // Apply basic properties to existing material as fallback
+                        obj.material.roughness = properties.roughness;
+                        obj.material.metalness = properties.metalness;
+                        obj.material.envMapIntensity = properties.envMapIntensity;
+                        obj.material.needsUpdate = true;
+                    }
+                }
+            });
+        }
+    } else {
+        // For t-shirts and other models
+        console.log(`Applying realistic ${fabricType} material to ${currentModelType} model`);
+        
+        if (shirtMaterial) {
+            try {
+                // Create new MeshPhysicalMaterial
+                const physicalMaterial = new THREE.MeshPhysicalMaterial({
+                    color: shirtMaterial.color ? shirtMaterial.color.clone() : new THREE.Color(0xffffff),
+                    map: shirtMaterial.map,
+                    normalMap: shirtMaterial.normalMap,
+                    roughnessMap: shirtMaterial.roughnessMap,
+                    metalnessMap: shirtMaterial.metalnessMap,
+                    
+                    // Apply fabric-specific properties
+                    roughness: properties.roughness,
+                    metalness: properties.metalness,
+                    sheen: properties.sheen,
+                    sheenRoughness: properties.sheenRoughness,
+                    sheenColor: properties.sheenColor.clone(),
+                    clearcoat: properties.clearcoat,
+                    clearcoatRoughness: properties.clearcoatRoughness,
+                    reflectivity: properties.reflectivity,
+                    envMapIntensity: properties.envMapIntensity,
+                    
+                    // Keep original material properties
+                    transparent: shirtMaterial.transparent,
+                    opacity: shirtMaterial.opacity,
+                    side: THREE.DoubleSide
+                });
+                
+                // Set normal scale if normalMap exists
+                if (shirtMaterial.normalMap && physicalMaterial.normalScale) {
+                    physicalMaterial.normalScale.set(properties.normalScale, properties.normalScale);
+                }
+                
+                // Apply to all meshes in the model
+                if (group) {
+                    group.traverse((obj) => {
+                        if (obj.isMesh) {
+                            // Dispose old material
+                            if (obj.material) obj.material.dispose();
+                            
+                            // Apply new material (clone to avoid sharing)
+                            obj.material = physicalMaterial.clone();
+                    obj.material.needsUpdate = true;
+                            
+                            // Enable shadows
+                            obj.castShadow = true;
+                            obj.receiveShadow = true;
+                        }
+                    });
+                }
+                
+                // Update main reference
+                shirtMaterial = physicalMaterial;
+                if (shirtMesh) {
+                    shirtMesh.material = physicalMaterial;
+                }
+                
+                console.log(`Successfully applied ${fabricType} physical material`);
+            } catch (e) {
+                console.warn(`Couldn't create physical material: ${e.message}`);
+                // Apply basic properties to existing material as fallback
+                shirtMaterial.roughness = properties.roughness;
+                shirtMaterial.metalness = properties.metalness;
+                shirtMaterial.envMapIntensity = properties.envMapIntensity;
+                shirtMaterial.needsUpdate = true;
+            }
+        }
+        }
+        
+        // Force render update
+        if (renderer && scene && camera) {
+            renderer.render(scene, camera);
+        }
 }
 
 // Expose updateThemeBackground to window for direct access from HTML
@@ -3073,3 +3715,515 @@ window.exportScene = function() {
     console.log('Exporting scene via window.exportScene');
     downloadCanvas();
 };
+
+/**
+ * Ensure a layer exists on the current model
+ * @param {string} layerName - Name of the layer to ensure
+ * @param {THREE.Material} material - Material to use for the layer
+ * @returns {THREE.Mesh} The layer mesh
+ */
+function ensureModelLayer(layerName, material = null) {
+    // Implementation similar to ensureShirtLayer but model-agnostic
+    if (!shirtMesh) {
+        console.error('Model mesh not available');
+        return null;
+    }
+    
+    console.log(`Ensuring model layer exists: ${layerName}`);
+    
+    // Find existing layer
+    let layer = shirtMesh.children.find(child => child.name === layerName);
+    
+    if (!layer) {
+        // Create a new layer if it doesn't exist
+        const modelGeometry = shirtMesh.geometry.clone();
+        
+        // Create a temporary material if one isn't provided
+        const tempMaterial = material || new THREE.MeshBasicMaterial({
+            transparent: true,
+            opacity: 1.0,
+            side: THREE.FrontSide,
+            blending: THREE.NormalBlending
+        });
+        
+        // Create new mesh with the same geometry
+        layer = new THREE.Mesh(modelGeometry, tempMaterial);
+        layer.name = layerName;
+        
+        // Copy the shirt's world transform
+        layer.matrix.copy(shirtMesh.matrix);
+        layer.matrixAutoUpdate = false;
+        
+        // Copy UV mapping from the original mesh
+        if (shirtMesh.geometry.attributes.uv) {
+            layer.geometry.attributes.uv = shirtMesh.geometry.attributes.uv.clone();
+        }
+        
+        // Force a specific render order
+        layer.renderOrder = 10;
+        
+        // Add to model mesh
+        shirtMesh.add(layer);
+        console.log(`Created new layer: ${layerName} with perfect alignment`);
+    } 
+    else if (material) {
+        // Update material if provided
+        layer.material = material;
+        layer.material.needsUpdate = true;
+    }
+    
+    // Always ensure layers are visible
+    layer.visible = true;
+    
+    return layer;
+}
+
+// Add a temp variable to use the new function name but keep backward compatibility 
+// Redeclaring ensureShirtLayer here causes an error - we're keeping the original from line 1608
+// Just adding a warning when it's used
+const originalEnsureShirtLayer = ensureShirtLayer;
+ensureShirtLayer = function(name, material) {
+    console.warn('ensureShirtLayer is deprecated. Use ensureModelLayer instead');
+    return ensureModelLayer(name, material);
+};
+
+/**
+ * Register a new model type with the system
+ * @param {string} modelType - The identifier for the model (e.g., 'tshirt', 'hoodie')
+ * @param {object} modelConfig - Configuration object with model properties and view settings
+ * @return {boolean} - Success status of registration
+ */
+function registerModelType(modelType, modelConfig) {
+    if (!modelType || typeof modelType !== 'string') {
+        console.error('Invalid model type provided');
+        return false;
+    }
+    
+    if (!modelConfig || typeof modelConfig !== 'object') {
+        console.error('Invalid model configuration provided');
+        return false;
+    }
+    
+    // Check for required configuration properties
+    const requiredProps = ['name', 'glbPath', 'views'];
+    const missingProps = requiredProps.filter(prop => !modelConfig.hasOwnProperty(prop));
+    
+    if (missingProps.length > 0) {
+        console.error(`Missing required properties in model config: ${missingProps.join(', ')}`);
+        return false;
+    }
+    
+    // Check if model type already exists
+    if (modelConfigs.hasOwnProperty(modelType)) {
+        console.warn(`Model type '${modelType}' already exists and will be overwritten`);
+    }
+    
+    // Register the model configuration
+    modelConfigs[modelType] = modelConfig;
+    
+    // Add to model options if it has a name
+    if (modelConfig.name) {
+        const modelOption = document.createElement('option');
+        modelOption.value = modelType;
+        modelOption.textContent = modelConfig.name;
+        
+        const modelSelector = document.getElementById('model-selector');
+        if (modelSelector) {
+            modelSelector.appendChild(modelOption);
+        }
+    }
+    
+    console.log(`Registered model type: ${modelType}`);
+    return true;
+}
+
+// Expose function globally
+window.registerModelType = registerModelType;
+
+// Add a new state variable to track whether decals should be affected by lighting
+let decalsAffectedByLighting = false;
+
+/**
+ * Toggles preview mode with enhanced lighting, shadows, and reflections on decals
+ * When enabled, editing is disabled and all objects are in view-only mode
+ * @param {boolean} enabled - Whether preview mode should be enabled
+ * @returns {boolean} - The new state
+ */
+export function toggleDecalLighting(enabled) {
+    // If no parameter is passed, toggle the current state
+    if (enabled === undefined) {
+        decalsAffectedByLighting = !decalsAffectedByLighting;
+    } else {
+        decalsAffectedByLighting = enabled;
+    }
+    
+    const previewMode = decalsAffectedByLighting;
+    console.log(`Preview mode with lighting effects ${previewMode ? 'enabled' : 'disabled'}`);
+    
+    // Update any existing decals with the new material type
+    // This function now handles all models, not just the t-shirt
+    updateExistingDecalsMaterial(previewMode);
+    
+    // Immediately lock/unlock decal controls based on preview mode
+    // Force = true to ensure it runs even if the state didn't change
+    toggleDecalControlsLock(previewMode, true);
+    
+    // Update state
+    updateState({ decalsAffectedByLighting: previewMode });
+    
+    // Expose the state to the window for the toggle button to access
+    window.decalsAffectedByLighting = previewMode;
+    
+    // Update the button UI if the update function exists
+    if (window.updateDecalLightingToggle) {
+        window.updateDecalLightingToggle(previewMode);
+    }
+    
+    // Show a toast notification
+    if (window.showToast) {
+        if (previewMode) {
+            window.showToast('Preview mode enabled. Editing is disabled.');
+        } else {
+            window.showToast('Preview mode disabled. You can edit again.');
+        }
+    }
+    
+    // Update all model materials to ensure consistent lighting behavior
+    // This ensures any future models will also respond to lighting correctly
+    if (scene) {
+        scene.traverse(object => {
+            if (object.isMesh && object.material) {
+                // For base model materials, adjust lighting-related properties
+                if (object !== shirtMesh && 
+                    !object.name.includes('canvas-layer') && 
+                    !object.name.includes('decal') &&
+                    !object.name.includes('texture-layer')) {
+                    
+                    // Ensure shadows are enabled/consistent
+                    object.castShadow = true;
+                    object.receiveShadow = true;
+                    
+                    // Adjust material properties for lighting consistency
+                    if (object.material.type.includes('Physical') || 
+                        object.material.type.includes('Standard') ||
+                        object.material.type.includes('Lambert') ||
+                        object.material.type.includes('Phong')) {
+                        
+                        // Ensure reflectivity is appropriate
+                        if (previewMode) {
+                            // Enhanced reflectivity when preview mode is on
+                            object.material.envMapIntensity = 0.3;
+                            if ('reflectivity' in object.material) 
+                                object.material.reflectivity = 0.1;
+                        } else {
+                            // Reduced reflectivity when preview mode is off
+                            object.material.envMapIntensity = 0.1;
+                            if ('reflectivity' in object.material) 
+                                object.material.reflectivity = 0.05;
+                        }
+                        
+                        // Force material update
+                        object.material.needsUpdate = true;
+                    }
+                }
+            }
+        });
+    }
+    
+    // Re-render to show changes
+    if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+    }
+    
+    return previewMode;
+}
+
+/**
+ * Updates the material type of existing decals based on the lighting toggle
+ * @param {boolean} useLighting - Whether to use lighting-responsive materials
+ */
+function updateExistingDecalsMaterial(useLighting) {
+    if (!scene) return;
+    
+    console.log(`Updating existing decals to ${useLighting ? 'use' : 'not use'} lighting effects`);
+    
+    // Get all decal layers from all model meshes, not just shirtMesh
+    let decalLayers = [];
+    
+    // First check if there's a main shirt mesh
+    if (shirtMesh) {
+        // Get layers from the main shirt mesh
+        const mainLayers = shirtMesh.children.filter(child => 
+            child.name === 'canvas-layer' || 
+            child.name === 'canvas-layer-front' || 
+            child.name === 'canvas-layer-back' ||
+            child.name === 'full-texture-layer'
+        );
+        decalLayers = decalLayers.concat(mainLayers);
+    }
+    
+    // Also search the entire scene for decal layers on any model
+    scene.traverse(object => {
+        // Check if this is a mesh and has a name indicating it's a decal layer
+        if (object.isMesh && (
+            object.name.includes('canvas-layer') || 
+            object.name.includes('decal') ||
+            object.name.includes('texture-layer')
+        )) {
+            // Don't add duplicates
+            if (!decalLayers.includes(object)) {
+                decalLayers.push(object);
+            }
+        }
+    });
+    
+    if (decalLayers.length === 0) {
+        console.log("No decal layers found to update");
+        return;
+    }
+    
+    console.log(`Found ${decalLayers.length} decal layers to update across all models`);
+    
+    // Process each decal layer
+    decalLayers.forEach(layer => {
+        if (!layer.material || !layer.material.map) {
+            console.log(`Layer ${layer.name} has no material or texture, skipping`);
+            return;
+        }
+        
+        // Save the original texture
+        const texture = layer.material.map;
+        
+        // Create the appropriate material type based on the toggle
+        if (useLighting) {
+            // Generate normal map for texture for lighting effects
+            const normalMap = generateNormalMapFromTexture(texture);
+            
+            // Create a physical material that responds to lighting
+            const physicalMaterial = new THREE.MeshPhysicalMaterial({
+                map: texture,
+                transparent: true,
+                opacity: layer.material.opacity || 1.0,
+                side: THREE.FrontSide,
+                
+                // Normal map for depth and light interaction
+                normalMap: normalMap,
+                normalScale: new THREE.Vector2(0.3, 0.3),
+                
+                // Physical properties for the decal
+                roughness: 0.6,
+                metalness: 0.0,
+                clearcoat: 0.1,
+                clearcoatRoughness: 0.8,
+                
+                // Shadows
+                shadowSide: THREE.FrontSide,
+                
+                // Depth settings
+                alphaTest: 0.01,
+                depthTest: true,
+                depthWrite: true,
+                
+                // Additional settings
+                envMapIntensity: 0.2,
+                sheen: 0.1,
+                sheenRoughness: 0.8,
+                sheenColor: new THREE.Color(0xffffff)
+            });
+            
+            // Dispose of old material
+            if (layer.material) {
+                // Don't dispose texture as we're reusing it
+                layer.material.dispose();
+            }
+            
+            // Apply new material
+            layer.material = physicalMaterial;
+            
+            // Enable shadows
+            layer.castShadow = true;
+            layer.receiveShadow = true;
+            
+        } else {
+            // Create a basic material that ignores lighting
+            const basicMaterial = new THREE.MeshBasicMaterial({
+                map: texture,
+                transparent: true,
+                opacity: layer.material.opacity || 1.0,
+                side: THREE.FrontSide,
+                
+                // Basic material settings
+                depthTest: true,
+                depthWrite: false,
+                alphaTest: 0.01,
+                
+                // Color space
+                colorSpace: THREE.SRGBColorSpace
+            });
+            
+            // Dispose of old material
+            if (layer.material) {
+                // Don't dispose the texture as we're reusing it
+                if (layer.material.normalMap) {
+                    layer.material.normalMap.dispose();
+                }
+                layer.material.dispose();
+            }
+            
+            // Apply new material
+            layer.material = basicMaterial;
+            
+            // Disable shadows
+            layer.castShadow = false;
+            layer.receiveShadow = false;
+        }
+        
+        // Update material
+        layer.material.needsUpdate = true;
+    });
+    
+    // Render to show changes
+    if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+    }
+}
+
+/**
+ * Locks or unlocks decal control buttons based on lighting state
+ * @param {boolean} lock - Whether to lock the controls
+ * @param {boolean} force - Whether to force update regardless of previous state
+ */
+function toggleDecalControlsLock(lock, force = false) {
+    // Initialize current state if not set
+    if (toggleDecalControlsLock.currentLockState === undefined) {
+        toggleDecalControlsLock.currentLockState = null;
+    }
+    
+    // Only proceed if state is changing or forced
+    if (toggleDecalControlsLock.currentLockState === lock && !force) {
+        return;
+    }
+    
+    // Update current state
+    toggleDecalControlsLock.currentLockState = lock;
+    
+    console.log(`Locking decal controls: ${lock ? 'YES' : 'NO'}`);
+    
+    // 1. Get all decal-related control buttons
+    const decalControls = [
+        document.getElementById('photo-upload-btn'),
+        document.getElementById('text-upload-btn'),
+        document.getElementById('shape-upload-btn'),
+        document.getElementById('ai-generator-btn')
+    ].filter(el => el); // Filter out any null elements
+    
+    // 2. Get the editor container/workspace
+    const editorContainer = document.querySelector('.editor-container');
+    const canvasContainer = document.querySelector('.canvas-container');
+    const editorControls = document.querySelector('.editor-controls');
+    
+    if (decalControls.length === 0) {
+        console.log("No decal controls found to lock/unlock");
+    } else {
+        console.log(`Found ${decalControls.length} decal controls to ${lock ? 'lock' : 'unlock'}`);
+    }
+    
+    // 3. Make existing decals non-interactive when locked
+    if (shirtMesh) {
+        shirtMesh.children.forEach(child => {
+            if (child.name && (
+                child.name.includes('canvas-layer') || 
+                child.name.includes('decal') ||
+                child.name.includes('texture-layer')
+            )) {
+                // Make decals non-interactive when locked
+                child.userData.isSelectable = !lock;
+            }
+        });
+    }
+    
+    // 4. Disable/enable editor mode only for decal editing
+    // If editor mode is enabled, temporarily disable it during preview
+    if (window.toggleEditorInteraction) {
+        window.toggleEditorInteraction(!lock);
+    }
+    
+    // Remove preview overlay code - we don't want to show this anymore
+    let previewOverlay = document.getElementById('preview-mode-overlay');
+    if (previewOverlay) {
+        previewOverlay.style.display = 'none';
+        // Optionally remove it entirely
+        previewOverlay.remove();
+    }
+    
+    // 5. Update decal control states
+    decalControls.forEach(control => {
+        if (lock) {
+            // Add disabled class
+            control.classList.add('disabled');
+            // Add a title attribute to explain why it's disabled
+            control.setAttribute('title', 'Disable lighting effects to edit decals');
+            // Also set the button as not interactive
+            control.style.pointerEvents = 'none';
+            control.setAttribute('data-locked', 'true');
+        } else {
+            // Remove disabled class
+            control.classList.remove('disabled');
+            // Restore original title if needed
+            if (control.getAttribute('title') === 'Disable lighting effects to edit decals') {
+                // Set appropriate title for each button type
+                if (control.id === 'photo-upload-btn') {
+                    control.setAttribute('title', 'Add photo to design');
+                } else if (control.id === 'text-upload-btn') {
+                    control.setAttribute('title', 'Add text to design');
+                } else if (control.id === 'shape-upload-btn') {
+                    control.setAttribute('title', 'Add shape to design');
+                } else if (control.id === 'ai-generator-btn') {
+                    control.setAttribute('title', 'Generate design with AI');
+                }
+            }
+            // Re-enable interaction
+            control.style.pointerEvents = 'auto';
+            control.removeAttribute('data-locked');
+        }
+    });
+    
+    // 6. Only lock the editable areas, not the whole canvas container
+    if (canvasContainer) {
+        if (lock) {
+            // Don't add preview-mode class to the whole container
+            // Instead, we'll just ensure the decal-specific interactions are disabled
+            // canvasContainer.classList.add('preview-mode');
+            // Don't disable all pointer events on the canvas
+            // canvasContainer.style.pointerEvents = 'none';
+        } else {
+            canvasContainer.classList.remove('preview-mode');
+            canvasContainer.style.pointerEvents = 'auto';
+        }
+    }
+    
+    // 7. Only lock editor controls for decal editing, not everything
+    if (editorControls) {
+        const decalEditorButtons = editorControls.querySelectorAll('.decal-editor button, .decal-editor input, .decal-editor select');
+        decalEditorButtons.forEach(button => {
+            button.disabled = lock;
+            if (lock) {
+                button.setAttribute('data-locked-by-preview', 'true');
+            } else {
+                button.removeAttribute('data-locked-by-preview');
+            }
+        });
+        
+        // Make sure camera, color, and download controls remain active
+        const cameraControls = editorControls.querySelectorAll('.camera-controls button, .color-controls button, .download-btn');
+        cameraControls.forEach(control => {
+            control.disabled = false;
+            control.removeAttribute('data-locked-by-preview');
+        });
+    }
+    
+    console.log(`Decal controls ${lock ? 'locked' : 'unlocked'}`);
+}
+
+// Expose the toggle function globally for the button to use
+window.toggleDecalLighting = toggleDecalLighting;

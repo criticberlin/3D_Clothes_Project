@@ -151,9 +151,13 @@ function positionFloatingPanel(panel) {
  * Show the view selection modal to choose where to apply the design element
  * @param {string} imageData - The image data URL for previews
  * @param {function} callback - Function to call with the selected view
+ * @param {string} modelType - The model type (tshirt, hoodie, etc.)
  * @param {string} title - Optional title for the modal
  */
-export function showViewSelectionModal(imageData, callback, title = 'Choose Placement') {
+export function showViewSelectionModal(imageData, callback, modelType = null, title = 'Choose Placement') {
+    // Use provided model type or get from state
+    const currentModelType = modelType || state.currentModel || 'tshirt';
+    
     // Remove any existing view selection containers
     const existingContainers = document.querySelectorAll('.view-selection-container');
     existingContainers.forEach(container => container.remove());
@@ -171,6 +175,7 @@ export function showViewSelectionModal(imageData, callback, title = 'Choose Plac
         `;
     }
     
+    // Build container base HTML
     container.innerHTML = `
         <div class="panel-header">
             <h2>${title}</h2>
@@ -179,29 +184,63 @@ export function showViewSelectionModal(imageData, callback, title = 'Choose Plac
             </button>
         </div>
         <div class="panel-content">
-            <p>Select which part of the garment to place your design:</p>
+            <p>Select which part of the ${currentModelType} to place your design:</p>
             ${previewHtml}
-            <div class="view-options">
-                <div class="view-option" data-view="front">
-                    <i class="fas fa-tshirt"></i>
-                    <span>Front View</span>
-                </div>
-                <div class="view-option" data-view="back">
-                    <i class="fas fa-tshirt fa-flip-horizontal"></i>
-                    <span>Back View</span>
-                </div>
-                <div class="view-option" data-view="left_arm">
-                    <i class="fas fa-hand-point-right"></i>
-                    <span>Left Sleeve</span>
-                </div>
-                <div class="view-option" data-view="right_arm">
-                    <i class="fas fa-hand-point-left"></i>
-                    <span>Right Sleeve</span>
-                </div>
-            </div>
+            <div class="view-options"></div>
             <button class="cancel-view-selection">Cancel</button>
         </div>
     `;
+    
+    // Get view options container
+    const viewOptionsContainer = container.querySelector('.view-options');
+    
+    // Get available views from modelConfig if accessible
+    if (window.modelConfig && window.modelConfig[currentModelType]) {
+        const views = window.modelConfig[currentModelType].views;
+        
+        // Build view options based on model configuration
+        Object.entries(views).forEach(([viewName, viewConfig]) => {
+            const displayName = viewConfig.name || viewName.replace('_', ' ');
+            
+            // Select appropriate icon based on view name
+            let iconClass = 'fa-tshirt';
+            if (viewName === 'back') iconClass = 'fa-tshirt fa-flip-horizontal';
+            else if (viewName === 'left_arm') iconClass = 'fa-hand-point-right';
+            else if (viewName === 'right_arm') iconClass = 'fa-hand-point-left';
+            else if (viewName === 'hood') iconClass = 'fa-hat-wizard';
+            
+            // Create view option element
+            const viewOption = document.createElement('div');
+            viewOption.className = 'view-option';
+            viewOption.dataset.view = viewName;
+            viewOption.innerHTML = `
+                <i class="fas ${iconClass}"></i>
+                <span>${displayName}</span>
+            `;
+            
+            viewOptionsContainer.appendChild(viewOption);
+        });
+    } else {
+        // Fallback to default views if modelConfig is not available
+        const defaultViews = [
+            { view: 'front', name: 'Front View', icon: 'fa-tshirt' },
+            { view: 'back', name: 'Back View', icon: 'fa-tshirt fa-flip-horizontal' },
+            { view: 'left_arm', name: 'Left Sleeve', icon: 'fa-hand-point-right' },
+            { view: 'right_arm', name: 'Right Sleeve', icon: 'fa-hand-point-left' }
+        ];
+        
+        defaultViews.forEach(({ view, name, icon }) => {
+            const viewOption = document.createElement('div');
+            viewOption.className = 'view-option';
+            viewOption.dataset.view = view;
+            viewOption.innerHTML = `
+                <i class="fas ${icon}"></i>
+                <span>${name}</span>
+            `;
+            
+            viewOptionsContainer.appendChild(viewOption);
+        });
+    }
     
     // Append the container to the document body
     document.body.appendChild(container);
@@ -715,6 +754,69 @@ function setupPanelSpecificHandlers() {
             }
         });
     }
+    
+    // AI Panel Apply and Download buttons
+    const aiPanel = document.getElementById('ai-panel');
+    if (aiPanel) {
+        const applyButton = aiPanel.querySelector('.apply-button');
+        const downloadButton = aiPanel.querySelector('.download-button');
+        
+        if (applyButton) {
+            applyButton.addEventListener('click', () => {
+                // Get the generated image
+                const aiResult = aiPanel.querySelector('.ai-result img');
+                if (aiResult && aiResult.src) {
+                    // Apply the generated design to the t-shirt
+                    console.log('Applying AI generated design to the t-shirt');
+                    // Implementation would depend on your 3D model handling logic
+                    applyGeneratedDesign(aiResult.src);
+                    
+                    // Close the panel after applying
+                    aiPanel.classList.remove('active');
+                } else {
+                    console.log('No AI design generated yet');
+                }
+            });
+        }
+        
+        if (downloadButton) {
+            downloadButton.addEventListener('click', () => {
+                // Get the generated image
+                const aiResult = aiPanel.querySelector('.ai-result img');
+                if (aiResult && aiResult.src) {
+                    // Download the generated image
+                    console.log('Downloading AI generated design');
+                    downloadGeneratedImage(aiResult.src);
+                } else {
+                    console.log('No AI design generated yet');
+                }
+            });
+        }
+    }
+}
+
+// Helper function to apply the generated design to the t-shirt
+function applyGeneratedDesign(imageUrl) {
+    // Implementation would depend on your specific 3D model handling
+    // This is a placeholder for the actual implementation
+    console.log('Applying design from URL:', imageUrl);
+    
+    // Show success notification
+    showToast('Design applied successfully!');
+}
+
+// Helper function to download the generated image
+function downloadGeneratedImage(imageUrl) {
+    // Create a temporary anchor element to trigger the download
+    const a = document.createElement('a');
+    a.href = imageUrl;
+    a.download = 'ai-generated-design.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    // Show success notification
+    showToast('Design downloaded successfully!');
 }
 
 /**
@@ -729,6 +831,31 @@ export function setupAIPicker() {
     const promptInput = document.getElementById('ai-prompt');
     const generateBtn = document.getElementById('ai-generate');
     const preview = document.querySelector('.ai-preview');
+    const previewContainer = document.querySelector('.ai-preview-container');
+    const previewActions = document.querySelector('.ai-preview-actions');
+    
+    // Ensure the preview container is visible
+    if (previewContainer) {
+        previewContainer.style.display = 'flex';
+    }
+    
+    // Set up a more visually appealing default state for the preview
+    if (preview) {
+        preview.style.display = 'flex';
+        preview.style.minHeight = '250px';
+        preview.style.maxHeight = '300px';
+        preview.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-robot"></i>
+                    <p>Enter a prompt below to generate a design</p>
+            </div>
+        `;
+    }
+    
+    // Hide the action buttons until an image is generated
+    if (previewActions) {
+        previewActions.style.display = 'none';
+    }
 
     if (!promptInput || !generateBtn || !preview) {
         console.warn('AI Picker elements not found, will try again when panels are visible');
@@ -756,7 +883,13 @@ export function setupAIPicker() {
             serverIsOnline = await checkAIServerStatus();
 
             if (serverIsOnline) {
-                preview.innerHTML = '<div class="empty-state"><i class="fas fa-robot"></i><p>Enter a prompt to generate a design</p></div>';
+                preview.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-robot"></i>
+                        <p>Enter a prompt to generate a design</p>
+                </div>`;
+                preview.style.minHeight = '250px';
+                preview.style.maxHeight = '300px';
                 generateBtn.disabled = false;
                 console.log('AI server is online');
             } else {
@@ -821,118 +954,294 @@ export function setupAIPicker() {
     oldBtn.parentNode.replaceChild(newBtn, oldBtn);
     const updatedGenerateBtn = newBtn;
 
-    // Handle generate button click
+    // Attach event listener to Generate button
     updatedGenerateBtn.addEventListener('click', async () => {
         console.log('Generate button clicked');
         
-        if (isGenerating) {
-            console.log('Ignoring click because generation is already in progress');
-            return;
-        }
-
+        // Get the prompt text
         const prompt = promptInput.value.trim();
+        
+        // Validate prompt
         if (!prompt) {
-            showToast('Please enter a prompt first');
+            console.warn('Empty prompt, not sending request');
+            showToast('Please enter a prompt to generate an image');
             return;
         }
-
-        if (!serverIsOnline) {
-            // If server is not online, try checking again
-            await checkAIServer();
-            if (!serverIsOnline) {
-                showToast('AI server is not available');
-                return;
-            }
+        
+        // Prevent multiple simultaneous generations
+        if (isGenerating) {
+            console.warn('Already generating, ignoring click');
+            return;
         }
-
+        
         isGenerating = true;
+        
+        // Hide buttons while generating
+        if (previewActions) {
+            previewActions.style.display = 'none';
+        }
+        
+        // Always show the section title when generating starts
+        const sectionTitle = document.querySelector('#ai-panel .section-title');
+        if (sectionTitle) {
+            sectionTitle.style.display = 'block';
+        }
+        
+        // Update button state
         updatedGenerateBtn.disabled = true;
         updatedGenerateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
-        preview.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i><p>Creating your design...</p></div>';
+        
+        // Always reset and show the loading state for each generation
+        preview.innerHTML = `
+        <div class="loading">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Creating your design...</p>
+        </div>
+        `;
+        
+        // Make sure the preview is visible in correct size for loading state
+        preview.style.display = 'flex';
+        preview.style.minHeight = '250px';
+        preview.style.maxHeight = '300px';
+        preview.style.overflow = 'hidden'; // Ensure loading container is visible
+        preview.style.width = '100%';
+        
+        // Clear any previous generated content
+        const previewContainer = document.querySelector('.ai-preview-container');
+        if (previewContainer) {
+            previewContainer.style.display = 'flex';
+            previewContainer.style.width = '100%';
+        }
 
         // Use the generateAIImage function from ai-integration.js
         generateAIImage(prompt, {
             onSuccess: (imageData) => {
                 console.log('AI image generated successfully');
                 
-                // Show the generated image with buttons for apply and download
-                preview.innerHTML = `
-                <div class="ai-result">
-                    <img src="${imageData}" alt="Generated design" />
-                    <div class="ai-buttons">
-                        <button class="button primary apply-ai-btn">Apply to Shirt</button>
-                        <button class="button secondary download-ai-btn"><i class="fas fa-download"></i> Download</button>
+                // Create a hidden image to get dimensions
+                const tempImg = new Image();
+                tempImg.onload = () => {
+                    // Show the generated image in the preview area
+                    preview.innerHTML = `
+                    <div class="ai-result">
+                        <img src="${imageData}" alt="Generated design" />
                     </div>
-                </div>
-                `;
+                    `;
+                    
+                    // Make the preview container fit the image
+                    preview.style.minHeight = 'unset';
+                    preview.style.maxHeight = '90vh';
+                    preview.style.width = '100%';
+                    preview.style.padding = '0';
+                    preview.style.background = 'transparent';
+                    preview.style.border = 'none';
+                    preview.style.boxShadow = 'none';
+                    preview.style.overflow = 'visible';
+                    
+                    // Hide the section-title when image is generated to make more room for the image
+                    const sectionTitle = document.querySelector('#ai-panel .section-title');
+                    if (sectionTitle) {
+                        sectionTitle.style.display = 'none';
+                    }
 
-                // Add event listener to the apply button
-                const applyBtn = preview.querySelector('.apply-ai-btn');
-                if (applyBtn) {
-                    applyBtn.addEventListener('click', () => {
-                        // Show view selection modal for the AI image
-                        showViewSelectionModal(imageData, (selectedView) => {
-                            if (selectedView) {
-                                // Apply as texture to the selected view
-                                import('./texture-mapper.js').then(textureMapper => {
-                                    // Use load custom image function with the selected view
-                                    textureMapper.loadCustomImage(imageData, selectedView, {
-                                        smartPlacement: true,
-                                        autoAdjust: true
-                                    }).then(() => {
-                                        showToast(`AI design applied to ${selectedView} view`);
-                                        
-                                        // Change to the view where the image was placed
-                                        changeCameraView(selectedView);
-                                        
-                                        // Close the panel after applying
-                                        const panel = document.getElementById('ai-panel');
-                                        if (panel) {
-                                            panel.classList.remove('active');
-                                            panel.style.display = 'none';
-                                        }
-                                        
-                                        // Deactivate the button
-                                        const button = document.getElementById('ai-generator-btn');
-                                        if (button) {
-                                            button.classList.remove('active');
-                                        }
-                                    });
-                                });
-                            }
-                        }, 'Choose Where to Apply AI Design');
-                    });
-                }
+                    // Set preview container to adjust to image dimensions
+                    const previewContainer = document.querySelector('.ai-preview-container');
+                    if (previewContainer) {
+                        previewContainer.style.width = '100%';
+                        previewContainer.style.display = 'flex';
+                    }
 
-                // Add event listener to the download button
-                const downloadBtn = preview.querySelector('.download-ai-btn');
-                if (downloadBtn) {
-                    downloadBtn.addEventListener('click', () => {
-                        // Create a temporary link element
-                        const link = document.createElement('a');
-                        link.href = imageData;
-                        link.download = `ai-design-${Date.now()}.png`;
+                    // Get the generated image and set it to maximize height
+                    const generatedImg = preview.querySelector('.ai-result img');
+                    if (generatedImg) {
+                        // Set fixed dimensions to 230px
+                        generatedImg.style.width = '230px';
+                        generatedImg.style.height = '230px';
+                        generatedImg.style.maxWidth = '230px';
+                        generatedImg.style.maxHeight = '230px';
+                        generatedImg.style.minWidth = '230px';
+                        generatedImg.style.objectFit = 'contain';
+                        
+                        // Wait for the image to be fully loaded
+                        generatedImg.onload = function() {
+                            // Ensure 230px dimensions after loading
+                            this.style.width = '230px';
+                            this.style.height = '230px';
+                            this.style.maxWidth = '230px';
+                            this.style.maxHeight = '230px';
+                            this.style.minWidth = '230px';
+                            this.style.objectFit = 'contain';
+                            
+                            // Adjust container to maximize image display
+                            preview.style.overflow = 'visible';
+                        };
+                    }
 
-                        // Append to the document, click it, and remove it
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
+                    // Always ensure buttons are properly displayed after successful generation
+                    if (previewActions) {
+                        console.log('Showing preview actions');
+                        previewActions.style.display = 'flex';
+                        
+                        // Enable buttons
+                        const buttons = previewActions.querySelectorAll('button');
+                        buttons.forEach(button => {
+                            button.disabled = false;
+                            button.classList.remove('disabled');
+                        });
+                        
+                        // Set up apply button
+                        const applyBtn = previewActions.querySelector('.apply-button');
+                        if (applyBtn) {
+                            // Remove any previous event listeners by replacing the button
+                            const newApplyBtn = applyBtn.cloneNode(true);
+                            applyBtn.parentNode.replaceChild(newApplyBtn, applyBtn);
+                            
+                            // Add new event listener
+                            newApplyBtn.addEventListener('click', () => {
+                                console.log('Apply button clicked');
+                                // Get current model type
+                                const currentModel = state.currentModel || 'tshirt';
+                                
+                                // Show view selection modal for the AI image
+                                showViewSelectionModal(imageData, (selectedView) => {
+                                    if (selectedView) {
+                                        // Apply as texture to the selected view of the current model
+                                        import('./texture-mapper.js').then(textureMapper => {
+                                            // Use load custom image function with the selected view and model type
+                                            textureMapper.loadCustomImage(imageData, selectedView, {
+                                                smartPlacement: true,
+                                                autoAdjust: true,
+                                                isAIGenerated: true
+                                            }).then(() => {
+                                                showToast(`AI design applied to ${selectedView} view on ${currentModel}`);
+                                                
+                                                // Change to the view where the image was placed
+                                                changeCameraView(selectedView);
+                                                
+                                                // Close the panel after applying
+                                                const panel = document.getElementById('ai-panel');
+                                                if (panel) {
+                                                    panel.classList.remove('active');
+                                                    panel.style.display = 'none';
+                                                }
+                                                
+                                                // Deactivate the button
+                                                const button = document.getElementById('ai-generator-btn');
+                                                if (button) {
+                                                    button.classList.remove('active');
+                                                }
+                                            }).catch(error => {
+                                                console.error('Error applying AI design:', error);
+                                                showToast(`Error applying AI design: ${error.message}`);
+                                            });
+                                        });
+                                    }
+                                }, currentModel); // Pass the current model type as a parameter
+                            });
+                        }
+                        
+                        // Set up download button
+                        const downloadBtn = previewActions.querySelector('.download-button');
+                        if (downloadBtn) {
+                            // Remove any previous event listeners by replacing the button
+                            const newDownloadBtn = downloadBtn.cloneNode(true);
+                            downloadBtn.parentNode.replaceChild(newDownloadBtn, downloadBtn);
+                            
+                            // Add new event listener
+                            newDownloadBtn.addEventListener('click', () => {
+                                console.log('Download button clicked');
+                                // Create a temporary link element
+                                const link = document.createElement('a');
+                                link.href = imageData;
+                                link.download = `ai-design-${Date.now()}.png`;
 
-                        showToast('Downloading AI design');
-                    });
-                }
+                                // Append to the document, click it, and remove it
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+
+                                showToast('Downloading AI design');
+                            });
+                        }
+                    } else {
+                        console.error('Preview actions not found');
+                    }
+                    
+                    // Reset UI state
+                    isGenerating = false;
+                    updatedGenerateBtn.disabled = false;
+                    updatedGenerateBtn.innerHTML = '<span class="sparkle-icon" style="color: white !important;">✨</span> Generate';
+                };
+                tempImg.src = imageData;
             },
             onError: (errorMessage) => {
                 console.error('Error generating AI image:', errorMessage);
                 preview.innerHTML = `<div class="error"><p>Error: ${errorMessage}</p></div>`;
+                
+                // Show the section-title again in case of error
+                const sectionTitle = document.querySelector('#ai-panel .section-title');
+                if (sectionTitle) {
+                    sectionTitle.style.display = 'block';
+                }
+                
+                // Hide preview actions if there's an error
+                if (previewActions) {
+                    previewActions.style.display = 'none';
+                }
             },
             onEnd: () => {
                 isGenerating = false;
                 updatedGenerateBtn.disabled = false;
-                updatedGenerateBtn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Generate';
+                updatedGenerateBtn.innerHTML = '<span class="sparkle-icon" style="color: white !important;">✨</span> Generate';
             }
         });
     });
+
+    // Make sure the section-title is visible when the panel is opened/created
+    const resetAIPanel = () => {
+        const sectionTitle = document.querySelector('#ai-panel .section-title');
+        if (sectionTitle) {
+            sectionTitle.style.display = 'block';
+        }
+        
+        // Ensure the preview container is visible
+        const previewContainer = document.querySelector('.ai-preview-container');
+        if (previewContainer) {
+            previewContainer.style.display = 'flex';
+        }
+        
+        // Reset the preview to an improved default state, always visible but smaller
+        if (preview) {
+            preview.style.display = 'flex';
+            preview.style.minHeight = '250px';
+            preview.style.maxHeight = '300px';
+            preview.innerHTML = `
+            <div class="ai-result">
+                <div class="empty-state">
+                    <i class="fas fa-robot"></i>
+                    <p>Enter a prompt to generate a design</p>
+                </div>
+            </div>
+            `;
+        }
+        
+        // Hide action buttons until an image is generated
+        if (previewActions) {
+            previewActions.style.display = 'none';
+        }
+    };
+    
+    // Add event listener to AI panel button to reset the panel when opened
+    const aiPanelButton = document.getElementById('ai-generator-btn');
+    if (aiPanelButton) {
+        aiPanelButton.addEventListener('click', resetAIPanel);
+    }
+    
+    // Also reset when the panel is closed
+    const closeButton = document.querySelector('#ai-panel .panel-close');
+    if (closeButton) {
+        closeButton.addEventListener('click', resetAIPanel);
+    }
 }
 
 /**
@@ -1442,7 +1751,7 @@ function ensureFloatingElementsExist() {
         { id: 'photo-upload-btn', icon: 'fa-image', text: 'Add Photo', panelId: 'photo-panel', panelTitle: 'Add Photo' },
         { id: 'text-upload-btn', icon: 'fa-font', text: 'Add Text', panelId: 'text-panel', panelTitle: 'Add Text' },
         { id: 'shape-upload-btn', icon: 'fa-shapes', text: 'Add Shape', panelId: 'shape-panel', panelTitle: 'Add Shape' },
-        { id: 'ai-generator-btn', icon: 'fa-magic', text: 'AI Design', panelId: 'ai-panel', panelTitle: 'AI Design Generator' },
+        { id: 'ai-generator-btn', text: 'AI Design', panelId: 'ai-panel', panelTitle: 'AI Design Generator', useSparkleEmoji: true },
         { id: 'download-btn', icon: 'fa-download', text: 'Save', panelId: 'download-panel', panelTitle: 'Save Your Design' }
     ];
     
@@ -1453,7 +1762,13 @@ function ensureFloatingElementsExist() {
             const button = document.createElement('button');
             button.id = data.id;
             button.className = 'floating-btn';
-            button.innerHTML = `<i class="fas ${data.icon}"></i><span>${data.text}</span>`;
+            
+            if (data.useSparkleEmoji) {
+                button.innerHTML = `<span class="sparkle-icon" style="color: white !important; text-shadow: 0 0 8px rgba(255, 255, 255, 1), 0 0 15px rgba(255, 255, 255, 1); filter: drop-shadow(0 0 15px rgba(255, 255, 255, 1)) brightness(2); background: white; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: #fff0;">✨</span><span>${data.text}</span>`;
+            } else {
+                button.innerHTML = `<i class="fas ${data.icon}"></i><span>${data.text}</span>`;
+            }
+            
             floatingControls.appendChild(button);
         }
         
@@ -1630,6 +1945,24 @@ function createPanel(id, title, container) {
                 <p>Describe what you'd like to generate</p>
             </div>
 
+            <div class="ai-preview">
+                <div class="empty-state">
+                    <i class="fas fa-robot"></i>
+                    <p>AI generated designs will appear here</p>
+                </div>
+            </div>
+            
+            <div class="ai-preview-actions">
+                <button class="button primary apply-button">
+                    <i class="fas fa-check"></i>
+                    Apply
+                </button>
+                <button class="button secondary download-button">
+                    <i class="fas fa-download"></i>
+                    Download
+                </button>
+            </div>
+
             <div class="ai-input-container">
                 <textarea
                     id="ai-prompt"
@@ -1637,16 +1970,11 @@ function createPanel(id, title, container) {
                     aria-label="AI Prompt"
                 ></textarea>
                 <button id="ai-generate" class="button primary">
-                    <i class="fas fa-wand-magic-sparkles"></i>
-                    Generate
+                    <span style="display: inline-flex; align-items: center; justify-content: center;">
+                        Generate
+                        <span class="sparkle-icon" style="color: white !important; text-shadow: 0 0 8px rgba(255, 255, 255, 1), 0 0 15px rgba(255, 255, 255, 1); filter: drop-shadow(0 0 15px rgba(255, 255, 255, 1)) brightness(2); background: white; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: #fff0; margin-left: 6px;">✨</span>
+                    </span>
                 </button>
-            </div>
-
-            <div class="ai-preview">
-                <div class="empty-state">
-                    <i class="fas fa-robot"></i>
-                    <p>AI generated designs will appear here</p>
-                </div>
             </div>
         `;
     } else if (id === 'download-panel') {

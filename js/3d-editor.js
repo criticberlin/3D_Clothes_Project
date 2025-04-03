@@ -217,6 +217,12 @@ function setupEventListeners() {
  * @param {MouseEvent} event 
  */
 function onMouseDown(event) {
+    // Check if decal editing is disabled (when in preview mode)
+    if (window.isDecalEditingEnabled === false) {
+        // If in preview mode, don't allow decal interaction
+        return;
+    }
+
     // Get normalized mouse coordinates
     updateMousePosition(event);
 
@@ -4248,40 +4254,22 @@ function createPhotoEditOverlay(photoObject) {
     const previewImg = panel.querySelector('#photo-preview');
     const previewContainer = panel.querySelector('.preview-container');
     
-    // Image dimensions and aspect ratio
-    const imgWidth = photoObject.img.naturalWidth;
-    const imgHeight = photoObject.img.naturalHeight;
-    const aspectRatio = imgWidth / imgHeight;
+    // Set the photo container to match the AI preview dimensions - exactly 1024x1024
+    previewContainer.style.width = '100%';
+    previewContainer.style.maxWidth = '1024px';
+    previewContainer.style.aspectRatio = '1/1';
+    previewContainer.style.height = 'auto';
+    previewContainer.style.margin = '0 auto';
+    previewContainer.style.position = 'relative';
+    previewContainer.style.overflow = 'auto';
     
-    // Set maximum dimensions for the preview
-    const maxWidth = 300;
-    const maxHeight = 300;
-    
-    // Calculate dimensions to maintain aspect ratio
-    let containerWidth, containerHeight;
-    if (aspectRatio > 1) {
-        // Wide image
-        containerWidth = Math.min(maxWidth, imgWidth);
-        containerHeight = containerWidth / aspectRatio;
-    } else {
-        // Tall image
-        containerHeight = Math.min(maxHeight, imgHeight);
-        containerWidth = containerHeight * aspectRatio;
-    }
-    
-    // Update container and image styles
-    if (previewContainer) {
-        previewContainer.style.width = `${containerWidth}px`;
-        previewContainer.style.height = `${containerHeight}px`;
-        previewContainer.style.margin = '0 auto';
-        previewContainer.style.position = 'relative';
-        previewContainer.style.overflow = 'hidden';
-    }
-    
-    // Set the image styles
+    // Set the image styles to match AI preview
     previewImg.style.width = '100%';
     previewImg.style.height = '100%';
-    previewImg.style.objectFit = 'contain';
+    previewImg.style.objectFit = 'cover';
+    previewImg.style.maxWidth = '1024px';
+    previewImg.style.maxHeight = '1024px';
+    previewImg.style.borderRadius = '0';
     previewImg.src = photoObject.img.src;
     
     // If the image already has filters, apply them to the preview
@@ -4670,6 +4658,7 @@ export default {
     exportCanvasImage,
     toggleEditMode,
     toggleCameraControls,
+    toggleEditorInteraction,
     isInEditMode: () => isEditingMode,
     isEditorLocked: () => isEditingLocked,
     getCurrentLockedView: () => currentLockedView,
@@ -5393,3 +5382,42 @@ export function setModelType(modelType) {
     // Refresh texture canvas to account for any differences in UV mapping
     updateShirt3DTexture();
 }
+
+/**
+ * Toggle editor interaction for decals only
+ * This function allows disabling just the decal editing functionality
+ * while keeping camera controls, color changes, and other features active
+ * @param {boolean} enabled - Whether to enable interaction with decals
+ * @returns {boolean} - The current state
+ */
+export function toggleEditorInteraction(enabled) {
+    // Only control the decal editing aspects, not camera movement
+    isEditingMode = enabled;
+    
+    if (!enabled) {
+        // When disabled, ensure no decal is selected
+        if (selectedObject) {
+            deselectObject();
+        }
+        
+        // Set edit mode variables
+        currentEditableArea = null;
+        
+        // Reset transform mode
+        transformMode = 'none';
+        
+        // Remove any transform controls
+        removeTransformControls();
+    }
+    
+    // Set the state in the window object so other components can check it
+    window.isDecalEditingEnabled = enabled;
+    
+    // Update texture display
+    updateShirt3DTexture();
+    
+    return enabled;
+}
+
+// Expose the function to window for external use
+window.toggleEditorInteraction = toggleEditorInteraction;

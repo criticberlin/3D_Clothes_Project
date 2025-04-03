@@ -1,6 +1,93 @@
-# 3D Clothes Customizer
+# 3D Clothing Customization System
 
-A powerful 3D clothing customization web application built with pure HTML, CSS, and JavaScript (no frameworks). This project allows users to customize T-shirts and hoodies with their own designs or AI-generated textures through an intuitive and interactive 3D interface.
+A model-agnostic 3D clothing customization system that allows users to add designs, decals, and textures to different types of clothing models.
+
+## Features
+
+- Support for multiple 3D clothing models (T-shirts, hoodies, and more)
+- Custom texture mapping for each model type
+- AI-generated designs with smart placement
+- Independent customization per model type
+- Dynamic view selection based on model type
+- Extensible architecture for adding new model types
+
+## Model Configuration
+
+Each model type requires a configuration object with the following structure:
+
+```javascript
+{
+    name: "Model Display Name",
+    glbPath: "./path/to/model.glb",
+    defaultColor: "#FFFFFF",
+    defaultScale: 1.0,
+    views: {
+        "view_id": {
+            name: "View Display Name",
+            bounds: { x: 0, y: 0, width: 1, height: 1 },
+            defaultScale: 1,
+            uvRect: { u1: 0, v1: 0, u2: 1, v2: 1 },
+            transformMatrix: {
+                scale: { x: 1, y: 1 },
+                rotation: 0,
+                offset: { x: 0, y: 0 }
+            }
+        },
+        // Additional views...
+    },
+    textureSettings: {
+        canvasWidth: 1024,
+        canvasHeight: 1024,
+        baseColor: "#FFFFFF",
+        acceptsFullTexture: true,
+        acceptsDecals: true
+    },
+    viewDetection: {
+        zones: [
+            { x: [0.3, 0.7], y: [0.2, 0.8], view: "front" },
+            // Additional zones...
+        ]
+    }
+}
+```
+
+## Adding a New Model Type
+
+To add a new model type, use the `registerModelType` function:
+
+```javascript
+const newModelConfig = {
+    name: "New Model",
+    glbPath: "./models/new_model.glb",
+    views: {
+        // View configurations
+    },
+    // Additional settings
+};
+
+window.registerModelType('new_model_id', newModelConfig);
+```
+
+See the `registerNewModelExample` function in `main.js` for a complete example.
+
+## Key Components
+
+- `scene.js`: Handles 3D scene rendering and model loading
+- `texture-mapper.js`: Manages custom textures and decals for each model
+- `ui.js`: Provides user interface for model customization
+- `main.js`: Initializes the application and connects components
+
+## Design Considerations
+
+- Each model maintains its own state and customizations
+- Texture coordinates (UVs) are defined per view for precise mapping
+- Smart placement detection identifies appropriate views based on cursor position
+- Automatic scaling adjusts designs for different view sizes
+
+## Requirements
+
+- Modern web browser with WebGL support
+- Internet connection for AI-generated designs
 
 ## Project Overview
 

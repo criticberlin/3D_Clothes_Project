@@ -250,12 +250,8 @@ function setupModelSelector() {
                 const loadingOverlay = document.querySelector('.loading-overlay');
                 if (loadingOverlay) {
                     loadingOverlay.style.display = 'flex';
-                    loadingOverlay.querySelector('p').textContent = `Loading ${newModel === 'hoodie' ? 'hoodie' : 't-shirt'} model...`;
+                    loadingOverlay.querySelector('p').textContent = `Loading ${newModel} model...`;
                 }
-
-                // Preserve current textures when changing models
-                const currentFullDecal = state.fullDecal;
-                const fullTextureVisible = state.stylish;
 
                 // Update state
                 updateState({ currentModel: newModel });
@@ -263,15 +259,32 @@ function setupModelSelector() {
                 // Update title based on model
                 const titleElement = document.querySelector('.customizer-tabs h2');
                 if (titleElement) {
-                    titleElement.textContent = `Customize Your ${newModel === 'hoodie' ? 'Hoodie' : 'Shirt'}`;
+                    // Get the model display name from config if available
+                    let displayName = newModel === 'hoodie' ? 'Hoodie' : 'Shirt';
+                    if (window.modelConfig && window.modelConfig[newModel]) {
+                        displayName = window.modelConfig[newModel].name || displayName;
+                    }
+                    titleElement.textContent = `Customize Your ${displayName}`;
                 }
 
-                // Change the 3D model - this will now handle customization preservation
+                // Change the 3D model - this will handle customization preservation
                 changeModel(newModel)
                     .then(() => {
-                        // Toggle full texture state if it was active before
-                        if (fullTextureVisible) {
-                            toggleTexture('full', true);
+                        console.log(`Successfully switched to ${newModel} model`);
+                        
+                        // Make sure the texture mapper is aware of the model change
+                        if (window.setModelType) {
+                            window.setModelType(newModel);
+                        }
+                        
+                        // Update any model-specific UI elements
+                        const modelLabel = document.querySelector('.model-label');
+                        if (modelLabel) {
+                            let displayName = newModel === 'hoodie' ? 'Hoodie' : 'T-Shirt';
+                            if (window.modelConfig && window.modelConfig[newModel]) {
+                                displayName = window.modelConfig[newModel].name || displayName;
+                            }
+                            modelLabel.textContent = displayName;
                         }
 
                         // Hide loading overlay with a fade effect
@@ -791,4 +804,103 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
         console.log('WebGL support:', webGLStatus.message);
     }
-}); 
+});
+
+/**
+ * Example function to demonstrate how to register a new model type
+ * This can be called to add new models dynamically
+ */
+function registerNewModelExample() {
+    // Check if the model registration function is available
+    if (typeof window.registerModelType !== 'function') {
+        console.error('Model registration function not available');
+        return false;
+    }
+    
+    // Example configuration for an "oversized t-shirt" model
+    const oversizedConfig = {
+        name: "Oversized T-Shirt",
+        glbPath: "./models/oversized_tshirt.glb", // Path to the 3D model file
+        defaultColor: "#FFFFFF",
+        defaultScale: 1.2,
+        views: {
+            // Define the available views and their properties
+            "front": {
+                name: "Front",
+                bounds: { x: 0.15, y: 0.45, width: 0.7, height: 0.8 },
+                defaultScale: 1,
+                uvRect: { u1: 0.08, v1: 0.08, u2: 0.45, v2: 0.65 },
+                transformMatrix: {
+                    scale: { x: 1, y: 1 },
+                    rotation: 0,
+                    offset: { x: 0, y: 0 }
+                }
+            },
+            "back": {
+                name: "Back",
+                bounds: { x: 0.25, y: 0.52, width: 0.45, height: 0.45 },
+                defaultScale: 1,
+                uvRect: { u1: 0.55, v1: 0.08, u2: 0.92, v2: 0.65 },
+                transformMatrix: {
+                    scale: { x: 1, y: 1 },
+                    rotation: 0,
+                    offset: { x: 0, y: 0 }
+                }
+            },
+            "left_arm": {
+                name: "Left Sleeve",
+                bounds: { x: 0.16, y: 0.35, width: 0.16, height: 0.25 },
+                defaultScale: 0.3,
+                uvRect: { u1: 0.08, v1: 0.78, u2: 0.42, v2: 0.92 },
+                transformMatrix: {
+                    scale: { x: 1, y: 1 },
+                    rotation: 0,
+                    offset: { x: 0, y: 0 }
+                }
+            },
+            "right_arm": {
+                name: "Right Sleeve",
+                bounds: { x: 0.76, y: 0.35, width: 0.16, height: 0.25 },
+                defaultScale: 0.3,
+                uvRect: { u1: 0.58, v1: 0.78, u2: 0.92, v2: 0.92 },
+                transformMatrix: {
+                    scale: { x: 1, y: 1 },
+                    rotation: 0,
+                    offset: { x: 0, y: 0 }
+                }
+            }
+        },
+        textureSettings: {
+            canvasWidth: 1024,
+            canvasHeight: 1024,
+            baseColor: "#FFFFFF",
+            acceptsFullTexture: true,
+            acceptsDecals: true
+        },
+        viewDetection: {
+            zones: [
+                { x: [0.35, 0.65], y: [0.2, 0.8], view: "front" },
+                { x: [0.05, 0.3], y: [0.3, 0.6], view: "left_arm" },
+                { x: [0.7, 0.95], y: [0.3, 0.6], view: "right_arm" }
+            ]
+        }
+    };
+    
+    // Register the new model type
+    const success = window.registerModelType('oversized_tshirt', oversizedConfig);
+    
+    if (success) {
+        console.log('Successfully registered new model: Oversized T-Shirt');
+        
+        // Optionally refresh the UI to show the new model
+        setupModelSelector();
+        
+        return true;
+    } else {
+        console.error('Failed to register new model');
+        return false;
+    }
+}
+
+// Expose the function globally for demonstration purposes
+window.registerNewModelExample = registerNewModelExample; 

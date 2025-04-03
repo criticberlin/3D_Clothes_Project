@@ -107,6 +107,58 @@
 				}
 			})
 		</script>
+
+		<!-- Add script for decal lighting toggle -->
+		<script>
+			window.addEventListener('DOMContentLoaded', function () {
+				// Set up decal lighting toggle
+				const decalLightingToggle = document.getElementById('decal-lighting-toggle');
+				if (decalLightingToggle) {
+					// Update button appearance based on state
+					const updateToggleAppearance = (isEnabled) => {
+						console.log('Updating toggle appearance:', isEnabled ? 'enabled' : 'disabled');
+						if (isEnabled) {
+							decalLightingToggle.classList.add('active');
+							decalLightingToggle.setAttribute('title', 'Disable preview mode (return to editing)');
+							decalLightingToggle.innerHTML = '<i class="fas fa-eye"></i>';
+						} else {
+							decalLightingToggle.classList.remove('active');
+							decalLightingToggle.setAttribute('title', 'Enable preview mode with lighting effects');
+							decalLightingToggle.innerHTML = '<i class="far fa-eye"></i>';
+						}
+					};
+					
+					// Get initial state (default is false if not set)
+					const initialState = window.decalsAffectedByLighting || false;
+					
+					// Default state from window or false
+					updateToggleAppearance(initialState);
+					
+					// Add click handler to update button appearance
+					decalLightingToggle.addEventListener('click', function() {
+						// The actual toggling happens in the onclick attribute
+						// This is just to animate the button
+						this.classList.add('rotating');
+						setTimeout(() => this.classList.remove('rotating'), 300);
+						
+						// Update appearance after a short delay to match the backend state
+						setTimeout(() => {
+							const isEnabled = window.decalsAffectedByLighting;
+							updateToggleAppearance(isEnabled);
+						}, 100);
+					});
+					
+					// Expose a function to update the button state from JS
+					window.updateDecalLightingToggle = updateToggleAppearance;
+					
+					// Check state again after a delay to ensure scene.js has initialized
+					setTimeout(() => {
+						const currentState = window.decalsAffectedByLighting || false;
+						updateToggleAppearance(currentState);
+					}, 1000);
+				}
+			});
+		</script>
 	</head>
 	<body>
 		<!-- Landing Page -->
@@ -129,6 +181,17 @@
 				title="Toggle Light/Dark Theme"
 			>
 				<i class="fas fa-sun"></i>
+			</button>
+
+			<!-- Decal Lighting Toggle Button -->
+			<button
+				id="decal-lighting-toggle"
+				class="theme-toggle decal-lighting-toggle"
+				aria-label="Toggle Preview Mode"
+				title="Enable preview mode with lighting effects"
+				onclick="window.toggleDecalLighting()"
+			>
+				<i class="far fa-eye"></i>
 			</button>
 
 			<!-- Main Content Container -->
@@ -226,7 +289,7 @@
 						
 						<!-- AI Generator Button -->
 						<button class="floating-btn" id="ai-generator-btn">
-							<i class="fas fa-magic"></i>
+							<i class="fas fa-robot"></i>
 							<span>AI Design</span>
 						</button>
 						
@@ -502,11 +565,35 @@
 							</button>
 						</div>
 						<div class="panel-content">
+							<!-- Title section -->
 							<div class="section-title">
 								<h3>Create unique designs with AI</h3>
 								<p>Describe what you'd like to generate</p>
 							</div>
 
+							<!-- AI Preview contains the image -->
+							<div class="ai-preview-container">
+								<div class="ai-preview">
+									<div class="ai-result">
+										<div class="empty-state">
+											<i class="fas fa-magic"></i>
+											<p>Enter a prompt to generate a design</p>
+										</div>
+									</div>
+								</div>
+								
+								<!-- Action buttons under the preview (hidden until generation) -->
+								<div class="ai-preview-actions" style="display: none;">
+									<button class="button primary apply-button">
+										<i class="fas fa-check"></i> Apply to Shirt
+									</button>
+									<button class="button secondary download-button">
+										<i class="fas fa-download"></i> Download
+									</button>
+								</div>
+							</div>
+
+							<!-- Input section -->
 							<div class="ai-input-container">
 								<textarea
 									id="ai-prompt"
@@ -514,16 +601,16 @@
 									aria-label="AI Prompt"
 								></textarea>
 								<button id="ai-generate" class="button primary">
-									<i class="fas fa-wand-magic-sparkles"></i>
+									<i class="fas fa-brain"></i>
 									Generate
 								</button>
 							</div>
 
-							<div class="ai-preview">
-								<div class="empty-state">
-									<i class="fas fa-robot"></i>
-									<p>AI generated designs will appear here</p>
-								</div>
+							<div class="status-message" id="ai-status" style="display: none;">
+								<p>AI server is not running.</p>
+								<button class="button secondary" id="start-ai-server">
+									Learn how to start
+								</button>
 							</div>
 						</div>
 					</div>
@@ -569,7 +656,7 @@
 					<span>Color</span>
 				</button>
 				<button id="mobile-ai" class="action-btn">
-					<i class="fas fa-magic"></i>
+					<i class="fas fa-robot"></i>
 					<span>AI Design</span>
 				</button>
 				<button id="mobile-download" class="action-btn">
