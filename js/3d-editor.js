@@ -439,6 +439,16 @@ function onMouseUp(event) {
         window._visualUpdateTimeout = null;
     }
     
+    // Reset mouse down states when mouse is released
+    if (selectedObject && selectedObject.mouseDown) {
+        selectedObject.mouseDown.scale = false;
+        selectedObject.mouseDown.rotate = false;
+        selectedObject.mouseDown.duplicate = false;
+        selectedObject.mouseDown.delete = false;
+        selectedObject.mouseDown.layers = false;
+        updateShirt3DTexture();
+    }
+    
     // Force a final update
     requestAnimationFrame(() => {
         updateShirt3DTexture();
@@ -1766,7 +1776,8 @@ function drawSelectionOverlay(object) {
     const buttonPadding = 5;
     
     // Function to draw a control button with improved colors
-    const drawControlButton = (x, y, icon, color = '#2196F3', backgroundColor = '#FFFFFF') => {
+    const drawControlButton = (x, y, icon, color = '#000000', backgroundColor = '#FFFFFF', rotation = 0, content = null) => {
+        ctx.save();
         ctx.beginPath();
         ctx.arc(x, y, buttonRadius, 0, Math.PI * 2);
         ctx.fillStyle = backgroundColor;
@@ -1775,13 +1786,44 @@ function drawSelectionOverlay(object) {
         ctx.strokeStyle = color;
         ctx.stroke();
         
+        // Apply rotation if specified
+        if (rotation !== 0) {
+            ctx.translate(x, y);
+            ctx.rotate(rotation * Math.PI / 180);
+            ctx.translate(-x, -y);
+        }
+        
         // Draw icon with improved contrast
         ctx.fillStyle = color;
         ctx.font = '14px FontAwesome';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(icon, x, y);
+        ctx.fillText(content || icon, x, y);
+        ctx.restore();
     };
+
+    // Initialize icon pin states if they don't exist
+    if (!object.iconStates) {
+        object.iconStates = {
+            delete: false,
+            layers: false,
+            scale: false,
+            pin: false,
+            rotate: false,
+            duplicate: false
+        };
+    }
+    
+    // Track if mouse is being held down
+    if (!object.mouseDown) {
+        object.mouseDown = {
+            scale: false,
+            rotate: false,
+            duplicate: false,
+            delete: false,
+            layers: false
+        };
+    }
 
     // Check if we should show the layers button (when there are overlapping decals)
     const hasOverlappingDecals = canvasData.objects.some(otherObj => 
@@ -1789,51 +1831,117 @@ function drawSelectionOverlay(object) {
         isObjectsOverlapping(object, otherObj)
     );
     
-    // Draw delete button (bottom left) - Red color scheme
-    drawControlButton(
-        -borderWidth / 2 - buttonRadius - buttonPadding + borderOffsetX,
-        borderHeight / 2 + buttonRadius + buttonPadding + borderOffsetY,
-        '🗑',
-        '#FF4444',
-        '#FFF5F5'
-    );
+    // Special handler for trash icon with color effect
+    const drawTrashIcon = () => {
+        const x = -borderWidth / 2 - buttonRadius - buttonPadding + borderOffsetX;
+        const y = borderHeight / 2 + buttonRadius + buttonPadding + borderOffsetY;
+        
+        // Draw button background
+        ctx.beginPath();
+        ctx.arc(x, y, buttonRadius * 1.1, 0, Math.PI * 2);
+        ctx.fillStyle = object.mouseDown.delete ? '#c8c8c8' : '#E3F2FD';  // Dark black when clicked
+        ctx.fill();
+        
+        // Draw border
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#000000';
+        ctx.stroke();
+        
+        // Draw the trash can
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(1.2, 1.2);  // Make the icon 20% larger
+        
+        // Use black color for icon
+        const iconColor = '#000000';
+        
+        // Draw trash can handle
+        ctx.beginPath();
+        ctx.moveTo(-4, -5);
+        ctx.lineTo(4, -5);
+        ctx.lineWidth = 1.5;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = iconColor;
+        ctx.stroke();
+        
+        // Draw trash can lid
+        ctx.beginPath();
+        ctx.moveTo(-5, -3);
+        ctx.lineTo(5, -3);
+        ctx.lineTo(4, -1);
+        ctx.lineTo(-4, -1);
+        ctx.closePath();
+        ctx.fillStyle = iconColor;
+        ctx.fill();
+        
+        // Draw trash can body
+        ctx.beginPath();
+        ctx.moveTo(-4, -1);
+        ctx.lineTo(-4, 5);
+        ctx.lineTo(-3, 6);
+        ctx.lineTo(3, 6);
+        ctx.lineTo(4, 5);
+        ctx.lineTo(4, -1);
+        ctx.closePath();
+        ctx.fillStyle = iconColor;
+        ctx.fill();
+        
+        // Draw lines on trash can
+        ctx.beginPath();
+        ctx.moveTo(-2, 0);
+        ctx.lineTo(-2, 4.5);
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, 4.5);
+        ctx.moveTo(2, 0);
+        ctx.lineTo(2, 4.5);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        ctx.restore();
+    };
+    
+    // Draw delete button (bottom left) with custom approach
+    drawTrashIcon();
     
     // Draw layers button (top center, only if there are overlapping decals)
     if (hasOverlappingDecals) {
         drawControlButton(
             borderOffsetX,
             -borderHeight / 2 - buttonRadius - buttonPadding + borderOffsetY,
-            '⎘',
-            '#4CAF50',
-            '#F1F8E9'
+            '⿻',
+            '#000000',
+            object.mouseDown.layers ? '#c8c8c8' : '#E3F2FD'  // Dark black when held
         );
     }
     
-    // Draw resize button (bottom right) - Blue color scheme
+    // Draw resize button (bottom right)
     drawControlButton(
         borderWidth / 2 + buttonRadius + buttonPadding + borderOffsetX,
         borderHeight / 2 + buttonRadius + buttonPadding + borderOffsetY,
         '↔',
-        '#2196F3',
-        '#E3F2FD'
+        '#000000',
+        object.mouseDown.scale ? '#c8c8c8' : '#E3F2FD',  // Dark black when held
+        45
     );
     
-    // Draw pin button (top left) - Green color scheme when pinned
+    // Draw pin button (top left)
     drawControlButton(
         -borderWidth / 2 - buttonRadius - buttonPadding + borderOffsetX,
         -borderHeight / 2 - buttonRadius - buttonPadding + borderOffsetY,
-        object.isPinned ? '📌' : '📍',
-        object.isPinned ? '#4CAF50' : '#2196F3',
-        object.isPinned ? '#F1F8E9' : '#E3F2FD'
+        '📌',
+        '#000000',
+        object.iconStates.pin ? '#c8c8c8' : '#E3F2FD',  // Dark black when pinned
+        object.iconStates.pin ? 0 : 45
     );
     
-    // Draw rotate button (top right) - Purple color scheme
+    // Draw rotate button (top right)
     drawControlButton(
         borderWidth / 2 + buttonRadius + buttonPadding + borderOffsetX,
         -borderHeight / 2 - buttonRadius - buttonPadding + borderOffsetY,
-        '↻',
-        '#9C27B0',
-        '#F3E5F5'
+        '↺',
+        '#000000',
+        object.mouseDown.rotate ? '#c8c8c8' : '#E3F2FD'  // Dark black when held
     );
     
     // Draw duplicate button (bottom center)
@@ -1841,8 +1949,8 @@ function drawSelectionOverlay(object) {
         borderOffsetX,
         borderHeight / 2 + buttonRadius + buttonPadding + borderOffsetY,
         'x2',
-        '#FF9800',
-        '#FFF3E0'
+        '#000000',
+        object.mouseDown.duplicate ? '#c8c8c8' : '#E3F2FD'  // Dark black when held
     );
     
     // Restore context state
@@ -3265,10 +3373,30 @@ function handleEditableAreaClick(uv, intersection) {
         if (action) {
             switch (action) {
                 case 'delete':
+                    // Initialize mouse states if needed
+                    if (!selectedObject.mouseDown) {
+                        selectedObject.mouseDown = {};
+                    }
+                    
+                    // Set mouse down state for delete
+                    selectedObject.mouseDown.delete = true;
+                    updateShirt3DTexture();
+                    
+                    // Delete object on first click
                     deleteSelectedObject();
                     break;
                     
                 case 'scale':
+                    // Initialize mouse states if needed
+                    if (!selectedObject.mouseDown) {
+                        selectedObject.mouseDown = {};
+                    }
+                    
+                    // Set mouse down state for scale
+                    selectedObject.mouseDown.scale = true;
+                    updateShirt3DTexture();
+                    
+                    // Only allow scaling if the object isn't pinned
                     if (!selectedObject.isPinned) {
                         transformMode = 'scale';
                         document.body.style.cursor = cursors.nwseResize;
@@ -3278,8 +3406,18 @@ function handleEditableAreaClick(uv, intersection) {
                     break;
                     
                 case 'rotate':
-                    // Allow rotation for both decals and text objects
-                    if (selectedObject.isDecal || selectedObject.type === 'text') {
+                    // Initialize mouse states if needed
+                    if (!selectedObject.mouseDown) {
+                        selectedObject.mouseDown = {};
+                    }
+                    
+                    // Set mouse down state for rotate
+                    selectedObject.mouseDown.rotate = true;
+                    updateShirt3DTexture();
+                    
+                    // Allow rotation for both decals and text objects if not pinned
+                    if ((selectedObject.isDecal || selectedObject.type === 'text') && 
+                        !selectedObject.isPinned) {
                         transformMode = 'rotate';
                         document.body.style.cursor = cursors.rotate;
                         // Lock camera when rotating
@@ -3288,17 +3426,53 @@ function handleEditableAreaClick(uv, intersection) {
                     break;
                     
                 case 'pin':
-                    // Toggle pin state
-                    selectedObject.isPinned = !selectedObject.isPinned;
+                    // Toggle the icon state
+                    if (!selectedObject.iconStates) {
+                        selectedObject.iconStates = {};
+                    }
+                    
+                    // Toggle between active and inactive state
+                    selectedObject.iconStates.pin = !selectedObject.iconStates.pin;
+                    
+                    // Also toggle the object's overall pin state
+                    selectedObject.isPinned = selectedObject.iconStates.pin;
+                    
                     updateShirt3DTexture();
                     historyStack.saveState();
                     break;
                     
                 case 'duplicate':
+                    // Initialize mouse states if needed
+                    if (!selectedObject.mouseDown) {
+                        selectedObject.mouseDown = {};
+                    }
+                    
+                    // Set mouse down state for duplicate
+                    selectedObject.mouseDown.duplicate = true;
+                    updateShirt3DTexture();
+                    
+                    // Duplicate on first click
                     duplicateSelectedObject();
                     break;
                     
                 case 'layers':
+                    // Initialize mouse states if needed
+                    if (!selectedObject.mouseDown) {
+                        selectedObject.mouseDown = {};
+                    }
+                    
+                    // Set mouse down state for layers
+                    selectedObject.mouseDown.layers = true;
+                    updateShirt3DTexture();
+                    
+                    // Toggle the icon state
+                    if (!selectedObject.iconStates) {
+                        selectedObject.iconStates = {};
+                    }
+                    
+                    // Toggle between active and inactive state
+                    selectedObject.iconStates.layers = !selectedObject.iconStates.layers;
+                    
                     // Handle layers button - find overlapping objects
                     const overlappingObjects = canvasData.objects.filter(obj => 
                         obj !== selectedObject && isObjectsOverlapping(selectedObject, obj)
@@ -3594,7 +3768,8 @@ export function copySelectedObject() {
         originY: selectedObject.originY,
         targetView: selectedObject.targetView,
         filters: selectedObject.filters,
-        metadata: selectedObject.metadata
+        metadata: selectedObject.metadata,
+        view: selectedObject.view
     }));
 
     // For images, store the image source
@@ -3605,14 +3780,28 @@ export function copySelectedObject() {
     // For text, store the text content and font properties
     if (selectedObject.type === 'text') {
         clipboard.text = selectedObject.text;
-        clipboard.fontFamily = selectedObject.fontFamily;
+        clipboard.fontFamily = selectedObject.font || selectedObject.fontFamily;
         clipboard.fontSize = selectedObject.fontSize;
         clipboard.fontWeight = selectedObject.fontWeight;
         clipboard.fontStyle = selectedObject.fontStyle;
         clipboard.textAlign = selectedObject.textAlign;
-        clipboard.fill = selectedObject.fill;
+        clipboard.fill = selectedObject.color || selectedObject.fill;
+        clipboard.lineHeight = selectedObject.lineHeight;
+        clipboard.backgroundColor = selectedObject.backgroundColor;
+        clipboard.padding = selectedObject.padding;
+        clipboard.stroke = selectedObject.stroke;
+        clipboard.strokeWidth = selectedObject.strokeWidth;
+    }
+    
+    // For shapes, store the shape type and color properties
+    if (selectedObject.type === 'shape') {
+        clipboard.shapeType = selectedObject.shapeType;
+        clipboard.fill = selectedObject.color || selectedObject.fill;
+        clipboard.stroke = selectedObject.stroke;
+        clipboard.strokeWidth = selectedObject.strokeWidth;
     }
 
+    console.log('Clipboard content:', clipboard);
     return true;
 }
 
@@ -3627,6 +3816,8 @@ export function pasteObject() {
             resolve(null);
             return;
         }
+
+        console.log('Pasting from clipboard:', clipboard);
 
         // Determine which view to paste into
         const targetView = state.cameraView || 'front';
@@ -3652,44 +3843,120 @@ export function pasteObject() {
                 reject(error);
             });
         } else if (clipboard.type === 'text') {
-            // Create a new text object
-            addText(clipboard.text, {
-                left: clipboard.left + offset,
-                top: clipboard.top + offset,
-                width: clipboard.width,
-                height: clipboard.height,
-                angle: clipboard.angle,
-                fontFamily: clipboard.fontFamily,
-                fontSize: clipboard.fontSize,
-                fontWeight: clipboard.fontWeight,
-                fontStyle: clipboard.fontStyle,
-                textAlign: clipboard.textAlign,
-                fill: clipboard.fill,
-                view: targetView
-            }).then(newObject => {
-                resolve(newObject);
-            }).catch(error => {
-                showToast('Failed to paste text: ' + error.message);
-                reject(error);
-            });
+            // Check if this is a duplicate operation (not from a manual paste)
+            const isDuplicating = true; // Always use direct creation for text objects
+            
+            if (isDuplicating) {
+                // Create text object directly without opening the edit panel
+                const textObj = {
+                    id: 'text_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+                    type: 'text',
+                    text: clipboard.text || '',
+                    font: clipboard.fontFamily || 'Arial',
+                    fontSize: clipboard.fontSize || 30,
+                    color: clipboard.fill || '#000000',
+                    left: clipboard.left + offset,
+                    top: clipboard.top + offset,
+                    width: clipboard.width,
+                    height: clipboard.height,
+                    angle: clipboard.angle,
+                    view: targetView,
+                    isDecal: true,
+                    textAlign: clipboard.textAlign || 'center',
+                    lineHeight: clipboard.lineHeight || 1.2,
+                    backgroundColor: clipboard.backgroundColor || 'transparent',
+                    padding: clipboard.padding || 0,
+                    stroke: clipboard.stroke || null,
+                    strokeWidth: clipboard.strokeWidth || 0
+                };
+                
+                console.log('Creating new text object:', textObj);
+                
+                // Add to canvas
+                addObject(textObj);
+                
+                // Save to panel settings
+                addPanelItem('text', textObj);
+                
+                // Update the texture
+                updateShirt3DTexture();
+                
+                resolve(textObj);
+            } else {
+                // Regular paste - use the normal flow with editing panel
+                addText(clipboard.text, {
+                    left: clipboard.left + offset,
+                    top: clipboard.top + offset,
+                    width: clipboard.width,
+                    height: clipboard.height,
+                    angle: clipboard.angle,
+                    fontFamily: clipboard.fontFamily,
+                    fontSize: clipboard.fontSize,
+                    fontWeight: clipboard.fontWeight,
+                    fontStyle: clipboard.fontStyle,
+                    textAlign: clipboard.textAlign,
+                    fill: clipboard.fill,
+                    view: targetView
+                }).then(newObject => {
+                    resolve(newObject);
+                }).catch(error => {
+                    showToast('Failed to paste text: ' + error.message);
+                    reject(error);
+                });
+            }
         } else if (clipboard.type === 'shape') {
-            // Create a new shape
-            addShape(clipboard.shapeType, {
-                left: clipboard.left + offset,
-                top: clipboard.top + offset,
-                width: clipboard.width,
-                height: clipboard.height,
-                angle: clipboard.angle,
-                fill: clipboard.fill,
-                stroke: clipboard.stroke,
-                strokeWidth: clipboard.strokeWidth,
-                view: targetView
-            }).then(newObject => {
-                resolve(newObject);
-            }).catch(error => {
-                showToast('Failed to paste shape: ' + error.message);
-                reject(error);
-            });
+            // Check if this is a duplicate operation (not from a manual paste)
+            const isDuplicating = true; // Always use direct creation for shape objects
+            
+            if (isDuplicating) {
+                // Create shape object directly without opening the edit panel
+                const shapeObj = {
+                    id: 'shape_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+                    type: 'shape',
+                    shapeType: clipboard.shapeType,
+                    width: clipboard.width,
+                    height: clipboard.height,
+                    color: clipboard.fill,
+                    left: clipboard.left + offset,
+                    top: clipboard.top + offset,
+                    angle: clipboard.angle,
+                    view: targetView,
+                    isDecal: true,
+                    stroke: clipboard.stroke,
+                    strokeWidth: clipboard.strokeWidth
+                };
+                
+                console.log('Creating new shape object:', shapeObj);
+                
+                // Add to canvas
+                addObject(shapeObj);
+                
+                // Save to panel settings
+                addPanelItem('shape', shapeObj);
+                
+                // Update texture
+                updateShirt3DTexture();
+                
+                resolve(shapeObj);
+            } else {
+                // Regular paste - use the normal flow with editing panel
+                addShape(clipboard.shapeType, {
+                    left: clipboard.left + offset,
+                    top: clipboard.top + offset,
+                    width: clipboard.width,
+                    height: clipboard.height,
+                    angle: clipboard.angle,
+                    fill: clipboard.fill,
+                    stroke: clipboard.stroke,
+                    strokeWidth: clipboard.strokeWidth,
+                    view: targetView
+                }).then(newObject => {
+                    resolve(newObject);
+                }).catch(error => {
+                    showToast('Failed to paste shape: ' + error.message);
+                    reject(error);
+                });
+            }
         } else {
             showToast('Unsupported object type for paste');
             resolve(null);
@@ -4016,27 +4283,90 @@ function onDoubleClick(event) {
         
         if (textEditOverlay) {
             const textInput = textEditOverlay.querySelector('.text-edit-input');
-            const fontSelect = textEditOverlay.querySelector('.font-select');
+            const fontSelect = textEditOverlay.querySelector('#font-select');
             const colorOptions = textEditOverlay.querySelectorAll('.color-option');
             const saveBtn = textEditOverlay.querySelector('.text-edit-save');
             const cancelBtn = textEditOverlay.querySelector('.text-edit-cancel');
             const closeBtn = textEditOverlay.querySelector('.panel-close');
+            const errorMsg = document.createElement('div');
+            
+            // Create error message element
+            errorMsg.className = 'text-edit-error';
+            errorMsg.style.color = 'red';
+            errorMsg.style.marginTop = '8px';
+            errorMsg.style.fontSize = '14px';
+            errorMsg.style.display = 'none';
+            errorMsg.textContent = 'Text cannot be empty!';
+            
+            // Insert error message before buttons
+            const buttonsContainer = textEditOverlay.querySelector('.text-edit-buttons');
+            buttonsContainer.parentNode.insertBefore(errorMsg, buttonsContainer);
             
             // Store original values
             const originalText = clickedObject.text;
             const originalColor = clickedObject.color;
             const originalFont = clickedObject.font;
+            const originalWidth = clickedObject.width;
+            const originalHeight = clickedObject.height;
+            const originalLeft = clickedObject.left;
+            const originalTop = clickedObject.top;
+            const originalCenter = {
+                x: originalLeft + originalWidth / 2,
+                y: originalTop + originalHeight / 2
+            };
             
             // Handle text changes
             textInput.addEventListener('input', () => {
-                clickedObject.text = textInput.value;
+                const newText = textInput.value;
+                clickedObject.text = newText;
+                
+                // Hide error message when user is typing
+                errorMsg.style.display = 'none';
+                
+                // Calculate new text width based on current text
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.font = `bold ${clickedObject.fontSize}px "${clickedObject.font || 'Arial'}"`;
+                const textMetrics = tempCtx.measureText(newText);
+                
+                // Store new dimensions
+                const newWidth = newText ? textMetrics.width : originalWidth;
+                const newHeight = clickedObject.fontSize * 1.2;
+                
+                // Keep the center position stable
+                clickedObject.left = originalCenter.x - newWidth / 2;
+                clickedObject.top = originalCenter.y - newHeight / 2;
+                clickedObject.width = newWidth;
+                clickedObject.height = newHeight;
+                
+                // Update the texture and transform controls
                 updateShirt3DTexture();
+                if (transformControls && transformControls.visible) {
+                    updateTransformControls();
+                }
             });
             
             // Handle font changes
             fontSelect.addEventListener('change', () => {
                 clickedObject.font = fontSelect.value;
+                
+                // Recalculate text width after font change
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.font = `bold ${clickedObject.fontSize}px "${clickedObject.font}"`;
+                const textMetrics = tempCtx.measureText(clickedObject.text);
+                
+                // Store new dimensions
+                const newWidth = textMetrics.width;
+                
+                // Keep the center position stable
+                clickedObject.left = originalCenter.x - newWidth / 2;
+                clickedObject.width = newWidth;
+                
                 updateShirt3DTexture();
+                if (transformControls && transformControls.visible) {
+                    updateTransformControls();
+                }
             });
             
             // Handle color changes
@@ -4051,23 +4381,50 @@ function onDoubleClick(event) {
             
             // Handle save
             saveBtn.addEventListener('click', () => {
+                const trimmedText = textInput.value.trim();
+                
+                // Check if text is empty
+                if (!trimmedText) {
+                    // Show error message
+                    errorMsg.style.display = 'block';
+                    textInput.focus();
+                    return;
+                }
+                
+                // Apply the trimmed text
+                clickedObject.text = trimmedText;
+                
+                // Final update and cleanup
+                updateShirt3DTexture();
                 textEditOverlay.remove();
             });
             
             // Handle cancel
             cancelBtn.addEventListener('click', () => {
+                // Restore original values
                 clickedObject.text = originalText;
                 clickedObject.color = originalColor;
                 clickedObject.font = originalFont;
+                clickedObject.width = originalWidth;
+                clickedObject.height = originalHeight;
+                clickedObject.left = originalLeft;
+                clickedObject.top = originalTop;
+                
                 updateShirt3DTexture();
                 textEditOverlay.remove();
             });
             
             // Handle close button
             closeBtn.addEventListener('click', () => {
+                // Restore original values
                 clickedObject.text = originalText;
                 clickedObject.color = originalColor;
                 clickedObject.font = originalFont;
+                clickedObject.width = originalWidth;
+                clickedObject.height = originalHeight;
+                clickedObject.left = originalLeft;
+                clickedObject.top = originalTop;
+                
                 updateShirt3DTexture();
                 textEditOverlay.remove();
             });
@@ -4075,17 +4432,135 @@ function onDoubleClick(event) {
             // Handle escape key
             const handleEscape = (e) => {
                 if (e.key === 'Escape') {
+                    // Restore original values
                     clickedObject.text = originalText;
                     clickedObject.color = originalColor;
                     clickedObject.font = originalFont;
+                    clickedObject.width = originalWidth;
+                    clickedObject.height = originalHeight;
+                    clickedObject.left = originalLeft;
+                    clickedObject.top = originalTop;
+                    
                     updateShirt3DTexture();
                     textEditOverlay.remove();
                 }
             };
             document.addEventListener('keydown', handleEscape);
             
+            // Handle Enter key
+            textInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    
+                    const trimmedText = textInput.value.trim();
+                    // Check if text is empty
+                    if (!trimmedText) {
+                        // Show error message
+                        errorMsg.style.display = 'block';
+                        return;
+                    }
+                    
+                    // Apply the trimmed text
+                    clickedObject.text = trimmedText;
+                    
+                    // Final update and cleanup
+                    updateShirt3DTexture();
+                    textEditOverlay.remove();
+                }
+            });
+            
             // Clean up event listener when panel is removed
             textEditOverlay.addEventListener('remove', () => {
+                document.removeEventListener('keydown', handleEscape);
+            });
+        }
+    } else if (clickedObject && clickedObject.type === 'shape') {
+        // Create shape edit panel for the clicked shape
+        const shapeEditOverlay = createShapeEditOverlay(
+            {
+                type: clickedObject.shapeType,
+                color: clickedObject.color
+            },
+            null
+        );
+        
+        if (shapeEditOverlay) {
+            // Add active class to show the panel
+            shapeEditOverlay.classList.add('active');
+            
+            const shapeOptions = shapeEditOverlay.querySelectorAll('.shape-option');
+            const colorOptions = shapeEditOverlay.querySelectorAll('.color-option');
+            const saveBtn = shapeEditOverlay.querySelector('.text-edit-save');
+            const cancelBtn = shapeEditOverlay.querySelector('.text-edit-cancel');
+            const closeBtn = shapeEditOverlay.querySelector('.panel-close');
+            
+            // Store original values
+            const originalShapeType = clickedObject.shapeType;
+            const originalColor = clickedObject.color;
+            
+            // Set initial active states
+            shapeOptions.forEach(option => {
+                if (option.dataset.shape === clickedObject.shapeType) {
+                    option.classList.add('active');
+                }
+                // Add click handler
+                option.addEventListener('click', () => {
+                    shapeOptions.forEach(opt => opt.classList.remove('active'));
+                    option.classList.add('active');
+                    clickedObject.shapeType = option.dataset.shape;
+                    updateShirt3DTexture();
+                });
+            });
+            
+            // Set initial active color
+            colorOptions.forEach(option => {
+                if (option.dataset.color === clickedObject.color) {
+                    option.classList.add('active');
+                }
+                // Add click handler
+                option.addEventListener('click', () => {
+                    colorOptions.forEach(opt => opt.classList.remove('active'));
+                    option.classList.add('active');
+                    clickedObject.color = option.dataset.color;
+                    updateShirt3DTexture();
+                });
+            });
+            
+            // Handle save
+            saveBtn.addEventListener('click', () => {
+                shapeEditOverlay.remove();
+                saveCurrentState();
+            });
+            
+            // Handle cancel
+            cancelBtn.addEventListener('click', () => {
+                clickedObject.shapeType = originalShapeType;
+                clickedObject.color = originalColor;
+                updateShirt3DTexture();
+                shapeEditOverlay.remove();
+            });
+            
+            // Handle close button
+            closeBtn.addEventListener('click', () => {
+                clickedObject.shapeType = originalShapeType;
+                clickedObject.color = originalColor;
+                updateShirt3DTexture();
+                shapeEditOverlay.remove();
+            });
+            
+            // Handle escape key
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') {
+                    clickedObject.shapeType = originalShapeType;
+                    clickedObject.color = originalColor;
+                    updateShirt3DTexture();
+                    shapeEditOverlay.remove();
+                }
+            };
+            document.addEventListener('keydown', handleEscape);
+            
+            // Clean up event listener when panel is removed
+            shapeEditOverlay.addEventListener('remove', () => {
                 document.removeEventListener('keydown', handleEscape);
             });
         }
