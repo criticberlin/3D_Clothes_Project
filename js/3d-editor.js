@@ -591,7 +591,48 @@ function detectTransformHandleClick() {
     // Size and positioning for control buttons - MUST MATCH drawSelectionOverlay
     const buttonRadius = 12;
     const buttonPadding = 5;
-    const hitRadius = buttonRadius * 1.5; // Slightly larger hit area for better usability
+    const hitRadius = buttonRadius * 1.5;
+    
+    // Get current view's UV boundaries from config for constraining controls
+    const viewConfig = modelConfig[state.currentModel].views[state.cameraView];
+    const constrainControls = viewConfig && viewConfig.uvRect;
+    
+    // Calculate boundaries in canvas space
+    let minX, maxX, minY, maxY;
+    
+    if (constrainControls) {
+        const uvRect = viewConfig.uvRect;
+        minX = Math.min(uvRect.u1, uvRect.u2) * canvasData.width;
+        maxX = Math.max(uvRect.u1, uvRect.u2) * canvasData.width;
+        minY = Math.min(uvRect.v1, uvRect.v2) * canvasData.height;
+        maxY = Math.max(uvRect.v1, uvRect.v2) * canvasData.height;
+        
+        // Convert boundaries to object-relative coordinates
+        minX = minX - (object.left + object.width / 2);
+        maxX = maxX - (object.left + object.width / 2);
+        minY = minY - (object.top + object.height / 2);
+        maxY = maxY - (object.top + object.height / 2);
+    }
+    
+    // Function to constrain button position within boundaries
+    const constrainButtonPosition = (x, y) => {
+        if (!constrainControls) return { x, y };
+        
+        // Add a small margin to keep buttons fully visible
+        const margin = buttonRadius + 2;
+        
+        // Constrain X
+        let constrainedX = x;
+        if (x < minX + margin) constrainedX = minX + margin;
+        if (x > maxX - margin) constrainedX = maxX - margin;
+        
+        // Constrain Y
+        let constrainedY = y;
+        if (y < minY + margin) constrainedY = minY + margin;
+        if (y > maxY - margin) constrainedY = maxY - margin;
+        
+        return { x: constrainedX, y: constrainedY };
+    };
     
     // Define control button positions - MUST MATCH drawSelectionOverlay
     const buttons = [
@@ -643,10 +684,13 @@ function detectTransformHandleClick() {
         if (button.action === 'layers' && !button.condition()) {
             continue;
         }
+        
+        // Constrain button position to within editable area
+        const constrainedPos = constrainButtonPosition(button.x, button.y);
 
         const distanceToButton = Math.sqrt(
-            Math.pow(relX - button.x, 2) +
-            Math.pow(relY - button.y, 2)
+            Math.pow(relX - constrainedPos.x, 2) +
+            Math.pow(relY - constrainedPos.y, 2)
         );
 
         if (distanceToButton <= hitRadius) {
@@ -1775,11 +1819,55 @@ function drawSelectionOverlay(object) {
     const buttonRadius = 12;
     const buttonPadding = 5;
     
+    // Get current view's UV boundaries from config for constraining controls
+    const viewConfig = modelConfig[state.currentModel].views[state.cameraView];
+    const constrainControls = viewConfig && viewConfig.uvRect;
+    
+    // Calculate boundaries in canvas space
+    let minX, maxX, minY, maxY;
+    
+    if (constrainControls) {
+        const uvRect = viewConfig.uvRect;
+        minX = Math.min(uvRect.u1, uvRect.u2) * canvasData.width;
+        maxX = Math.max(uvRect.u1, uvRect.u2) * canvasData.width;
+        minY = Math.min(uvRect.v1, uvRect.v2) * canvasData.height;
+        maxY = Math.max(uvRect.v1, uvRect.v2) * canvasData.height;
+        
+        // Convert boundaries to object-relative coordinates
+        minX = minX - (object.left + object.width / 2);
+        maxX = maxX - (object.left + object.width / 2);
+        minY = minY - (object.top + object.height / 2);
+        maxY = maxY - (object.top + object.height / 2);
+    }
+    
+    // Function to constrain button position within boundaries
+    const constrainButtonPosition = (x, y) => {
+        if (!constrainControls) return { x, y };
+        
+        // Add a small margin to keep buttons fully visible
+        const margin = buttonRadius + 2;
+        
+        // Constrain X
+        let constrainedX = x;
+        if (x < minX + margin) constrainedX = minX + margin;
+        if (x > maxX - margin) constrainedX = maxX - margin;
+        
+        // Constrain Y
+        let constrainedY = y;
+        if (y < minY + margin) constrainedY = minY + margin;
+        if (y > maxY - margin) constrainedY = maxY - margin;
+        
+        return { x: constrainedX, y: constrainedY };
+    };
+    
     // Function to draw a control button with improved colors
     const drawControlButton = (x, y, icon, color = '#000000', backgroundColor = '#FFFFFF', rotation = 0, content = null) => {
+        // Constrain button within editable area
+        const constrainedPos = constrainButtonPosition(x, y);
+        
         ctx.save();
         ctx.beginPath();
-        ctx.arc(x, y, buttonRadius, 0, Math.PI * 2);
+        ctx.arc(constrainedPos.x, constrainedPos.y, buttonRadius, 0, Math.PI * 2);
         ctx.fillStyle = backgroundColor;
         ctx.fill();
         ctx.lineWidth = 2;
@@ -1788,9 +1876,9 @@ function drawSelectionOverlay(object) {
         
         // Apply rotation if specified
         if (rotation !== 0) {
-            ctx.translate(x, y);
+            ctx.translate(constrainedPos.x, constrainedPos.y);
             ctx.rotate(rotation * Math.PI / 180);
-            ctx.translate(-x, -y);
+            ctx.translate(-constrainedPos.x, -constrainedPos.y);
         }
         
         // Draw icon with improved contrast
@@ -1798,7 +1886,7 @@ function drawSelectionOverlay(object) {
         ctx.font = '14px FontAwesome';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(content || icon, x, y);
+        ctx.fillText(content || icon, constrainedPos.x, constrainedPos.y);
         ctx.restore();
     };
 
@@ -1836,9 +1924,12 @@ function drawSelectionOverlay(object) {
         const x = -borderWidth / 2 - buttonRadius - buttonPadding + borderOffsetX;
         const y = borderHeight / 2 + buttonRadius + buttonPadding + borderOffsetY;
         
+        // Constrain within boundaries
+        const constrainedPos = constrainButtonPosition(x, y);
+        
         // Draw button background
         ctx.beginPath();
-        ctx.arc(x, y, buttonRadius * 1.1, 0, Math.PI * 2);
+        ctx.arc(constrainedPos.x, constrainedPos.y, buttonRadius * 1.1, 0, Math.PI * 2);
         ctx.fillStyle = object.mouseDown.delete ? '#c8c8c8' : '#E3F2FD';  // Dark black when clicked
         ctx.fill();
         
@@ -1849,7 +1940,7 @@ function drawSelectionOverlay(object) {
         
         // Draw the trash can
         ctx.save();
-        ctx.translate(x, y);
+        ctx.translate(constrainedPos.x, constrainedPos.y);
         ctx.scale(1.2, 1.2);  // Make the icon 20% larger
         
         // Use black color for icon
@@ -3051,21 +3142,23 @@ function highlightEditableArea(area) {
     const width = (u2 - u1) * canvasData.width;
     const height = (v2 - v1) * canvasData.height;
 
-    // Draw a visible highlight for the active editable area
+    // Draw a dark overlay over the entire canvas
     ctx.save();
-
-    // Create highlight effect with animated dash
-    ctx.strokeStyle = 'rgb(64, 127, 255)'; // Fixed bright blue
-    ctx.lineWidth = 2;
-    ctx.setLineDash([5, 5]);
-    ctx.lineDashOffset = (Date.now() / 100) % 10;
     
-    // Use composite operation that ensures the line is always visible
+    // Use a semi-transparent black overlay to darken non-editable areas
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.globalCompositeOperation = 'source-over';
     
-    // Draw the rectangle
-    ctx.strokeRect(x, y, width, height);
-
+    // Draw four rectangles to cover everything except the editable area
+    // Top rectangle
+    ctx.fillRect(0, 0, canvasData.width, y);
+    // Left rectangle
+    ctx.fillRect(0, y, x, height);
+    // Right rectangle
+    ctx.fillRect(x + width, y, canvasData.width - (x + width), height);
+    // Bottom rectangle
+    ctx.fillRect(0, y + height, canvasData.width, canvasData.height - (y + height));
+    
     ctx.restore();
 }
 
@@ -3203,13 +3296,13 @@ export function setTransformMode(mode) {
  * This can help users understand where they can click to edit
  */
 export function showEditableAreas(show = true) {
-    // Update state
-    state.showEditableAreas = show;
+    // Update state but always set to false to prevent blue boundaries
+    state.showEditableAreas = false;
 
     // Redraw
     updateShirt3DTexture();
 
-    return show;
+    return false;
 }
 
 /**
@@ -3217,41 +3310,8 @@ export function showEditableAreas(show = true) {
  * @param {CanvasRenderingContext2D} ctx - The canvas context
  */
 function drawEditableAreas(ctx) {
-    if (!canvasData || !ctx) return;
-
-    const views = modelConfig[state.currentModel].views;
-    if (!views) return;
-
-    // Draw each view's editable area
-    for (const [viewName, viewConfig] of Object.entries(views)) {
-        const { uvRect } = viewConfig;
-
-        // Convert UV to pixel coordinates
-        const x = uvRect.u1 * canvasData.width;
-        const y = uvRect.v1 * canvasData.height;
-        const width = (uvRect.u2 - uvRect.u1) * canvasData.width;
-        const height = (uvRect.v2 - uvRect.v1) * canvasData.height;
-
-        // Draw a subtle outline
-        ctx.save();
-        
-        // Set up the style for the border
-        ctx.strokeStyle = 'rgba(33, 150, 243, 0.5)'; // Semi-transparent blue
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
-        ctx.lineDashOffset = (Date.now() / 100) % 10; // Animated dash
-        
-        // Draw the rectangle
-        ctx.strokeRect(x, y, width, height);
-        
-        // Add a subtle highlight
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([]);
-        ctx.strokeRect(x - 1, y - 1, width + 2, height + 2);
-        
-        ctx.restore();
-    }
+    // Disabled to prevent blue boundaries from being drawn
+    return;
 }
 
 /**
