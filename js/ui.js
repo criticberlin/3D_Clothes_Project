@@ -611,6 +611,9 @@ function setupPanelSpecificHandlers() {
         photoButton.addEventListener('click', () => {
             console.log('Photo panel opened');
             
+            // Set up tabs functionality
+            setupPhotoUploadTabs();
+            
             // Setup file upload functionality
             const uploadButton = document.querySelector('#photo-panel .upload-button');
             const fileInput = document.getElementById('file-upload');
@@ -625,55 +628,9 @@ function setupPanelSpecificHandlers() {
                     fileInput.click();
                 });
                 
-                // Setup the file input change event to match the right-side button functionality
+                // Setup the file input change event
                 fileInput.onchange = (e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                            // Use the existing showViewSelectionModal function instead of creating a new modal
-                            showViewSelectionModal(event.target.result, (selectedView) => {
-                                if (selectedView) {
-                                    // Import and use the 3D editor to:
-                                    // 1. Change to selected view
-                                    // 2. Add the image to that view
-                                    import("./3d-editor.js")
-                                        .then((editor) => {
-                                            // First change the camera view
-                                            import("./scene.js")
-                                                .then((scene) => {
-                                                    if (scene.changeCameraView) {
-                                                        scene.changeCameraView(selectedView);
-                                                    }
-                                                    
-                                                    // Then add the image to the selected view
-                                                    if (editor.addImage) {
-                                                        editor.addImage(event.target.result, {
-                                                            view: selectedView,
-                                                            center: true,
-                                                            isDecal: true
-                                                        }).then(() => {
-                                                            showToast(`Image added to ${selectedView} view`);
-                                                            
-                                                            // Close the panel
-                                                            const panel = document.getElementById('photo-panel');
-                                                            if (panel) {
-                                                                panel.classList.remove('active');
-                                                                photoButton.classList.remove('active');
-                                                            }
-                                                        });
-                                                    }
-                                                });
-                                        })
-                                        .catch(error => {
-                                            console.error("Error adding image:", error);
-                                            showToast("Error adding image");
-                                        });
-                                }
-                            }, 'Choose Image Placement');
-                        };
-                        reader.readAsDataURL(file);
-                    }
+                    handleImageUpload(e.target.files[0]);
                 };
             }
             
@@ -694,12 +651,16 @@ function setupPanelSpecificHandlers() {
                     dragArea.classList.remove('active');
                     
                     if (e.dataTransfer.files.length) {
-                        fileInput.files = e.dataTransfer.files;
-                        const event = new Event('change');
-                        fileInput.dispatchEvent(event);
+                        handleImageUpload(e.dataTransfer.files[0]);
                     }
                 });
             }
+            
+            // Setup URL image fetching
+            setupUrlImageFetcher();
+            
+            // Setup camera functionality
+            setupCameraFunctionality();
         });
     }
     
@@ -715,19 +676,583 @@ function setupPanelSpecificHandlers() {
             e.stopPropagation();
             console.log('Text button clicked - calling addText directly');
             
-            // Import and use the 3d-editor module directly
+            // Get the text panel
+            const textPanel = document.getElementById('text-panel');
+            if (textPanel) {
+                // Clear any existing text
+                const textInput = textPanel.querySelector('.text-edit-input');
+                if (textInput) {
+                    textInput.value = '';
+                }
+                
+                // Show the panel
+                textPanel.classList.add('active');
+                newTextButton.classList.add('active');
+                
+                // Focus the textarea after panel is visible
+                setTimeout(() => {
+                    if (textInput) {
+                        textInput.focus();
+                        
+                        // Add keyboard event listeners for better UX
+                        textInput.addEventListener('keydown', (e) => {
+                            // Submit on Ctrl+Enter or Cmd+Enter
+                            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                                e.preventDefault();
+                                newSaveButton.click();
+                            }
+                            
+                            // Cancel on Escape
+                            if (e.key === 'Escape') {
+                                e.preventDefault();
+                                textPanel.classList.remove('active');
+                                newTextButton.classList.remove('active');
+                            }
+                        });
+                    }
+                }, 300);
+                
+                // Handle the save button click
+                const saveButton = textPanel.querySelector('.text-edit-save');
+                if (saveButton) {
+                    // Remove existing event listeners by cloning
+                    const newSaveButton = saveButton.cloneNode(true);
+                    saveButton.parentNode.replaceChild(newSaveButton, saveButton);
+                    
+                    newSaveButton.addEventListener('click', () => {
+                        const textValue = textInput.value.trim();
+                        if (textValue) {
+                            // Get selected color
+                            const activeColor = textPanel.querySelector('.color-option.active');
+                            const color = activeColor ? activeColor.getAttribute('data-color') : '#000000';
+                            
+                            // Get selected font
+                            const fontSelect = textPanel.querySelector('#font-select');
+                            const font = fontSelect ? fontSelect.value : 'Arial';
+                            
+                            // Get shadow settings
+                            let shadowEnabled = false;
+                            let shadowConfig = null;
+                            
+                            if (window.getShadowConfig) {
+                                const config = window.getShadowConfig();
+                                shadowEnabled = config.enabled;
+                                shadowConfig = config.config;
+                            }
+                            
+                            // Close the panel
+                            textPanel.classList.remove('active');
+                            newTextButton.classList.remove('active');
+                            
+                            // Generate a preview image of the text
+                            const previewCanvas = document.createElement('canvas');
+                            previewCanvas.width = 400;
+                            previewCanvas.height = 100;
+                            const ctx = previewCanvas.getContext('2d');
+                            
+                            // Draw background
+                            ctx.fillStyle = '#f5f5f5';
+                            ctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+                            
+                            // Draw text
+                            ctx.font = `30px ${font}`;
+                            ctx.fillStyle = color;
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillText(textValue, previewCanvas.width / 2, previewCanvas.height / 2);
+                            
+                            // Get data URL for preview
+                            const previewImage = previewCanvas.toDataURL('image/png');
+                            
+                            // Show view selection modal
+                            showViewSelectionModal(previewImage, (selectedView) => {
+                                if (selectedView) {
+                                    // Import 3D editor module to add the text
+                                    import('./3d-editor.js')
+                                        .then((editor) => {
+                                            // Import scene module to change the camera view
+                                            import('./scene.js')
+                                                .then((scene) => {
+                                                    // Change camera view to selected view
+                                                    if (scene.changeCameraView) {
+                                                        scene.changeCameraView(selectedView);
+                                                    }
+                                                    
+                                                    // Get the model config
+                                                    const modelConfig = editor.getEditorState().modelConfig;
+                                                    const state = editor.getEditorState().state;
+                                                    const canvasData = editor.getEditorState().canvasData;
+                                                    
+                                                    // Calculate the center of the editable area
+                                                    const viewConfig = modelConfig[state.currentModel].views[selectedView];
+                                                    const centerX = (viewConfig.uvRect.u1 + viewConfig.uvRect.u2) / 2 * canvasData.width;
+                                                    const centerY = (viewConfig.uvRect.v1 + viewConfig.uvRect.v2) / 2 * canvasData.height;
+                                                    
+                                                    // Set font size
+                                                    const fontSize = 80; // Increased from 50 to 80
+                                                    
+                                                    // Measure text dimensions
+                                                    const tempCanvas = document.createElement('canvas');
+                                                    const tempCtx = tempCanvas.getContext('2d');
+                                                    tempCtx.font = `bold ${fontSize}px "${font}"`;
+                                                    const textMetrics = tempCtx.measureText(textValue);
+                                                    
+                                                    // Calculate text width and height
+                                                    const textWidth = textMetrics.width;
+                                                    const textHeight = fontSize * 1.2;
+                                                    
+                                                    // Create text object
+                                                    const textObj = {
+                                                        id: 'text_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+                                                        type: 'text',
+                                                        text: textValue,
+                                                        font: font,
+                                                        fontSize: fontSize,
+                                                        color: color,
+                                                        left: centerX - textWidth/2,
+                                                        top: centerY - textHeight/2,
+                                                        width: textWidth,
+                                                        height: textHeight,
+                                                        angle: 0,
+                                                        view: selectedView,
+                                                        isDecal: true,
+                                                        textAlign: 'center',
+                                                        lineHeight: 1.2,
+                                                        backgroundColor: 'transparent',
+                                                        padding: 0,
+                                                        stroke: true,
+                                                        strokeWidth: 0,
+                                                        shadow: shadowEnabled,
+                                                        shadowConfig: shadowConfig
+                                                    };
+                                                    
+                                                    // Add the text object to canvas
+                                                    editor.addObject(textObj);
+                                                    
+                                                    // Add to panel items if function is available
+                                                    if (typeof editor.addPanelItem === 'function') {
+                                                        editor.addPanelItem('text', textObj);
+                                                    }
+                                                    
+                                                    // Update the texture
+                                                    editor.updateShirt3DTexture();
+                                                    
+                                                    // Show success message
+                                                    showToast(`Text added to ${selectedView} view`);
+                                                });
+                                        })
+                                        .catch((error) => {
+                                            console.error('Error adding text to shirt:', error);
+                                            showToast('Failed to add text');
+                                        });
+                                }
+                            }, 'Choose Text Placement');
+                        } else {
+                            showToast('Please enter some text');
+                        }
+                    });
+                }
+                
+                // Handle the cancel button click
+                const cancelButton = textPanel.querySelector('.text-edit-cancel');
+                if (cancelButton) {
+                    // Remove existing event listeners by cloning
+                    const newCancelButton = cancelButton.cloneNode(true);
+                    cancelButton.parentNode.replaceChild(newCancelButton, cancelButton);
+                    
+                    newCancelButton.addEventListener('click', () => {
+                        // Close the panel
+                        textPanel.classList.remove('active');
+                        newTextButton.classList.remove('active');
+                    });
+                }
+                
+                // Handle color selection
+                const colorOptions = textPanel.querySelectorAll('.color-option');
+                colorOptions.forEach(option => {
+                    option.addEventListener('click', () => {
+                        colorOptions.forEach(opt => opt.classList.remove('active'));
+                        option.classList.add('active');
+                    });
+                });
+                
+                // Setup advanced shadow controls
+                const setupShadowControls = () => {
+                    // Shadow configuration
+                    let shadowEnabled = false;
+                    let currentShadowType = 'none';
+                    let shadowBlur = 5;
+                    let shadowDistance = 3;
+                    let shadowAngle = 45;
+                    let shadowOpacity = 0.5;
+                    let shadowColor = '#000000';
+                    let shadowConfig = null;
+                    
+                    // Shadow button
+                    const shadowBtn = textPanel.querySelector('#shadow-btn');
+                    if (shadowBtn) {
+                        shadowBtn.addEventListener('click', () => {
+                            // Show the shadow selection modal
+                            const shadowModal = document.getElementById('shadow-selection-modal');
+                            if (shadowModal) {
+                                // Initialize text preview with current text and color
+                                const textInput = textPanel.querySelector('.text-edit-input');
+                                const previewText = shadowModal.querySelector('#shadow-preview-text');
+                                if (textInput && previewText) {
+                                    const text = textInput.value.trim();
+                                    previewText.textContent = text || 'Preview Text';
+                                }
+                                
+                                // Set preview color
+                                const activeColor = textPanel.querySelector('.color-option.active');
+                                if (activeColor && previewText) {
+                                    previewText.style.color = activeColor.getAttribute('data-color') || '#000000';
+                                }
+                                
+                                // Show modal
+                                shadowModal.style.display = 'flex';
+                                
+                                // Setup the shadow controls inside the modal
+                                setupModalShadowControls(shadowModal);
+                            }
+                        });
+                    }
+                    
+                    // Function to setup all the shadow controls inside the modal
+                    const setupModalShadowControls = (modal) => {
+                        const shadowToggle = modal.querySelector('#shadow-toggle');
+                        const shadowOptions = modal.querySelector('#shadow-options');
+                        const shadowPreviews = modal.querySelectorAll('.shadow-preview');
+                        const customControls = modal.querySelector('#shadow-custom-controls');
+                        const previewText = modal.querySelector('#shadow-preview-text');
+                        const cancelBtn = modal.querySelector('#cancel-shadow-btn');
+                        const applyBtn = modal.querySelector('#apply-shadow-btn');
+                        const closeBtn = modal.querySelector('#close-shadow-modal');
+                        
+                        // Function to update preview text shadow
+                        const updatePreviewShadow = () => {
+                            if (!shadowEnabled) {
+                                previewText.style.textShadow = 'none';
+                                return;
+                            }
+                            
+                            // Calculate offsets based on angle and distance
+                            const angleRad = shadowAngle * Math.PI / 180;
+                            const offsetX = Math.cos(angleRad) * shadowDistance;
+                            const offsetY = Math.sin(angleRad) * shadowDistance;
+                            
+                            // Create shadow based on current type
+                            if (currentShadowType === 'custom') {
+                                // Convert hex color and opacity to rgba
+                                const r = parseInt(shadowColor.substr(1, 2), 16);
+                                const g = parseInt(shadowColor.substr(3, 2), 16);
+                                const b = parseInt(shadowColor.substr(5, 2), 16);
+                                const shadowRgba = `rgba(${r}, ${g}, ${b}, ${shadowOpacity})`;
+                                
+                                previewText.style.textShadow = `${offsetX}px ${offsetY}px ${shadowBlur}px ${shadowRgba}`;
+                            } else if (currentShadowType === 'none') {
+                                previewText.style.textShadow = 'none';
+                            } else if (currentShadowType === 'subtle') {
+                                previewText.style.textShadow = '1px 1px 2px rgba(0,0,0,0.2)';
+                            } else if (currentShadowType === 'medium') {
+                                previewText.style.textShadow = '2px 2px 4px rgba(0,0,0,0.4)';
+                            } else if (currentShadowType === 'strong') {
+                                previewText.style.textShadow = '3px 3px 6px rgba(0,0,0,0.6)';
+                            } else if (currentShadowType === 'neon') {
+                                previewText.style.textShadow = '0 0 5px rgba(0,0,255,0.8), 0 0 10px rgba(0,0,255,0.5)';
+                            } else if (currentShadowType === 'outline') {
+                                previewText.style.textShadow = '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000';
+                            }
+                        };
+                        
+                        // Update color preview
+                        const updateColorPreview = () => {
+                            const colorPreview = modal.querySelector('#shadow-color-preview');
+                            if (colorPreview) {
+                                const r = parseInt(shadowColor.substr(1, 2), 16);
+                                const g = parseInt(shadowColor.substr(3, 2), 16);
+                                const b = parseInt(shadowColor.substr(5, 2), 16);
+                                colorPreview.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${shadowOpacity})`;
+                            }
+                        };
+                        
+                        // Toggle shadow on/off
+                        if (shadowToggle) {
+                            shadowToggle.checked = shadowEnabled;
+                            shadowOptions.style.display = shadowEnabled ? 'block' : 'none';
+                            
+                            shadowToggle.addEventListener('change', () => {
+                                shadowEnabled = shadowToggle.checked;
+                                shadowOptions.style.display = shadowEnabled ? 'block' : 'none';
+                                updatePreviewShadow();
+                            });
+                        }
+                        
+                        // Handle shadow preview selection
+                        shadowPreviews.forEach(preview => {
+                            const type = preview.getAttribute('data-shadow-type');
+                            
+                            // Reset border color
+                            if (type !== currentShadowType) {
+                                preview.style.borderColor = 'transparent';
+                            }
+                            
+                            preview.addEventListener('click', () => {
+                                // Update active state
+                                shadowPreviews.forEach(p => p.style.borderColor = 'transparent');
+                                preview.style.borderColor = 'var(--primary-color)';
+                                
+                                // Update current shadow type
+                                currentShadowType = type;
+                                
+                                // Show/hide custom controls
+                                customControls.style.display = currentShadowType === 'custom' ? 'block' : 'none';
+                                
+                                // Update preview
+                                updatePreviewShadow();
+                            });
+                        });
+                        
+                        // Setup slider controls
+                        const setupSlider = (id, valueId, unit, property, defaultValue, callback) => {
+                            const slider = modal.querySelector(`#${id}`);
+                            const valueDisplay = modal.querySelector(`#${valueId}`);
+                            
+                            if (slider && valueDisplay) {
+                                slider.value = defaultValue;
+                                valueDisplay.textContent = `${defaultValue}${unit}`;
+                                
+                                slider.addEventListener('input', () => {
+                                    const value = slider.value;
+                                    valueDisplay.textContent = `${value}${unit}`;
+                                    
+                                    if (property === 'shadowOpacity') {
+                                        shadowOpacity = unit === '%' ? value / 100 : parseFloat(value);
+                                    } else if (property === 'shadowBlur') {
+                                        shadowBlur = parseFloat(value);
+                                    } else if (property === 'shadowDistance') {
+                                        shadowDistance = parseFloat(value);
+                                    } else if (property === 'shadowAngle') {
+                                        shadowAngle = parseFloat(value);
+                                    }
+                                    
+                                    if (callback) callback();
+                                });
+                            }
+                        };
+                        
+                        // Setup all sliders
+                        setupSlider('shadow-intensity', 'intensity-value', '%', 'shadowOpacity', 50, () => {
+                            updateColorPreview();
+                            updatePreviewShadow();
+                        });
+                        
+                        setupSlider('shadow-blur', 'blur-value', 'px', 'shadowBlur', 5, updatePreviewShadow);
+                        setupSlider('shadow-distance', 'distance-value', 'px', 'shadowDistance', 3, updatePreviewShadow);
+                        setupSlider('shadow-angle', 'angle-value', '°', 'shadowAngle', 45, updatePreviewShadow);
+                        
+                        // Handle shadow color selection
+                        const colorPickerPreview = modal.querySelector('#shadow-color-preview');
+                        const colorPicker = modal.querySelector('#shadow-color');
+                        
+                        if (colorPickerPreview && colorPicker) {
+                            colorPickerPreview.addEventListener('click', () => {
+                                colorPicker.click();
+                            });
+                            
+                            colorPicker.addEventListener('input', () => {
+                                shadowColor = colorPicker.value;
+                                updateColorPreview();
+                                updatePreviewShadow();
+                            });
+                        }
+                        
+                        // Initialize with current shadow type
+                        const activePreview = modal.querySelector(`.shadow-preview[data-shadow-type="${currentShadowType}"]`);
+                        if (activePreview) {
+                            activePreview.style.borderColor = 'var(--primary-color)';
+                        }
+                        
+                        // Handle Apply button
+                        if (applyBtn) {
+                            applyBtn.addEventListener('click', () => {
+                                // Store the shadow configuration
+                                if (shadowEnabled) {
+                                    if (currentShadowType === 'custom') {
+                                        shadowConfig = {
+                                            type: 'custom',
+                                            blur: shadowBlur,
+                                            distance: shadowDistance,
+                                            angle: shadowAngle,
+                                            opacity: shadowOpacity,
+                                            color: shadowColor
+                                        };
+                                    } else {
+                                        shadowConfig = {
+                                            type: currentShadowType
+                                        };
+                                    }
+                                } else {
+                                    shadowConfig = null;
+                                }
+                                
+                                // Show the shadow status on the button
+                                if (shadowBtn) {
+                                    if (shadowEnabled && currentShadowType !== 'none') {
+                                        shadowBtn.innerHTML = `<i class="fas fa-magic"></i> Shadow: ${currentShadowType.charAt(0).toUpperCase() + currentShadowType.slice(1)}`;
+                                        shadowBtn.style.color = 'var(--primary-color)';
+                                    } else {
+                                        shadowBtn.innerHTML = `<i class="fas fa-magic"></i> Text Shadow Effects`;
+                                        shadowBtn.style.color = '';
+                                    }
+                                }
+                                
+                                // Close the modal
+                                modal.style.display = 'none';
+                            });
+                        }
+                        
+                        // Handle Cancel button and Close button
+                        const closeModal = () => {
+                            modal.style.display = 'none';
+                        };
+                        
+                        if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+                        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+                        
+                        // Close when clicking outside
+                        modal.addEventListener('click', (e) => {
+                            if (e.target === modal) {
+                                closeModal();
+                            }
+                        });
+                        
+                        // Update initial preview
+                        updatePreviewShadow();
+                    };
+                    
+                    // Get shadow config for saving to text object
+                    window.getShadowConfig = () => {
+                        return {
+                            enabled: shadowEnabled,
+                            config: shadowConfig
+                        };
+                    };
+                };
+                
+                // Initialize shadow controls
+                setupShadowControls();
+                
+                // Set up the more colors button
+                const moreColorsBtn = textPanel.querySelector('#more-colors-btn');
+                if (moreColorsBtn) {
+                    // Remove existing event listener if any
+                    const newMoreColorsBtn = moreColorsBtn.cloneNode(true);
+                    moreColorsBtn.parentNode.replaceChild(newMoreColorsBtn, moreColorsBtn);
+
+                    newMoreColorsBtn.addEventListener('click', () => {
+                        // Show the color selection modal
+                        const colorModal = document.getElementById('color-selection-modal');
+                        if (colorModal) {
+                            colorModal.style.display = 'flex';
+                        }
+                    });
+                }
+                
+                // Set up color selection modal behavior only once
+                const colorModal = document.getElementById('color-selection-modal');
+                if (colorModal) {
+                    // Remove existing event listeners from color items
+                    const colorItems = colorModal.querySelectorAll('.color-item');
+                    colorItems.forEach(item => {
+                        const newItem = item.cloneNode(true);
+                        item.parentNode.replaceChild(newItem, item);
+                        
+                        newItem.addEventListener('click', () => {
+                            const color = newItem.getAttribute('data-color');
+                            // Update custom color option in text panel
+                            const colorOptions = textPanel.querySelectorAll('.color-option');
+                            const customColorOption = textPanel.querySelector('.custom-color-option');
+                            
+                            if (customColorOption) {
+                                // Update the custom color option
+                                customColorOption.style.background = color;
+                                customColorOption.setAttribute('data-color', color);
+                                // Set it as active
+                                colorOptions.forEach(opt => opt.classList.remove('active'));
+                                customColorOption.classList.add('active');
+                            }
+                            
+                            // Close the modal
+                            colorModal.style.display = 'none';
+                        });
+                    });
+                    
+                    // Set up modal color picker
+                    const modalColorPicker = colorModal.querySelector('#modal-color-picker');
+                    if (modalColorPicker) {
+                        const newModalColorPicker = modalColorPicker.cloneNode(true);
+                        modalColorPicker.parentNode.replaceChild(newModalColorPicker, modalColorPicker);
+                        
+                        newModalColorPicker.addEventListener('change', () => {
+                            const selectedColor = newModalColorPicker.value;
+                            const colorOptions = textPanel.querySelectorAll('.color-option');
+                            const customColorOption = textPanel.querySelector('.custom-color-option');
+                            
+                            if (customColorOption) {
+                                // Update the custom color option
+                                customColorOption.style.background = selectedColor;
+                                customColorOption.setAttribute('data-color', selectedColor);
+                                // Set it as active
+                                colorOptions.forEach(opt => opt.classList.remove('active'));
+                                customColorOption.classList.add('active');
+                            }
+                            
+                            // Close the modal
+                            colorModal.style.display = 'none';
+                        });
+                    }
+                    
+                    // Set up close button
+                    const closeColorModal = colorModal.querySelector('#close-color-modal');
+                    if (closeColorModal) {
+                        const newCloseBtn = closeColorModal.cloneNode(true);
+                        closeColorModal.parentNode.replaceChild(newCloseBtn, closeColorModal);
+                        
+                        newCloseBtn.addEventListener('click', () => {
+                            colorModal.style.display = 'none';
+                        });
+                    }
+                    
+                    // Close modal when clicking outside
+                    colorModal.addEventListener('click', (e) => {
+                        if (e.target === colorModal) {
+                            colorModal.style.display = 'none';
+                        }
+                    });
+                }
+                
+                // Handle panel close button
+                const closeButton = textPanel.querySelector('.panel-close');
+                if (closeButton) {
+                    closeButton.addEventListener('click', () => {
+                        // Close the panel
+                        textPanel.classList.remove('active');
+                        newTextButton.classList.remove('active');
+                    });
+                }
+            } else {
+                // Fall back to direct 3D editor call if panel doesn't exist
             import('./3d-editor.js')
                 .then((editor) => {
                     // Call the addText function with empty text to start a new text
-                    // The fromButton option makes it show in the right position
                     editor.addText('', { fromButton: true });
                 })
                 .catch((error) => {
                     console.error('Error importing 3d-editor module:', error);
                     showToast('Failed to add text');
                 });
-                
-            // We don't need to show the panel as addText opens its own overlay
+            }
         });
     }
     
@@ -1874,7 +2399,7 @@ function createPanel(id, title, container) {
                 <p>Customize your text style</p>
             </div>
             <div class="text-edit-options">
-                <input type="text" class="text-edit-input" placeholder="Enter your text here" />
+                <textarea class="text-edit-input" placeholder="Enter your text here" rows="2"></textarea>
                 <div class="font-select-container">
                     <label for="font-select">Font</label>
                     <select id="font-select" class="font-select">
@@ -1885,13 +2410,17 @@ function createPanel(id, title, container) {
                         <option value="Courier New">Courier New</option>
                     </select>
                 </div>
-                <div class="text-edit-colors">
-                    <div class="color-option active" style="background-color: #000000" data-color="#000000"></div>
-                    <div class="color-option" style="background-color: #FFFFFF" data-color="#FFFFFF"></div>
-                    <div class="color-option" style="background-color: #FF0000" data-color="#FF0000"></div>
-                    <div class="color-option" style="background-color: #00FF00" data-color="#00FF00"></div>
-                    <div class="color-option" style="background-color: #0000FF" data-color="#0000FF"></div>
-                    <div class="color-option" style="background-color: #FFFF00" data-color="#FFFF00"></div>
+                <button id="shadow-btn" class="text-style-button" style="margin-top: 10px; padding: 8px 12px; border-radius: 4px; background-color: rgba(var(--primary-color-rgb), 0.1); border: 1px solid rgba(var(--primary-color-rgb), 0.2); color: var(--primary-color); cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 5px; width: 100%;">
+                    <i class="fas fa-magic"></i> Text Shadow Effects
+                </button>
+                <div class="text-edit-colors" style="display: flex; gap: 10px; padding: 8px; align-items: center;">
+                    <div class="color-option" style="background-color: #000000; width: 30px; height: 30px; border-radius: 50%; cursor: pointer;" data-color="#000000"></div>
+                    <div class="color-option" style="background-color: #FFFFFF; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; border: 1px solid #ddd;" data-color="#FFFFFF"></div>
+                    <div class="color-option custom-color-option" style="background: linear-gradient(135deg, #ff0000, #ff9900, #33cc33, #3399ff, #cc33ff); width: 30px; height: 30px; border-radius: 50%; cursor: pointer;" data-color="#ff0000"></div>
+                    <button id="more-colors-btn" class="more-colors-button" style="padding: 6px 12px; border-radius: 4px; background-color: rgba(var(--primary-color-rgb), 0.1); border: 1px solid rgba(var(--primary-color-rgb), 0.2); color: var(--primary-color); cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 5px;">
+                        <i class="fas fa-palette"></i> More Colors
+                    </button>
+                    <input type="color" id="custom-color-picker" class="hidden-color-picker" style="position: absolute; opacity: 0; pointer-events: none; height: 0; width: 0;">
                 </div>
                 <div class="text-edit-buttons">
                     <button class="text-edit-cancel">Cancel</button>
@@ -2735,3 +3264,481 @@ export function showDeleteConfirmationDialog(type, onConfirm) {
     };
     document.addEventListener('keydown', handleEscape);
 }
+
+/**
+ * Sets up the tab functionality for the photo upload panel
+ */
+function setupPhotoUploadTabs() {
+    const tabs = document.querySelectorAll('#photo-panel .method-tab');
+    const tabContents = document.querySelectorAll('#photo-panel .upload-tab');
+    
+    if (tabs.length === 0 || tabContents.length === 0) return;
+    
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            // Remove active class from all tabs
+            tabs.forEach(t => t.classList.remove('active'));
+            
+            // Add active class to clicked tab
+            tab.classList.add('active');
+            
+            // Hide all tab contents
+            tabContents.forEach(content => content.classList.remove('active'));
+            
+            // Show the selected tab content
+            const tabId = tab.getAttribute('data-tab');
+            const tabContent = document.getElementById(`${tabId}-tab`);
+            if (tabContent) {
+                tabContent.classList.add('active');
+            }
+            
+            // If camera tab is selected, initialize camera
+            if (tabId === 'camera') {
+                initializeCamera();
+            } else {
+                // Stop camera when switching to other tabs
+                stopCamera();
+            }
+        });
+    });
+}
+
+/**
+ * Setup URL image fetcher functionality
+ */
+function setupUrlImageFetcher() {
+    const fetchButton = document.getElementById('fetch-url-image');
+    const urlInput = document.getElementById('image-url');
+    const previewPlaceholder = document.querySelector('#url-preview .preview-placeholder');
+    const previewContainer = document.querySelector('#url-preview .preview-image-container');
+    const previewImage = document.getElementById('url-preview-image');
+    const useUrlImageButton = document.getElementById('use-url-image');
+    
+    if (!fetchButton || !urlInput || !previewPlaceholder || !previewContainer || !previewImage || !useUrlImageButton) return;
+    
+    fetchButton.addEventListener('click', () => {
+        const url = urlInput.value.trim();
+        if (!url) {
+            showToast('Please enter a valid URL');
+            return;
+        }
+        
+        // Show loading state
+        previewPlaceholder.innerHTML = '<div class="spinner"></div><p>Loading image...</p>';
+        previewPlaceholder.style.display = 'flex';
+        previewContainer.style.display = 'none';
+        
+        // Try to load the image
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        
+        img.onload = function() {
+            // Hide placeholder and show preview
+            previewPlaceholder.style.display = 'none';
+            previewContainer.style.display = 'block';
+            
+            // Set image source
+            previewImage.src = img.src;
+        };
+        
+        img.onerror = function() {
+            // Show error in placeholder
+            previewPlaceholder.innerHTML = '<i class="fas fa-exclamation-triangle"></i><p>Failed to load image. Please check the URL.</p>';
+            previewPlaceholder.style.display = 'flex';
+            previewContainer.style.display = 'none';
+        };
+        
+        // Handle CORS issues by trying to proxy the image
+        try {
+            // First try direct loading
+            img.src = url;
+        } catch (error) {
+            // If direct loading fails, try a CORS proxy
+            img.src = `https://cors-anywhere.herokuapp.com/${url}`;
+        }
+    });
+    
+    // Handle "Use This Image" button click
+    useUrlImageButton.addEventListener('click', () => {
+        if (previewImage.src) {
+            // Convert image to base64 to easily pass it around
+            const canvas = document.createElement('canvas');
+            canvas.width = previewImage.naturalWidth;
+            canvas.height = previewImage.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(previewImage, 0, 0);
+            const dataUrl = canvas.toDataURL('image/png');
+            
+            // Use the same function as file upload to process the image
+            showViewSelectionModal(dataUrl, (selectedView) => {
+                if (selectedView) {
+                    import("./3d-editor.js")
+                        .then((editor) => {
+                            // First change the camera view
+                            import("./scene.js")
+                                .then((scene) => {
+                                    if (scene.changeCameraView) {
+                                        scene.changeCameraView(selectedView);
+                                    }
+                                    
+                                    // Then add the image to the selected view
+                                    if (editor.addImage) {
+                                        editor.addImage(dataUrl, {
+                                            view: selectedView,
+                                            center: true,
+                                            isDecal: true
+                                        }).then(() => {
+                                            showToast(`Image added to ${selectedView} view`);
+                                            
+                                            // Close the panel
+                                            const panel = document.getElementById('photo-panel');
+                                            const photoButton = document.getElementById('photo-upload-btn');
+                                            if (panel && photoButton) {
+                                                panel.classList.remove('active');
+                                                photoButton.classList.remove('active');
+                                            }
+                                        });
+                                    }
+                                });
+                        })
+                        .catch((error) => {
+                            console.error("Error adding image:", error);
+                            showToast("Error adding image");
+                        });
+                }
+            }, 'Choose Image Placement');
+        }
+    });
+}
+
+/**
+ * Setup camera functionality
+ */
+function setupCameraFunctionality() {
+    const cameraTab = document.getElementById('camera-tab');
+    const cameraFeed = document.getElementById('camera-feed');
+    const cameraFeedContainer = document.getElementById('camera-feed-container');
+    const cameraPreviewContainer = document.getElementById('camera-preview-container');
+    const cameraPreview = document.getElementById('camera-preview');
+    const captureButton = document.getElementById('camera-capture');
+    const switchButton = document.getElementById('camera-switch');
+    const flashButton = document.getElementById('camera-flash');
+    const retakeButton = document.getElementById('retake-photo');
+    const useCameraPhotoButton = document.getElementById('use-camera-photo');
+    
+    if (!cameraTab || !cameraFeed || !cameraPreview || !captureButton || !retakeButton || !useCameraPhotoButton) return;
+    
+    let stream = null;
+    let facingMode = 'user'; // front camera by default
+    let flashOn = false;
+    
+    // Capture photo
+    captureButton.addEventListener('click', () => {
+        if (!stream) return;
+        
+        // Create canvas for screenshot
+        const canvas = document.getElementById('camera-preview');
+        const context = canvas.getContext('2d');
+        
+        // Set canvas dimensions to match video
+        canvas.width = cameraFeed.videoWidth;
+        canvas.height = cameraFeed.videoHeight;
+        
+        // Draw video frame to canvas
+        context.drawImage(cameraFeed, 0, 0, canvas.width, canvas.height);
+        
+        // Show preview and hide feed
+        cameraFeedContainer.style.display = 'none';
+        cameraPreviewContainer.style.display = 'block';
+    });
+    
+    // Retake photo
+    retakeButton.addEventListener('click', () => {
+        // Show feed and hide preview
+        cameraFeedContainer.style.display = 'block';
+        cameraPreviewContainer.style.display = 'none';
+    });
+    
+    // Use photo button
+    useCameraPhotoButton.addEventListener('click', () => {
+        // Get the photo data URL
+        const dataUrl = cameraPreview.toDataURL('image/png');
+        
+        // Use the photo
+        showViewSelectionModal(dataUrl, (selectedView) => {
+            if (selectedView) {
+                import("./3d-editor.js")
+                    .then((editor) => {
+                        // First change the camera view
+                        import("./scene.js")
+                            .then((scene) => {
+                                if (scene.changeCameraView) {
+                                    scene.changeCameraView(selectedView);
+                                }
+                                
+                                // Then add the image to the selected view
+                                if (editor.addImage) {
+                                    editor.addImage(dataUrl, {
+                                        view: selectedView,
+                                        center: true,
+                                        isDecal: true
+                                    }).then(() => {
+                                        showToast(`Image added to ${selectedView} view`);
+                                        
+                                        // Close the panel
+                                        const panel = document.getElementById('photo-panel');
+                                        const photoButton = document.getElementById('photo-upload-btn');
+                                        if (panel && photoButton) {
+                                            panel.classList.remove('active');
+                                            photoButton.classList.remove('active');
+                                        }
+                                        
+                                        // Stop the camera
+                                        stopCamera();
+                                    });
+                                }
+                            });
+                    })
+                    .catch((error) => {
+                        console.error("Error adding image:", error);
+                        showToast("Error adding image");
+                    });
+            }
+        }, 'Choose Image Placement');
+    });
+    
+    // Switch camera
+    if (switchButton) {
+        switchButton.addEventListener('click', () => {
+            facingMode = facingMode === 'user' ? 'environment' : 'user';
+            stopCamera();
+            initializeCamera();
+        });
+    }
+    
+    // Toggle flash
+    if (flashButton) {
+        flashButton.addEventListener('click', () => {
+            flashOn = !flashOn;
+            toggleFlash(flashOn);
+            flashButton.innerHTML = flashOn ? '<i class="fas fa-bolt"></i>' : '<i class="fas fa-bolt-slash"></i>';
+        });
+    }
+}
+
+/**
+ * Initialize the camera
+ */
+function initializeCamera() {
+    const cameraFeed = document.getElementById('camera-feed');
+    const cameraFeedContainer = document.getElementById('camera-feed-container');
+    const cameraPreviewContainer = document.getElementById('camera-preview-container');
+    
+    if (!cameraFeed || !cameraFeedContainer || !cameraPreviewContainer) return;
+    
+    // Make sure preview is hidden and feed is shown
+    cameraFeedContainer.style.display = 'block';
+    cameraPreviewContainer.style.display = 'none';
+    
+    // Check if camera is available
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showToast('Camera access is not supported by your browser');
+        return;
+    }
+    
+    // Stop any existing stream
+    stopCamera();
+    
+    // Access the camera
+    navigator.mediaDevices.getUserMedia({
+        video: {
+            facingMode: window.facingMode || 'user',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+        },
+        audio: false
+    })
+    .then(function(newStream) {
+        window.cameraStream = newStream;
+        cameraFeed.srcObject = newStream;
+        cameraFeed.play();
+    })
+    .catch(function(error) {
+        console.error('Error accessing camera:', error);
+        showToast('Could not access camera: ' + error.message);
+    });
+}
+
+/**
+ * Stop the camera stream
+ */
+function stopCamera() {
+    if (window.cameraStream) {
+        const tracks = window.cameraStream.getTracks();
+        tracks.forEach(track => track.stop());
+        window.cameraStream = null;
+    }
+}
+
+/**
+ * Toggle flash (if available)
+ */
+function toggleFlash(on) {
+    if (!window.cameraStream) return;
+    
+    const track = window.cameraStream.getVideoTracks()[0];
+    if (track && track.getCapabilities && track.getCapabilities().torch) {
+        track.applyConstraints({
+            advanced: [{ torch: on }]
+        })
+        .catch(error => {
+            console.error('Flash not supported:', error);
+            showToast('Flash not supported on this device');
+        });
+    } else {
+        showToast('Flash not supported on this device');
+    }
+}
+
+/**
+ * Handle an image upload from file or drag and drop
+ */
+function handleImageUpload(file) {
+    if (!file) return;
+    
+    // Check file type
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'];
+    if (!validTypes.includes(file.type)) {
+        showToast('Please upload a valid image file (JPG, PNG, WEBP, SVG)');
+        return;
+    }
+    
+    // Check file size (10MB limit)
+    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+    if (file.size > maxSize) {
+        showToast('Image file is too large. Maximum size is 10MB.');
+        return;
+    }
+    
+    // Read the file
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        // Show view selection modal
+        showViewSelectionModal(event.target.result, (selectedView) => {
+            if (selectedView) {
+                import("./3d-editor.js")
+                    .then((editor) => {
+                        // First change the camera view
+                        import("./scene.js")
+                            .then((scene) => {
+                                if (scene.changeCameraView) {
+                                    scene.changeCameraView(selectedView);
+                                }
+                                
+                                // Then add the image to the selected view
+                                if (editor.addImage) {
+                                    editor.addImage(event.target.result, {
+                                        view: selectedView,
+                                        center: true,
+                                        isDecal: true
+                                    }).then(() => {
+                                        showToast(`Image added to ${selectedView} view`);
+                                        
+                                        // Close the panel
+                                        const panel = document.getElementById('photo-panel');
+                                        const photoButton = document.getElementById('photo-upload-btn');
+                                        if (panel && photoButton) {
+                                            panel.classList.remove('active');
+                                            photoButton.classList.remove('active');
+                                        }
+                                    });
+                                }
+                            });
+                    })
+                    .catch((error) => {
+                        console.error("Error adding image:", error);
+                        showToast("Error adding image");
+                    });
+            }
+        }, 'Choose Image Placement');
+    };
+    reader.readAsDataURL(file);
+}
+
+// Add this to your document ready or initialization function
+function initTextPanel() {
+    const shadowToggle = document.getElementById('shadow-toggle');
+    
+    if (shadowToggle) {
+        shadowToggle.addEventListener('click', function() {
+            // Show the shadow selection modal
+            const modal = document.getElementById('shadow-selection-modal');
+            if (modal) {
+                modal.classList.add('active');
+                
+                // Update the shadow text based on current selection
+                updateShadowButtonText();
+            }
+        });
+    }
+    
+    // Custom color picker
+    const customColorOption = document.querySelector('.custom-color');
+    const colorPicker = document.getElementById('custom-color-picker');
+    
+    if (customColorOption && colorPicker) {
+        customColorOption.addEventListener('click', function() {
+            colorPicker.click();
+        });
+        
+        colorPicker.addEventListener('change', function() {
+            const color = this.value;
+            customColorOption.setAttribute('data-color', color);
+            
+            // Remove active class from all color options
+            document.querySelectorAll('.color-option').forEach(option => {
+                option.classList.remove('active');
+            });
+            
+            // Add active class to the custom color option
+            customColorOption.classList.add('active');
+        });
+    }
+    
+    // Regular color options
+    const colorOptions = document.querySelectorAll('.color-option');
+    colorOptions.forEach(option => {
+        option.addEventListener('click', function() {
+            // Skip if it's the custom color option (handled separately)
+            if (this.classList.contains('custom-color')) return;
+            
+            // Remove active class from all options
+            colorOptions.forEach(opt => opt.classList.remove('active'));
+            
+            // Add active class to clicked option
+            this.classList.add('active');
+        });
+    });
+}
+
+// Function to update the shadow button text based on current selection
+function updateShadowButtonText() {
+    const shadowButton = document.getElementById('shadow-toggle');
+    const shadowText = shadowButton.querySelector('.shadow-text');
+    
+    // Get current shadow type from the modal or localStorage
+    const currentShadow = localStorage.getItem('currentShadowType') || 'None';
+    
+    if (shadowText) {
+        if (currentShadow === 'None') {
+            shadowText.textContent = 'Text Shadow Effects';
+        } else {
+            shadowText.textContent = `Shadow: ${currentShadow}`;
+        }
+    }
+}
+
+// Call the init function when the document is ready
+document.addEventListener('DOMContentLoaded', function() {
+    initTextPanel();
+});
