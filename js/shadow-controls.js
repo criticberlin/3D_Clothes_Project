@@ -1,3 +1,84 @@
+// Improve slider dragging behavior
+function enhanceSliderBehavior() {
+    const sliders = document.querySelectorAll('input[type="range"]');
+    
+    sliders.forEach(slider => {
+        let isDragging = false;
+        
+        // Mouse events
+        slider.addEventListener('mousedown', () => {
+            isDragging = true;
+            document.body.style.userSelect = 'none'; // Prevent text selection during drag
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            // Calculate the new value based on mouse position
+            const rect = slider.getBoundingClientRect();
+            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const min = parseFloat(slider.min) || 0;
+            const max = parseFloat(slider.max) || 100;
+            const value = min + percent * (max - min);
+            
+            // Update the slider value
+            slider.value = Math.round(value);
+            
+            // Trigger the input event manually
+            slider.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                document.body.style.userSelect = '';
+                
+                // Trigger the change event manually
+                slider.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+        
+        // Touch events for mobile
+        slider.addEventListener('touchstart', (e) => {
+            isDragging = true;
+            document.body.style.userSelect = 'none';
+            document.body.style.touchAction = 'none'; // Prevent scrolling during touch
+            e.preventDefault();
+        });
+        
+        document.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            
+            // Get touch position
+            const touch = e.touches[0];
+            const rect = slider.getBoundingClientRect();
+            const percent = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+            const min = parseFloat(slider.min) || 0;
+            const max = parseFloat(slider.max) || 100;
+            const value = min + percent * (max - min);
+            
+            // Update the slider value
+            slider.value = Math.round(value);
+            
+            // Trigger the input event
+            slider.dispatchEvent(new Event('input', { bubbles: true }));
+            
+            e.preventDefault();
+        });
+        
+        document.addEventListener('touchend', () => {
+            if (isDragging) {
+                isDragging = false;
+                document.body.style.userSelect = '';
+                document.body.style.touchAction = ''; 
+                
+                // Trigger the change event
+                slider.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+    });
+}
+
 // Function to handle shadow modal setup and interactions
 function setupShadowModal() {
     const modal = document.getElementById('shadow-selection-modal');
@@ -8,20 +89,44 @@ function setupShadowModal() {
     const shadowPreviews = document.querySelectorAll('.shadow-preview');
     const applyButton = document.getElementById('apply-shadow-btn');
     const cancelButton = document.getElementById('cancel-shadow-btn');
+    const textPanel = document.getElementById('text-panel');
     
     // Show modal
     function showModal() {
-        modal.classList.add('active');
-        modal.style.display = 'flex';
-        updatePreviewText();
+        if (textPanel && modal) {
+            // Position the shadow modal at the same position as the text panel
+            const textPanelRect = textPanel.getBoundingClientRect();
+            modal.style.top = textPanelRect.top + 'px';
+            modal.style.right = (window.innerWidth - textPanelRect.right) + 'px';
+            modal.style.width = textPanelRect.width + 'px';
+            modal.style.height = textPanelRect.height + 'px';
+            
+            // Hide text panel
+            textPanel.style.display = 'none';
+            
+            // Show shadow modal
+            modal.classList.add('active');
+            modal.style.display = 'block';
+            
+            // Update content
+            updatePreviewText();
+            updateColorPreview(); // Initialize color preview
+            enhanceSliderBehavior(); // Add enhanced slider behavior
+        }
     }
     
     // Hide modal
     function hideModal() {
-        modal.classList.remove('active');
-        setTimeout(() => {
+        if (modal) {
+            // Hide shadow modal
+            modal.classList.remove('active');
             modal.style.display = 'none';
-        }, 300);
+            
+            // Show text panel
+            if (textPanel) {
+                textPanel.style.display = 'block';
+            }
+        }
     }
     
     // Update preview text with current input
@@ -52,11 +157,6 @@ function setupShadowModal() {
         });
     }
     
-    // Close modal when clicking close button
-    if (closeButton) {
-        closeButton.addEventListener('click', hideModal);
-    }
-    
     // Select shadow type
     shadowPreviews.forEach(preview => {
         preview.addEventListener('click', function() {
@@ -83,29 +183,56 @@ function setupShadowModal() {
         const previewText = document.getElementById('shadow-preview-text');
         if (!previewText) return;
         
+        // Get color from the color picker
+        const colorPicker = document.getElementById('shadow-color');
+        const color = colorPicker ? colorPicker.value : '#000000';
+        const colorObj = hexToRgb(color);
+        
         // Reset shadow
         previewText.style.textShadow = 'none';
         
         // Apply shadow based on type
         switch(shadowType) {
-            case 'subtle':
-                previewText.style.textShadow = '1px 1px 2px rgba(0,0,0,0.2)';
+            case 'drop':
+                const dropOpacity = 0.5;
+                const dropBlur = 4;
+                const dropDistance = 3;
+                const dropAngle = 45;
+                
+                // Calculate x and y based on angle and distance
+                const dropRadians = (dropAngle * Math.PI) / 180;
+                const dropX = Math.cos(dropRadians) * dropDistance;
+                const dropY = Math.sin(dropRadians) * dropDistance;
+                
+                const dropShadowColor = `rgba(${colorObj.r}, ${colorObj.g}, ${colorObj.b}, ${dropOpacity})`;
+                previewText.style.textShadow = `${dropX}px ${dropY}px ${dropBlur}px ${dropShadowColor}`;
                 break;
-            case 'medium':
-                previewText.style.textShadow = '2px 2px 4px rgba(0,0,0,0.4)';
+                
+            case 'inner':
+                // Inner shadows aren't directly supported with CSS text-shadow
+                // Using a workaround with multiple shadows
+                const innerOpacity = 0.6;
+                const innerShadowColor = `rgba(${colorObj.r}, ${colorObj.g}, ${colorObj.b}, ${innerOpacity})`;
+                previewText.style.textShadow = 
+                    `0 0 1px ${innerShadowColor}, ` +
+                    `0 0 2px ${innerShadowColor}, ` +
+                    `0 0 3px ${innerShadowColor}`;
                 break;
-            case 'strong':
-                previewText.style.textShadow = '3px 3px 6px rgba(0,0,0,0.6)';
+                
+            case 'glow':
+                // Glow effect with multiple shadows
+                const glowOpacity = 0.7;
+                const glowShadowColor = `rgba(${colorObj.r}, ${colorObj.g}, ${colorObj.b}, ${glowOpacity})`;
+                previewText.style.textShadow = 
+                    `0 0 2px ${glowShadowColor}, ` +
+                    `0 0 4px ${glowShadowColor}, ` +
+                    `0 0 8px ${glowShadowColor}`;
                 break;
-            case 'neon':
-                previewText.style.textShadow = '0 0 5px rgba(0,0,255,0.8), 0 0 10px rgba(0,0,255,0.5)';
-                break;
-            case 'outline':
-                previewText.style.textShadow = '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000';
-                break;
+                
             case 'custom':
                 applyCustomShadow();
                 break;
+                
             default:
                 // No shadow
                 break;
@@ -154,8 +281,28 @@ function setupShadowModal() {
         return { r, g, b };
     }
     
+    // Function to update the color preview
+    function updateColorPreview() {
+        const colorPicker = document.getElementById('shadow-color');
+        const colorPreview = document.getElementById('color-preview');
+        const colorValue = document.getElementById('color-value');
+        
+        if (colorPicker && colorPreview && colorValue) {
+            colorPreview.style.backgroundColor = colorPicker.value;
+            colorValue.textContent = colorPicker.value.toUpperCase();
+            
+            // Update shadow preview if custom is active
+            const activePreview = document.querySelector('.shadow-preview.active');
+            if (activePreview && activePreview.getAttribute('data-shadow-type') === 'custom') {
+                applyCustomShadow();
+            } else if (activePreview) {
+                // Apply to other shadow types as well
+                applyShadowToPreview(activePreview.getAttribute('data-shadow-type'));
+            }
+        }
+    }
+    
     // Setup custom shadow controls
-    const intensitySlider = document.getElementById('shadow-intensity');
     const blurSlider = document.getElementById('shadow-blur');
     const distanceSlider = document.getElementById('shadow-distance');
     const angleSlider = document.getElementById('shadow-angle');
@@ -163,15 +310,6 @@ function setupShadowModal() {
     const opacitySlider = document.getElementById('shadow-opacity');
     
     // Update value displays
-    if (intensitySlider) {
-        intensitySlider.addEventListener('input', function() {
-            document.getElementById('intensity-value').textContent = this.value + '%';
-            if (document.querySelector('.shadow-preview[data-shadow-type="custom"]').classList.contains('active')) {
-                applyCustomShadow();
-            }
-        });
-    }
-    
     if (blurSlider) {
         blurSlider.addEventListener('input', function() {
             document.getElementById('blur-value').textContent = this.value + 'px';
@@ -210,23 +348,12 @@ function setupShadowModal() {
     
     if (colorPicker) {
         colorPicker.addEventListener('input', function() {
-            document.getElementById('shadow-color-preview').style.backgroundColor = this.value;
-            if (document.querySelector('.shadow-preview[data-shadow-type="custom"]').classList.contains('active')) {
-                applyCustomShadow();
-            }
+            updateColorPreview();
         });
-        
-        // Connect color preview to color picker
-        const colorPreview = document.getElementById('shadow-color-preview');
-        if (colorPreview) {
-            colorPreview.addEventListener('click', function() {
-                colorPicker.click();
-            });
-        }
     }
     
     // Connect shadow button to modal
-    const shadowButton = document.querySelector('.shadow-button');
+    const shadowButton = document.getElementById('shadow-btn');
     if (shadowButton) {
         shadowButton.addEventListener('click', showModal);
     }
@@ -252,6 +379,11 @@ function setupShadowModal() {
     // Handle cancel button
     if (cancelButton) {
         cancelButton.addEventListener('click', hideModal);
+    }
+    
+    // Close modal when clicking close button
+    if (closeButton) {
+        closeButton.addEventListener('click', hideModal);
     }
     
     // Get shadow configuration
@@ -285,17 +417,19 @@ function setupShadowModal() {
     
     // Update shadow button text
     function updateShadowButtonText() {
-        const shadowButtonText = document.querySelector('.shadow-button .shadow-text');
-        if (!shadowButtonText) return;
+        const shadowButton = document.getElementById('shadow-btn');
+        if (!shadowButton) return;
         
         const shadowEnabled = localStorage.getItem('shadowEnabled') === 'true';
         const shadowType = localStorage.getItem('shadowType') || 'none';
         
         if (!shadowEnabled || shadowType === 'none') {
-            shadowButtonText.textContent = 'Text Shadow Effects';
+            shadowButton.innerHTML = `<i class="fas fa-shadow"></i> Text Shadow`;
+            shadowButton.style.color = '';
         } else {
             const displayName = shadowType.charAt(0).toUpperCase() + shadowType.slice(1);
-            shadowButtonText.textContent = `Shadow: ${displayName}`;
+            shadowButton.innerHTML = `<i class="fas fa-shadow"></i> Shadow: ${displayName}`;
+            shadowButton.style.color = 'var(--primary-color)';
         }
     }
     

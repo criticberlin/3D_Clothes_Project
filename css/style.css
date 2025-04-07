@@ -5847,50 +5847,36 @@ body.dark-theme #editor-mode-toggle:hover {
 #shadow-selection-modal {
     position: fixed;
     top: 0;
-    left: 0;
-    width: 100%;
+    right: 0;
+    width: 400px;
     height: 100%;
-    background-color: rgba(0,0,0,0.5);
+    background-color: var(--bg-primary);
     z-index: 9999;
     display: none;
-    justify-content: center;
-    align-items: center;
-    overflow: hidden; /* Changed from auto to hidden to remove outer scrollbar */
+    box-shadow: -4px 0 20px rgba(0,0,0,0.2);
 }
 
 #shadow-selection-modal.active {
-    display: flex;
+    display: block;
 }
 
 #shadow-selection-modal > div {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
     background-color: var(--bg-primary);
-    border-radius: 8px;
     padding: 20px;
-    width: 90%;
-    max-width: 450px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-    max-height: 90vh;
     overflow-y: auto;
 }
 
-/* Modern scrollbar styling */
-#shadow-selection-modal > div::-webkit-scrollbar {
-    width: 8px;
+/* Light Theme for Shadow Modal */
+:root.light-theme #shadow-selection-modal {
+    background-color: #ffffff;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
 }
 
-#shadow-selection-modal > div::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 4px;
-}
-
-#shadow-selection-modal > div::-webkit-scrollbar-thumb {
-    background: rgba(108, 99, 255, 0.5);
-    border-radius: 4px;
-    transition: background 0.3s ease;
-}
-
-#shadow-selection-modal > div::-webkit-scrollbar-thumb:hover {
-    background: rgba(108, 99, 255, 0.8);
+:root.light-theme #shadow-selection-modal > div {
+    background-color: #ffffff;
 }
 
 #shadow-custom-controls {
@@ -5928,4 +5914,536 @@ body.dark-theme #editor-mode-toggle:hover {
 
 .shadow-preview[data-shadow-type="custom"].active + #shadow-custom-controls {
     display: block;
+}
+
+/* Shadow Effects Button */
+.shadow-effects-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 10px 0;
+    padding: 10px 15px;
+    width: auto;
+    max-width: 160px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: linear-gradient(135deg, var(--primary-color), rgba(var(--primary-color-rgb), 0.8));
+    color: white;
+    border: none;
+    box-shadow: 0 2px 8px rgba(var(--primary-color-rgb), 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.shadow-effects-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: 0.5s;
+}
+
+.shadow-effects-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(var(--primary-color-rgb), 0.4);
+}
+
+.shadow-effects-btn:hover::before {
+    left: 100%;
+}
+
+.shadow-effects-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(var(--primary-color-rgb), 0.3);
+}
+
+.shadow-effects-btn i {
+    font-size: 16px;
+}
+
+/* End Shadow Effects Button */
+
+.shadow-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+}
+
+.shadow-modal.active {
+    display: flex;
+}
+
+.shadow-modal-content {
+    background-color: var(--bg-primary);
+    border-radius: 8px;
+    padding: 20px;
+    width: 90%;
+    max-width: 450px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.shadow-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    position: relative;
+}
+
+.shadow-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.shadow-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    overflow-y: auto;
+    max-height: calc(90vh - 100px);
+    padding-right: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-color) var(--bg-tertiary);
+}
+
+.shadow-modal-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.shadow-modal-body::-webkit-scrollbar-track {
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
+.shadow-modal-body::-webkit-scrollbar-thumb {
+    background-color: var(--primary-color);
+    border-radius: 4px;
+    border: 2px solid var(--bg-tertiary);
+}
+
+#close-shadow-modal {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 1.2rem;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+#close-shadow-modal:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    transform: rotate(90deg);
+}
+
+#close-shadow-modal:active {
+    transform: rotate(90deg) scale(0.9);
+}
+
+.shadow-color-main {
+    background-color: var(--bg-secondary);
+    border-radius: var(--border-radius);
+    padding: 12px 15px;
+    margin-bottom: 10px;
+}
+
+.shadow-color-main label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.color-picker-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+}
+
+.color-picker-wrapper input[type="color"] {
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 50%;
+    overflow: hidden;
+    cursor: pointer;
+    padding: 0;
+    background: none;
+}
+
+.color-picker-wrapper input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.color-picker-wrapper input[type="color"]::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px var(--bg-tertiary);
+}
+
+.color-preview {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #000000;
+    border: 2px solid var(--bg-tertiary);
+    position: absolute;
+    left: 0;
+    pointer-events: none;
+}
+
+#color-value {
+    font-family: monospace;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.shadow-preview-text {
+    text-align: center;
+    padding: 25px 20px;
+    background-color: var(--bg-tertiary);
+    border-radius: var(--border-radius);
+    font-size: 28px;
+    font-weight: bold;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    margin-bottom: 5px;
+}
+
+.shadow-previews {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.shadow-preview {
+    text-align: center;
+    padding: 15px 10px;
+    border-radius: var(--border-radius);
+    background-color: var(--bg-secondary);
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.shadow-preview:hover {
+    background-color: var(--bg-tertiary);
+}
+
+.shadow-preview.active {
+    border-color: var(--primary-color);
+    background-color: var(--bg-tertiary);
+}
+
+.shadow-custom-controls {
+    display: none;
+    background-color: var(--bg-secondary);
+    border-radius: var(--border-radius);
+    padding: 15px;
+}
+
+.shadow-custom-controls.active {
+    display: block;
+}
+
+.shadow-control-group {
+    margin-bottom: 15px;
+}
+
+.shadow-control-group:last-child {
+    margin-bottom: 0;
+}
+
+.shadow-control-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.shadow-control-group input[type="range"] {
+    width: 100%;
+    margin: 5px 0;
+    cursor: grab;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    outline: none;
+}
+
+.shadow-control-group input[type="range"]:active {
+    cursor: grabbing;
+}
+
+.shadow-control-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    cursor: grab;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.shadow-control-group input[type="range"]:active::-webkit-slider-thumb {
+    cursor: grabbing;
+    width: 18px;
+    height: 18px;
+}
+
+.shadow-control-group input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    cursor: grab;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    border: none;
+}
+
+.shadow-control-group input[type="range"]:active::-moz-range-thumb {
+    cursor: grabbing;
+    width: 18px;
+    height: 18px;
+}
+
+.shadow-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.shadow-modal-actions button {
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.shadow-modal-actions .cancel-button {
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.shadow-modal-actions .apply-button {
+    border: none;
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.shadow-modal-actions button:hover {
+    opacity: 0.9;
+}
+
+.shadow-modal-actions button:active {
+    transform: scale(0.98);
+}
+
+/* Light Theme for Text Panel */
+:root.light-theme #text-panel {
+    background-color: #ffffff;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e0e0e0;
+}
+
+:root.light-theme #text-panel .panel-header {
+    background-color: #f8f8f8;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+:root.light-theme #text-panel .panel-header h3 {
+    color: #333333;
+}
+
+:root.light-theme #text-panel .panel-close {
+    color: #555555;
+}
+
+:root.light-theme #text-panel .panel-close:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+:root.light-theme #text-panel .text-edit-input {
+    background-color: #ffffff;
+    border: 1px solid #d0d0d0;
+    color: #333333;
+}
+
+:root.light-theme #text-panel .text-edit-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.15);
+}
+
+:root.light-theme #text-panel .font-select {
+    background-color: #ffffff;
+    border: 1px solid #d0d0d0;
+    color: #333333;
+}
+
+:root.light-theme #text-panel .font-select:focus {
+    border-color: var(--primary-color);
+}
+
+:root.light-theme #text-panel .text-edit-buttons .text-edit-save,
+:root.light-theme #text-panel .text-edit-buttons .text-edit-cancel {
+    background-color: #f8f8f8;
+    border: 1px solid #d0d0d0;
+    color: #333333;
+}
+
+:root.light-theme #text-panel .text-edit-buttons .text-edit-save:hover,
+:root.light-theme #text-panel .text-edit-buttons .text-edit-cancel:hover {
+    background-color: #e8e8e8;
+}
+
+:root.light-theme #text-panel .text-edit-buttons .text-edit-save {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+}
+
+:root.light-theme #text-panel .shadow-effects-btn {
+    background: linear-gradient(to right, #f2f2f2, #f8f8f8);
+    color: #333333;
+    border: 1px solid #d0d0d0;
+}
+
+:root.light-theme #text-panel .shadow-effects-btn:hover {
+    background: linear-gradient(to right, #e8e8e8, #f2f2f2);
+}
+
+/* Light Theme for Text Panel Color Options */
+:root.light-theme #text-panel .text-edit-colors {
+    background-color: #f8f8f8;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+:root.light-theme #text-panel .color-option {
+    border: 2px solid #e8e8e8;
+}
+
+:root.light-theme #text-panel .color-option:hover {
+    border-color: #c0c0c0;
+}
+
+:root.light-theme #text-panel .color-option.active {
+    border-color: var(--primary-color);
+}
+
+:root.light-theme #text-panel .color-picker-container {
+    background-color: #f0f0f0;
+}
+
+:root.light-theme #text-panel .custom-color {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Light Theme for Shadow Modal */
+:root.light-theme .shadow-modal-content {
+    background-color: #ffffff;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.12);
+}
+
+:root.light-theme .shadow-modal-header {
+    border-bottom: 1px solid #e0e0e0;
+}
+
+:root.light-theme .shadow-modal-header h3 {
+    color: #333333;
+}
+
+:root.light-theme #close-shadow-modal {
+    color: #555555;
+}
+
+:root.light-theme #close-shadow-modal:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+:root.light-theme .shadow-preview-text {
+    background-color: #f0f0f0;
+    color: #333333;
+}
+
+:root.light-theme .shadow-preview {
+    background-color: #f5f5f5;
+    border: 2px solid transparent;
+}
+
+:root.light-theme .shadow-preview:hover {
+    background-color: #e8e8e8;
+}
+
+:root.light-theme .shadow-preview.active {
+    border-color: var(--primary-color);
+    background-color: #e8e8e8;
+}
+
+:root.light-theme .shadow-custom-controls {
+    background-color: #f5f5f5;
+}
+
+:root.light-theme .shadow-control-group label {
+    color: #333333;
+}
+
+:root.light-theme .shadow-control-group input[type="range"] {
+    background: #e0e0e0;
+}
+
+:root.light-theme .shadow-control-group input[type="range"]::-webkit-slider-thumb {
+    background: var(--primary-color);
+}
+
+:root.light-theme .shadow-modal-actions .cancel-button {
+    background-color: #f0f0f0;
+    border: 1px solid #d0d0d0;
+    color: #333333;
+}
+
+:root.light-theme .shadow-modal-actions .apply-button {
+    background-color: var(--primary-color);
+}
+
+:root.light-theme .shadow-color-main {
+    background-color: #f5f5f5;
+}
+
+:root.light-theme .shadow-color-main label {
+    color: #333333;
+}
+
+:root.light-theme #color-value {
+    color: #555555;
 }

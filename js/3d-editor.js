@@ -4699,6 +4699,173 @@ function onDoubleClick(event) {
             // Rest of the original implementation...
             // [code continues as before]
         }
+    } else if (clickedObject && clickedObject.type === 'shape') {
+        console.log('Shape double-clicked:', clickedObject);
+        
+        // Check if there's an existing shape edit panel
+        const existingPanel = document.getElementById('shape-edit-panel');
+        
+        if (existingPanel) {
+            // Set up the existing panel for editing
+            const colorOptions = existingPanel.querySelectorAll('.color-option');
+            
+            // Select the correct color
+            if (colorOptions.length > 0) {
+                colorOptions.forEach(option => {
+                    option.classList.remove('active');
+                    if (option.getAttribute('data-color') === clickedObject.color) {
+                        option.classList.add('active');
+                    }
+                });
+            }
+            
+            // Store original values
+            const originalColor = clickedObject.color;
+            
+            // Show the panel
+            existingPanel.classList.add('active');
+            
+            // Handle color selection
+            colorOptions.forEach(option => {
+                // Remove existing event listeners by cloning
+                const newOption = option.cloneNode(true);
+                option.parentNode.replaceChild(newOption, option);
+                
+                // Add new event listener
+                newOption.addEventListener('click', () => {
+                    colorOptions.forEach(opt => opt.classList.remove('active'));
+                    newOption.classList.add('active');
+                    clickedObject.color = newOption.getAttribute('data-color');
+                    updateShirt3DTexture();
+                });
+            });
+            
+            // Handle save button
+            const saveBtn = existingPanel.querySelector('.text-edit-save');
+            if (saveBtn) {
+                // Remove existing event listeners by cloning
+                const newSaveBtn = saveBtn.cloneNode(true);
+                saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
+                
+                // Add new event listener
+                newSaveBtn.addEventListener('click', () => {
+                    // Update the object and hide panel
+                    updateShirt3DTexture();
+                    existingPanel.classList.remove('active');
+                });
+            }
+            
+            // Handle cancel button
+            const cancelBtn = existingPanel.querySelector('.text-edit-cancel');
+            if (cancelBtn) {
+                // Remove existing event listeners by cloning
+                const newCancelBtn = cancelBtn.cloneNode(true);
+                cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+                
+                // Add new event listener
+                newCancelBtn.addEventListener('click', () => {
+                    // Restore original values
+                    clickedObject.color = originalColor;
+                    
+                    updateShirt3DTexture();
+                    existingPanel.classList.remove('active');
+                });
+            }
+            
+            // Handle close button
+            const closeBtn = existingPanel.querySelector('.panel-close');
+            if (closeBtn) {
+                // Remove existing event listeners by cloning
+                const newCloseBtn = closeBtn.cloneNode(true);
+                closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+                
+                // Add new event listener
+                newCloseBtn.addEventListener('click', () => {
+                    // Restore original values
+                    clickedObject.color = originalColor;
+                    
+                    updateShirt3DTexture();
+                    existingPanel.classList.remove('active');
+                });
+            }
+            
+            return;
+        }
+        
+        // If no existing panel, create a new one
+        const panel = createShapeEditOverlay(clickedObject);
+        
+        if (panel) {
+            // Store original values
+            const originalColor = clickedObject.color;
+            
+            // Show the panel
+            panel.classList.add('active');
+            
+            // Handle shape option selection
+            const shapeOptions = panel.querySelectorAll('.shape-option');
+            shapeOptions.forEach(option => {
+                if (option.dataset.shape === clickedObject.shapeType) {
+                    option.classList.add('active');
+                }
+                
+                option.addEventListener('click', () => {
+                    shapeOptions.forEach(opt => opt.classList.remove('active'));
+                    option.classList.add('active');
+                    clickedObject.shapeType = option.dataset.shape;
+                    updateShirt3DTexture();
+                });
+            });
+            
+            // Handle color selection
+            const colorOptions = panel.querySelectorAll('.color-option');
+            colorOptions.forEach(option => {
+                if (option.dataset.color === clickedObject.color) {
+                    option.classList.add('active');
+                }
+                
+                option.addEventListener('click', () => {
+                    colorOptions.forEach(opt => opt.classList.remove('active'));
+                    option.classList.add('active');
+                    clickedObject.color = option.dataset.color;
+                    updateShirt3DTexture();
+                });
+            });
+            
+            // Handle save button
+            const saveBtn = panel.querySelector('.text-edit-save');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', () => {
+                    // Update the object and remove panel
+                    updateShirt3DTexture();
+                    panel.remove();
+                });
+            }
+            
+            // Handle cancel button
+            const cancelBtn = panel.querySelector('.text-edit-cancel');
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', () => {
+                    // Restore original values
+                    clickedObject.color = originalColor;
+                    
+                    updateShirt3DTexture();
+                    panel.remove();
+                });
+            }
+            
+            // Handle close button
+            const closeBtn = panel.querySelector('.panel-close');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => {
+                    // Restore original values
+                    clickedObject.color = originalColor;
+                    
+                    updateShirt3DTexture();
+                    panel.remove();
+                });
+            }
+        }
     } 
     // Rest of the function for other object types
 }
