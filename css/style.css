@@ -89,19 +89,19 @@
 	font-family: var(--font-sans);
 }
 
-body {
+body, html {
 	width: 100%;
-	height: 100vh;
+	height: 100%;
+	margin: 0;
+	padding: 0;
 	overflow: hidden;
-	background-color: var(--bg-primary);
-	color: var(--text-primary);
-	line-height: 1.5;
 }
 
 .app {
 	position: relative;
 	display: flex;
 	flex-direction: column;
+	width: 100%;
 	height: 100vh;
 	overflow: hidden;
 }
@@ -117,17 +117,29 @@ body {
 	flex: 1;
 	overflow: hidden;
 	position: relative;
+	width: 100%;
+	height: 100%;
 }
 
 .canvas-container {
 	position: relative;
 	flex: 1;
 	width: 100%;
+	height: 100%;
 	overflow: hidden;
 	display: flex;
 	justify-content: center;
 	align-items: center;
 	background-color: var(--bg-primary);
+	transition: all 0.3s ease-in-out; /* Add smooth transition for any changes */
+}
+
+/* Make sure the canvas itself is responsive */
+.canvas-container canvas {
+	width: 100% !important;
+	height: 100% !important;
+	transition: all 0.3s ease-in-out;
+	display: block;
 }
 
 /* Camera Controls - Make buttons float independently */
@@ -785,7 +797,7 @@ body {
 	
 	.canvas-container {
 		width: 100%;
-		height: calc(100vh - 120px); /* Adjust for header and mobile action bar */
+		height: 100%;
 	}
 	
 	.floating-controls {
@@ -794,6 +806,7 @@ body {
 		transform: translateY(-50%);
 		display: flex;
 		flex-direction: column;
+		
 		gap: 10px;
 		background-color: var(--bg-secondary);
 		padding: 10px;
@@ -2310,6 +2323,15 @@ body.dark-theme #editor-mode-toggle:hover {
     display: flex !important;
     opacity: 1;
     visibility: visible;
+    pointer-events: auto;
+}
+
+/* Add styles for when the panel is created */
+#photo-edit-panel.floating-panel {
+    display: flex !important;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
 }
 
 #photo-edit-panel .preview-container {
@@ -5928,4 +5950,99 @@ body.dark-theme #editor-mode-toggle:hover {
 
 .shadow-preview[data-shadow-type="custom"].active + #shadow-custom-controls {
     display: block;
+}
+
+.colors-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+.colors-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.colors-header label {
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.color-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.more-colors-btn, .shadow-btn {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    padding: 4px 8px;
+    border-radius: var(--border-radius-sm);
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: var(--transition);
+}
+
+.more-colors-btn:hover, .shadow-btn:hover {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.more-colors-btn i, .shadow-btn i {
+    font-size: 12px;
+}
+
+.color-options-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: calc(100% - 45px);
+}
+
+.color-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.color-option {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.color-option:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.color-option.active {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+.color-picker-button {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+    background: linear-gradient(135deg, #ff0000, #ff9900, #33cc33, #3399ff, #cc33ff);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 5px;
+    transition: transform 0.2s, box-shadow 0.2s;
 }

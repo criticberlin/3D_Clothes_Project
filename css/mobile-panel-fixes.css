@@ -1,0 +1,364 @@
+/* Mobile Panel Fixes - Apply consistent styling for all panels in mobile view */
+
+/* Desktop view resets - ensure panels return to correct positions after mobile view */
+@media (min-width: 769px) {
+    #ai-panel,
+    #photo-panel,
+    #text-panel,
+    #text-edit-panel,
+    #shape-panel,
+    #color-panel,
+    #photo-edit-panel,
+    #shape-edit-panel,
+    #model-panel,
+    #save-design-panel,
+    .view-selection-container {
+        position: fixed !important;
+        left: 100px !important;
+        top: 50% !important;
+        right: auto !important;
+        bottom: auto !important;
+        max-width: 400px !important;
+        width: 380px !important;
+        transform: translateY(-50%) !important;
+        max-height: calc(100vh - 40px) !important;
+        margin: 0 !important;
+        animation: none !important;
+    }
+    
+    /* Special override for shadow panel to position it on the right side */
+
+    /* Ensure panel content has correct sizing/scrolling */
+    #ai-panel .panel-content,
+    #photo-panel .panel-content,
+    #text-panel .panel-content,
+    #text-edit-panel .panel-content,
+    #shape-panel .panel-content,
+    #color-panel .panel-content,
+    #photo-edit-panel .panel-content,
+    #shape-edit-panel .panel-content,
+    #model-panel .panel-content,
+    #save-design-panel .panel-content,
+    .view-selection-container .panel-content {
+        max-height: calc(100vh - 120px) !important;
+        padding: 1.2rem !important;
+        font-size: 1rem !important;
+    }
+}
+
+/* Fix color wheel visibility issues */
+.color-wheel-container,
+.color-wheel-wrapper,
+#color-wheel {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Remove duplicate color wheel selectors that might be hiding the correct wheel */
+#color-wheel:first-of-type,
+.color-wheel:first-of-type {
+    display: block !important;
+}
+
+.color-wheel-container:first-of-type {
+    display: block !important;
+}
+
+/* Override the incorrect AI panel mobile styling to match other panels */
+@media (max-width: 768px) {
+    /* Remove the bottom-slide-up behavior and make it match the color panel */
+    #ai-panel,
+    #photo-panel,
+    #text-panel,
+    #text-edit-panel,
+    #shape-panel,
+    #color-panel,
+    #photo-edit-panel,
+    #shape-edit-panel,
+    #model-panel,
+    #save-design-panel,
+    .view-selection-container {
+        position: fixed !important;
+        top: auto !important;
+        left: 50% !important;
+        right: auto !important;
+        bottom: calc(90px + 20px) !important; /* Position above floating controls with consistent 20px gap */
+        width: 321.6px !important; /* Exact width as requested */
+        max-width: none !important;
+        border-radius: 20px !important;
+        transform: translateX(-50%) !important;
+        margin: 0 !important;
+        animation: none !important; /* Remove existing animations */
+        z-index: 1100 !important; /* Ensure proper stacking */
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03)) !important;
+        backdrop-filter: blur(20px) !important;
+        -webkit-backdrop-filter: blur(20px) !important;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2), 0 0 15px rgba(0, 0, 0, 0.1) !important;
+    }
+    
+    /* Light theme panel styling */
+    :root.light-theme #ai-panel,
+    :root.light-theme #photo-panel,
+    :root.light-theme #text-panel,
+    :root.light-theme #text-edit-panel,
+    :root.light-theme #shape-panel,
+    :root.light-theme #color-panel,
+    :root.light-theme #photo-edit-panel,
+    :root.light-theme #shape-edit-panel,
+    :root.light-theme #model-panel,
+    :root.light-theme #save-design-panel,
+    :root.light-theme .view-selection-container {
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.6)) !important;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 0 15px rgba(255, 255, 255, 0.05) !important;
+    }
+    
+    /* Specifically apply the same width to the save design panel to ensure consistency */
+    #save-design-panel {
+        width: 321.6px !important; /* Exact width as requested */
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+    }
+    
+    #ai-panel.active,
+    #photo-panel.active,
+    #text-panel.active,
+    #text-edit-panel.active,
+    #shape-panel.active,
+    #color-panel.active,
+    #photo-edit-panel.active,
+    #shape-edit-panel.active,
+    #model-panel.active,
+    #save-design-panel.active,
+    .view-selection-container.active {
+        animation: panelSlideUpFromControls 0.3s ease !important;
+        transform: translateX(-50%) translateY(0) !important;
+    }
+    
+    /* Reset any custom animations for panels */
+    @keyframes ai-panel-slide-up {
+        0%, 100% { transform: translateX(-50%) translateY(0); }
+    }
+    
+    /* Add specific animation for text panel */
+    @keyframes panelSlideUpFromControls {
+        0% { transform: translateX(-50%) translateY(20px); opacity: 0; }
+        100% { transform: translateX(-50%) translateY(0); opacity: 1; }
+    }
+    
+    /* Apply overflow rules to all panels */
+    #ai-panel,
+    #photo-panel,
+    #text-panel,
+    #text-edit-panel,
+    #shape-panel,
+    #color-panel,
+    #photo-edit-panel,
+    #shape-edit-panel,
+    #model-panel,
+    #save-design-panel,
+    .view-selection-container {
+        max-height: 60% !important; /* Reduce from 65% to 60% */
+        overflow-y: auto !important;
+    }
+    
+    /* Ensure text-edit-panel has exactly the same position as other panels */
+    #text-edit-panel {
+        position: fixed !important;
+        top: auto !important;
+        left: 50% !important;
+        right: auto !important;
+        bottom: calc(90px + 20px) !important;
+        width: 321.6px !important;
+        transform: translateX(-50%) !important;
+        border-radius: 20px !important;
+        margin: 0 !important;
+        animation: none !important;
+        z-index: 1100 !important;
+    }
+    
+    /* Ensure text-edit-panel appears with proper animation */
+    #text-edit-panel.active {
+        animation: panelSlideUpFromControls 0.3s ease !important;
+        transform: translateX(-50%) translateY(0) !important;
+        display: flex !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+    
+    /* Consistency in panel content layout for all panels - make more compact */
+    #ai-panel .panel-content,
+    #photo-panel .panel-content,
+    #text-panel .panel-content,
+    #text-edit-panel .panel-content,
+    #shape-panel .panel-content,
+    #color-panel .panel-content,
+    #photo-edit-panel .panel-content,
+    #shape-edit-panel .panel-content,
+    #model-panel .panel-content,
+    #save-design-panel .panel-content,
+    .view-selection-container .panel-content {
+        padding: 0.7rem !important; /* Reduced from 1rem */
+        font-size: 0.85rem !important; /* Reduced from 0.9rem */
+        max-height: calc(60vh - 45px) !important; /* Account for header, reduced height */
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    
+    /* Consistency in panel headers for all panels - make more compact */
+    #ai-panel .panel-header,
+    #photo-panel .panel-header,
+    #text-panel .panel-header,
+    #text-edit-panel .panel-header,
+    #shape-panel .panel-header,
+    #color-panel .panel-header,
+    #photo-edit-panel .panel-header,
+    #shape-edit-panel .panel-header,
+    #model-panel .panel-header,
+    #save-design-panel .panel-header,
+    .view-selection-container .panel-header {
+        padding: 0.7rem 1rem !important; /* Reduced from 0.9rem 1.2rem */
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+    
+    #ai-panel .panel-header h3,
+    #photo-panel .panel-header h3,
+    #text-panel .panel-header h3,
+    #text-edit-panel .panel-header h3,
+    #shape-panel .panel-header h3,
+    #color-panel .panel-header h3,
+    #photo-edit-panel .panel-header h3,
+    #shape-edit-panel .panel-header h3,
+    #model-panel .panel-header h3,
+    #save-design-panel .panel-header h3,
+    .view-selection-container .panel-header h3,
+    .view-selection-container .panel-header h2 {
+        font-size: 0.95rem !important; /* Reduced from 1rem */
+        margin: 0 !important;
+    }
+    
+    /* Make buttons in all panels more compact */
+    #ai-panel button,
+    #photo-panel button,
+    #text-panel button,
+    #text-edit-panel button,
+    #shape-panel button,
+    #color-panel button,
+    #photo-edit-panel button,
+    #shape-edit-panel button,
+    #model-panel button,
+    #save-design-panel button,
+    .view-selection-container button {
+        font-size: 0.85rem !important; /* Smaller font size for buttons */
+        padding: 0.5rem 0.8rem !important; /* Reduced padding */
+    }
+}
+
+/* Smaller mobile devices */
+@media (max-width: 480px) {
+    #ai-panel,
+    #photo-panel,
+    #text-panel,
+    #text-edit-panel,
+    #shape-panel,
+    #color-panel,
+    #photo-edit-panel,
+    #shape-edit-panel,
+    #model-panel,
+    #save-design-panel,
+    .view-selection-container {
+        width: 321.6px !important; /* Exact width as requested */
+        bottom: calc(70px + 20px) !important; /* Position above floating controls with consistent 20px gap */
+        max-height: 55% !important; /* Reduced from 60% */
+        border-radius: 16px !important; /* Reduced from 18px */
+        font-size: 0.8rem !important; /* Reduced from 0.85rem */
+    }
+    
+    /* Specifically apply the same width to the save design panel to ensure consistency */
+    #save-design-panel {
+        width: 321.6px !important; /* Exact width as requested */
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+    }
+    
+    #ai-panel .panel-content,
+    #photo-panel .panel-content,
+    #text-panel .panel-content,
+    #text-edit-panel .panel-content,
+    #shape-panel .panel-content,
+    #color-panel .panel-content,
+    #photo-edit-panel .panel-content,
+    #shape-edit-panel .panel-content,
+    #model-panel .panel-content,
+    #save-design-panel .panel-content,
+    .view-selection-container .panel-content {
+        padding: 0.6rem !important; /* Reduced from 0.8rem */
+        font-size: 0.8rem !important; /* Reduced from 0.85rem */
+        max-height: calc(55vh - 40px) !important; /* Account for smaller header */
+    }
+    
+    #ai-panel .panel-header,
+    #photo-panel .panel-header,
+    #text-panel .panel-header,
+    #text-edit-panel .panel-header,
+    #shape-panel .panel-header,
+    #color-panel .panel-header,
+    #photo-edit-panel .panel-header,
+    #shape-edit-panel .panel-header,
+    #model-panel .panel-header,
+    #save-design-panel .panel-header,
+    .view-selection-container .panel-header {
+        padding: 0.6rem 0.8rem !important; /* Reduced from 0.8rem 1rem */
+    }
+    
+    #ai-panel .panel-header h3,
+    #photo-panel .panel-header h3,
+    #text-panel .panel-header h3,
+    #text-edit-panel .panel-header h3,
+    #shape-panel .panel-header h3,
+    #color-panel .panel-header h3,
+    #photo-edit-panel .panel-header h3,
+    #shape-edit-panel .panel-header h3,
+    #model-panel .panel-header h3,
+    #save-design-panel .panel-header h3,
+    .view-selection-container .panel-header h3,
+    .view-selection-container .panel-header h2 {
+        font-size: 0.85rem !important; /* Reduced from 0.95rem */
+    }
+    
+    /* Make buttons even smaller */
+    #ai-panel button,
+    #photo-panel button,
+    #text-panel button,
+    #text-edit-panel button,
+    #shape-panel button,
+    #color-panel button,
+    #photo-edit-panel button,
+    #shape-edit-panel button,
+    #model-panel button,
+    #save-design-panel button,
+    .view-selection-container button {
+        padding: 5px 8px !important;
+        font-size: 0.75rem !important;
+    }
+    
+    /* Ensure floating panels are properly placed above mobile floating controls */
+    .floating-panel {
+        max-height: 55vh !important;
+    }
+    
+    /* Ensure text-edit-panel has exactly the same position on smaller devices */
+    #text-edit-panel {
+        position: fixed !important;
+        top: auto !important;
+        left: 50% !important;
+        right: auto !important;
+        bottom: calc(70px + 20px) !important;
+        width: 321.6px !important;
+        border-radius: 16px !important;
+        transform: translateX(-50%) !important;
+    }
+} 

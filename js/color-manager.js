@@ -57,12 +57,29 @@ export function initColorManager() {
  */
 function initColorWheel() {
     const ctx = colorWheel.getContext('2d');
-    const centerX = colorWheel.width / 2;
-    const centerY = colorWheel.height / 2;
+    const width = colorWheel.width;
+    const height = colorWheel.height;
+    const centerX = width / 2;
+    const centerY = height / 2;
     const radius = Math.min(centerX, centerY) - 5;
     
-    // Draw color wheel
-    drawColorWheel(ctx, centerX, centerY, radius);
+    // Clear the canvas
+    ctx.clearRect(0, 0, width, height);
+    
+    // Create a circular color wheel gradient
+    const gradient = createColorWheelGradient(ctx, centerX, centerY, radius);
+    
+    // Draw the circular color wheel
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    
+    // Create a white center circle
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius * 0.15, 0, 2 * Math.PI);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fill();
     
     // Add event listeners for color selection
     colorWheel.addEventListener('mousedown', startColorSelection);
@@ -78,33 +95,50 @@ function initColorWheel() {
 }
 
 /**
- * Draw the color wheel on canvas
+ * Create a color wheel gradient
  */
-function drawColorWheel(ctx, centerX, centerY, radius) {
-    // Create gradient
-    for (let angle = 0; angle < 360; angle += 0.1) {
-        const startAngle = (angle - 0.1) * (Math.PI / 180);
-        const endAngle = angle * (Math.PI / 180);
+function createColorWheelGradient(ctx, centerX, centerY, radius) {
+    // We'll create a conical gradient by using multiple radial gradients
+    // for each hue section
+    
+    // First, draw a white-to-transparent radial gradient as a base
+    ctx.save();
+    const baseGradient = ctx.createRadialGradient(
+        centerX, centerY, 0,
+        centerX, centerY, radius
+    );
+    baseGradient.addColorStop(0, 'white');
+    baseGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+    ctx.fillStyle = baseGradient;
+    ctx.fill();
+    ctx.restore();
+    
+    // Create a conical gradient by drawing color segments
+    for (let angle = 0; angle < 360; angle += 1) {
+        const startAngle = (angle - 0.5) * (Math.PI / 180);
+        const endAngle = (angle + 0.5) * (Math.PI / 180);
         
-        for (let r = 0; r < radius; r++) {
-            const hue = angle;
-            const saturation = r / radius;
-            const lightness = 0.4;
-            
-            // Convert HSL to RGB
-            ctx.fillStyle = `hsl(${hue}, ${saturation * 100}%, ${lightness * 100}%)`;
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, r, startAngle, endAngle, false);
-            ctx.lineTo(centerX, centerY);
-            ctx.fill();
-        }
+        // Get the color for this angle
+        const hue = angle;
+        const color = `hsl(${hue}, 100%, 50%)`;
+        
+        // Draw a segment
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fill();
     }
     
-    // Draw white circle in center
-    ctx.fillStyle = '#FFFFFF';
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius * 0.1, 0, Math.PI * 2, false);
-    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    
+    // Return a base gradient for compatibility with the function caller
+    return baseGradient;
 }
 
 /**
@@ -166,11 +200,22 @@ function selectColorFromWheel(e) {
     const y = e.clientY - rect.top;
     
     const ctx = colorWheel.getContext('2d');
+    
+    // Get the pixel color at the clicked position
     const imageData = ctx.getImageData(x, y, 1, 1).data;
     
     const r = imageData[0];
     const g = imageData[1];
     const b = imageData[2];
+    
+    // Calculate the brightness and saturation based on RGB values
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    
+    // If the color is too dark or too light (close to white/black), skip it
+    if (max < 20 || (max > 235 && min > 235)) {
+        return;
+    }
     
     const hexColor = rgbToHex(r, g, b);
     setActiveColor(hexColor);
@@ -227,7 +272,7 @@ function updateColorInfo(color) {
     colorHexElement.textContent = color;
     
     // Update color name (if known)
-    const colorName = COLOR_NAMES[color.toUpperCase()] || getClosestColorName(color);
+    const colorName = COLOR_NAMES[color.toUpperCase()] || 'Custom Color';
     colorNameElement.textContent = colorName;
 }
 
@@ -239,41 +284,8 @@ function rgbToHex(r, g, b) {
 }
 
 /**
- * Get the closest known color name for a hex color
+ * Public method to set color from external components
  */
-function getClosestColorName(hexColor) {
-    // Convert to RGB for comparison
-    const r1 = parseInt(hexColor.substring(1, 3), 16);
-    const g1 = parseInt(hexColor.substring(3, 5), 16);
-    const b1 = parseInt(hexColor.substring(5, 7), 16);
-    
-    let closestColor = '';
-    let minDistance = Number.MAX_VALUE;
-    
-    // Compare with known colors
-    for (const [knownHex, name] of Object.entries(COLOR_NAMES)) {
-        const r2 = parseInt(knownHex.substring(1, 3), 16);
-        const g2 = parseInt(knownHex.substring(3, 5), 16);
-        const b2 = parseInt(knownHex.substring(5, 7), 16);
-        
-        // Calculate color distance using Euclidean distance
-        const distance = Math.sqrt(
-            Math.pow(r1 - r2, 2) + 
-            Math.pow(g1 - g2, 2) + 
-            Math.pow(b1 - b2, 2)
-        );
-        
-        if (distance < minDistance) {
-            minDistance = distance;
-            closestColor = name;
-        }
-    }
-    
-    // If it's too far from any known color, just call it "Custom"
-    return minDistance < 50 ? closestColor : 'Custom Color';
-}
-
-// Export the set active color function for external use
 export function setColor(color) {
-    setActiveColor(color, false);
+    setActiveColor(color);
 } 

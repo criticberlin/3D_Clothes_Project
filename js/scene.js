@@ -179,8 +179,10 @@ function optimizeTextures() {
 // ============================================================================
 const modelSettings = {
     tshirt: {
-        scale: 0.8,
+        scale: 1.2, // Consistent scale for t-shirt across all devices
         position: new THREE.Vector3(0, 0, 0),
+        mobilePosition: new THREE.Vector3(0, 0.08, 0), // Increased Y value to position model higher on mobile
+        mobileScale: 1.4, // Same scale as desktop for consistent sizing
 
         camera: {
             position: new THREE.Vector3(0, 0, 2.5),
@@ -212,8 +214,8 @@ const modelSettings = {
         }
     },
     hoodie: {
-        scale: 0.65,
-        position: new THREE.Vector3(0, -0.9, 0),
+        scale: 1.1,
+        position: new THREE.Vector3(0, -1.5, 0),
         camera: {
             position: new THREE.Vector3(0, 0.05, 2.8),
             target: new THREE.Vector3(0, 0, 0),
@@ -1573,14 +1575,28 @@ function processLoadedModel(gltf, settings, color) {
         
     console.log(`Applied standard cloth material to ${allMeshes.length} meshes in the ${currentModelType} model`);
 
-    // Apply model settings
-    model.scale.set(
-        settings.scale,
-        settings.scale,
-        settings.scale
-    );
+    // Check if we're on mobile
+    const isMobile = window.innerWidth < 768;
+    
+    // Apply appropriate scale and position based on device type
+    if (isMobile && settings.mobileScale && settings.mobilePosition) {
+        console.log(`Applying mobile-specific settings for ${currentModelType}`);
+        model.scale.set(
+            settings.mobileScale,
+            settings.mobileScale,
+            settings.mobileScale
+        );
+        model.position.copy(settings.mobilePosition);
+    } else {
+        // Apply standard desktop scale and position
+        model.scale.set(
+            settings.scale,
+            settings.scale,
+            settings.scale
+        );
+        model.position.copy(settings.position);
+    }
 
-    model.position.copy(settings.position);
     model.rotation.copy(settings.rotation || new THREE.Euler(0, 0, 0));
 
     // Ensure group exists
@@ -2722,8 +2738,94 @@ function onWindowResize() {
 
         console.log(`Resizing canvas to ${width}x${height}`);
 
+        // Store previous mobile state for comparison
+        const wasMobile = camera.userData.isMobile || false;
+        
+        // Determine if we're in mobile mode but use a continuous scale factor
+        const isMobile = width < 768;
+        camera.userData.isMobile = isMobile;
+        
+        // Calculate a responsive scale factor between 0 (mobile) and 1 (desktop)
+        // This creates a smooth transition zone between 480px and 768px
+        const mobileBreakpoint = 768;
+        const smallMobileBreakpoint = 480;
+        let responsiveFactor = 1; // Default to desktop (1)
+        
+        if (width <= smallMobileBreakpoint) {
+            // Full mobile mode
+            responsiveFactor = 0;
+        } else if (width < mobileBreakpoint) {
+            // Transition zone - calculate a factor between 0 and 1
+            responsiveFactor = (width - smallMobileBreakpoint) / (mobileBreakpoint - smallMobileBreakpoint);
+        }
+        
         // Update camera aspect ratio
         camera.aspect = width / height;
+        
+        // Smoothly adjust FOV based on responsive factor
+        const mobileFOV = 35;
+        const desktopFOV = 25;
+        camera.fov = desktopFOV + (mobileFOV - desktopFOV) * (1 - responsiveFactor);
+        
+        // Apply responsive scaling to models if we have a current model
+        if (currentModelType && group) {
+            const settings = modelSettings[currentModelType];
+            if (settings) {
+                // Only attempt to adjust if we have both desktop and mobile settings
+                if (settings.scale && (settings.mobileScale !== undefined) && 
+                    settings.position && (settings.mobilePosition !== undefined)) {
+                    
+                    // Calculate interpolated scale based on responsive factor
+                    const interpolatedScale = settings.mobileScale + 
+                        (settings.scale - settings.mobileScale) * responsiveFactor;
+                    
+                    // Calculate interpolated position
+                    const interpolatedPosition = new THREE.Vector3();
+                    interpolatedPosition.lerpVectors(
+                        settings.mobilePosition,
+                        settings.position,
+                        responsiveFactor
+                    );
+                    
+                    console.log(`Responsive sizing: factor=${responsiveFactor.toFixed(2)}, scale=${interpolatedScale.toFixed(2)}`);
+                    
+                    // Apply to each model in the group
+                    group.children.forEach(model => {
+                        // Apply interpolated scale
+                        model.scale.set(
+                            interpolatedScale,
+                            interpolatedScale,
+                            interpolatedScale
+                        );
+                        
+                        // Apply interpolated position
+                        model.position.copy(interpolatedPosition);
+                    });
+                } else if (isMobile !== wasMobile) {
+                    // Fallback to binary switch if we don't have both values defined
+                    group.children.forEach(model => {
+                        if (isMobile && settings.mobileScale && settings.mobilePosition) {
+                            console.log(`Switching to mobile layout for ${currentModelType}`);
+                            model.scale.set(
+                                settings.mobileScale,
+                                settings.mobileScale,
+                                settings.mobileScale
+                            );
+                            model.position.copy(settings.mobilePosition);
+                        } else {
+                            console.log(`Switching to desktop layout for ${currentModelType}`);
+                            model.scale.set(
+                                settings.scale,
+                                settings.scale,
+                                settings.scale
+                            );
+                            model.position.copy(settings.position);
+                        }
+                    });
+                }
+            }
+        }
+        
         camera.updateProjectionMatrix();
 
         // Update renderer size
