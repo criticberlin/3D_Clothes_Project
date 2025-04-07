@@ -879,8 +879,8 @@ function setupPanelSpecificHandlers() {
                 // Setup advanced shadow controls
                 const setupShadowControls = () => {
                     // Shadow configuration
-                    let shadowEnabled = false;
-                    let currentShadowType = 'none';
+                    let shadowEnabled = true; // Set to true by default
+                    let currentShadowType = 'drop'; // Set default shadow type
                     let shadowBlur = 5;
                     let shadowDistance = 3;
                     let shadowAngle = 45;
@@ -920,8 +920,6 @@ function setupPanelSpecificHandlers() {
                     
                     // Function to setup all the shadow controls inside the modal
                     const setupModalShadowControls = (modal) => {
-                        const shadowToggle = modal.querySelector('#shadow-toggle');
-                        const shadowOptions = modal.querySelector('#shadow-options');
                         const shadowPreviews = modal.querySelectorAll('.shadow-preview');
                         const customControls = modal.querySelector('#shadow-custom-controls');
                         const previewText = modal.querySelector('#shadow-preview-text');
@@ -950,6 +948,36 @@ function setupPanelSpecificHandlers() {
                                 const shadowRgba = `rgba(${r}, ${g}, ${b}, ${shadowOpacity})`;
                                 
                                 previewText.style.textShadow = `${offsetX}px ${offsetY}px ${shadowBlur}px ${shadowRgba}`;
+                            } else if (currentShadowType === 'drop') {
+                                // Regular drop shadow
+                                const r = parseInt(shadowColor.substr(1, 2), 16);
+                                const g = parseInt(shadowColor.substr(3, 2), 16);
+                                const b = parseInt(shadowColor.substr(5, 2), 16);
+                                const shadowRgba = `rgba(${r}, ${g}, ${b}, ${shadowOpacity})`;
+                                
+                                previewText.style.textShadow = `${offsetX}px ${offsetY}px ${shadowBlur}px ${shadowRgba}`;
+                            } else if (currentShadowType === 'inner') {
+                                // Inner shadows aren't directly supported in CSS for text
+                                // Using a workaround with text-stroke and colors
+                                const r = parseInt(shadowColor.substr(1, 2), 16);
+                                const g = parseInt(shadowColor.substr(3, 2), 16);
+                                const b = parseInt(shadowColor.substr(5, 2), 16);
+                                const shadowRgba = `rgba(${r}, ${g}, ${b}, ${shadowOpacity})`;
+                                
+                                previewText.style.textShadow = 
+                                    `0px 0px ${shadowBlur}px ${shadowRgba}, ` +
+                                    `0px 0px ${shadowBlur*0.8}px ${shadowRgba}`;
+                            } else if (currentShadowType === 'glow') {
+                                // Glow effect with multiple shadows
+                                const r = parseInt(shadowColor.substr(1, 2), 16);
+                                const g = parseInt(shadowColor.substr(3, 2), 16);
+                                const b = parseInt(shadowColor.substr(5, 2), 16);
+                                const shadowRgba = `rgba(${r}, ${g}, ${b}, ${shadowOpacity})`;
+                                
+                                previewText.style.textShadow = 
+                                    `0 0 ${shadowBlur*0.5}px ${shadowRgba}, ` +
+                                    `0 0 ${shadowBlur}px ${shadowRgba}, ` +
+                                    `0 0 ${shadowBlur*1.5}px ${shadowRgba}`;
                             } else if (currentShadowType === 'none') {
                                 previewText.style.textShadow = 'none';
                             } else if (currentShadowType === 'subtle') {
@@ -975,18 +1003,6 @@ function setupPanelSpecificHandlers() {
                                 colorPreview.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${shadowOpacity})`;
                             }
                         };
-                        
-                        // Toggle shadow on/off
-                        if (shadowToggle) {
-                            shadowToggle.checked = shadowEnabled;
-                            shadowOptions.style.display = shadowEnabled ? 'block' : 'none';
-                            
-                            shadowToggle.addEventListener('change', () => {
-                                shadowEnabled = shadowToggle.checked;
-                                shadowOptions.style.display = shadowEnabled ? 'block' : 'none';
-                                updatePreviewShadow();
-                            });
-                        }
                         
                         // Handle shadow preview selection
                         shadowPreviews.forEach(preview => {
@@ -1047,18 +1063,19 @@ function setupPanelSpecificHandlers() {
                             updatePreviewShadow();
                         });
                         
-                        setupSlider('shadow-blur', 'blur-value', 'px', 'shadowBlur', 5, updatePreviewShadow);
-                        setupSlider('shadow-distance', 'distance-value', 'px', 'shadowDistance', 3, updatePreviewShadow);
-                        setupSlider('shadow-angle', 'angle-value', '°', 'shadowAngle', 45, updatePreviewShadow);
+                        setupSlider('shadow-blur', 'blur-value', 'px', 'shadowBlur', shadowBlur, updatePreviewShadow);
+                        setupSlider('shadow-distance', 'distance-value', 'px', 'shadowDistance', shadowDistance, updatePreviewShadow);
+                        setupSlider('shadow-angle', 'angle-value', '°', 'shadowAngle', shadowAngle, updatePreviewShadow);
+                        setupSlider('shadow-opacity', 'opacity-value', '%', 'shadowOpacity', Math.round(shadowOpacity * 100), () => {
+                            updateColorPreview();
+                            updatePreviewShadow();
+                        });
                         
                         // Handle shadow color selection
-                        const colorPickerPreview = modal.querySelector('#shadow-color-preview');
                         const colorPicker = modal.querySelector('#shadow-color');
                         
-                        if (colorPickerPreview && colorPicker) {
-                            colorPickerPreview.addEventListener('click', () => {
-                                colorPicker.click();
-                            });
+                        if (colorPicker) {
+                            colorPicker.value = shadowColor;
                             
                             colorPicker.addEventListener('input', () => {
                                 shadowColor = colorPicker.value;
@@ -1099,10 +1116,11 @@ function setupPanelSpecificHandlers() {
                                 // Show the shadow status on the button
                                 if (shadowBtn) {
                                     if (shadowEnabled && currentShadowType !== 'none') {
-                                        shadowBtn.innerHTML = `<i class="fas fa-magic"></i> Shadow: ${currentShadowType.charAt(0).toUpperCase() + currentShadowType.slice(1)}`;
+                                        const shadowTypeDisplay = currentShadowType.charAt(0).toUpperCase() + currentShadowType.slice(1);
+                                        shadowBtn.innerHTML = `<i class="fas fa-shadow"></i> Shadow: ${shadowTypeDisplay}`;
                                         shadowBtn.style.color = 'var(--primary-color)';
                                     } else {
-                                        shadowBtn.innerHTML = `<i class="fas fa-magic"></i> Text Shadow Effects`;
+                                        shadowBtn.innerHTML = `<i class="fas fa-shadow"></i> Text Shadow`;
                                         shadowBtn.style.color = '';
                                     }
                                 }
@@ -2410,8 +2428,9 @@ function createPanel(id, title, container) {
                         <option value="Courier New">Courier New</option>
                     </select>
                 </div>
-                <button id="shadow-btn" class="text-style-button" style="margin-top: 10px; padding: 8px 12px; border-radius: 4px; background-color: rgba(var(--primary-color-rgb), 0.1); border: 1px solid rgba(var(--primary-color-rgb), 0.2); color: var(--primary-color); cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 5px; width: 100%;">
-                    <i class="fas fa-magic"></i> Text Shadow Effects
+                <button id="shadow-btn" class="shadow-effects-btn">
+                    <i class="fas fa-magic"></i>
+                    <span>Text Shadow</span>
                 </button>
                 <div class="text-edit-colors" style="display: flex; gap: 10px; padding: 8px; align-items: center;">
                     <div class="color-option" style="background-color: #000000; width: 30px; height: 30px; border-radius: 50%; cursor: pointer;" data-color="#000000"></div>
