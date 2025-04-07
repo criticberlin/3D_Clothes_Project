@@ -79,34 +79,45 @@ function enhanceSliderBehavior() {
     });
 }
 
-// Function to handle shadow modal setup and interactions
-function setupShadowModal() {
-    const modal = document.getElementById('shadow-selection-modal');
-    const closeButton = document.getElementById('close-shadow-modal');
+// Function to handle shadow panel setup and interactions
+function setupShadowPanel() {
+    const panel = document.getElementById('shadow-panel');
+    const closeButton = panel.querySelector('.panel-close');
     const shadowToggle = document.getElementById('shadow-toggle');
     const shadowOptions = document.getElementById('shadow-options');
     const customControls = document.getElementById('shadow-custom-controls');
-    const shadowPreviews = document.querySelectorAll('.shadow-preview');
+    const shadowPreviews = panel.querySelectorAll('.shadow-preview');
     const applyButton = document.getElementById('apply-shadow-btn');
     const cancelButton = document.getElementById('cancel-shadow-btn');
     const textPanel = document.getElementById('text-panel');
     
-    // Show modal
-    function showModal() {
-        if (textPanel && modal) {
-            // Position the shadow modal at the same position as the text panel
-            const textPanelRect = textPanel.getBoundingClientRect();
-            modal.style.top = textPanelRect.top + 'px';
-            modal.style.right = (window.innerWidth - textPanelRect.right) + 'px';
-            modal.style.width = textPanelRect.width + 'px';
-            modal.style.height = textPanelRect.height + 'px';
+    // Show panel
+    function showPanel() {
+        if (panel) {
+            // Hide color panel if it's open
+            const colorPanel = document.getElementById('color-panel-extended');
+            if (colorPanel && colorPanel.classList.contains('active')) {
+                colorPanel.classList.remove('active');
+            }
             
-            // Hide text panel
-            textPanel.style.display = 'none';
+            // Position the shadow panel near the text panel
+            if (textPanel) {
+                const textPanelRect = textPanel.getBoundingClientRect();
+                panel.style.top = textPanelRect.top + 'px';
+                panel.style.left = (textPanelRect.right + 20) + 'px';
+                
+                // Hide text panel
+                textPanel.style.display = 'none';
+            }
             
-            // Show shadow modal
-            modal.classList.add('active');
-            modal.style.display = 'block';
+            // Check if text-edit-panel exists and hide it
+            const textEditPanel = document.getElementById('text-edit-panel');
+            if (textEditPanel) {
+                textEditPanel.style.display = 'none';
+            }
+            
+            // Show shadow panel
+            panel.classList.add('active');
             
             // Update content
             updatePreviewText();
@@ -115,12 +126,17 @@ function setupShadowModal() {
         }
     }
     
-    // Hide modal
-    function hideModal() {
-        if (modal) {
-            // Hide shadow modal
-            modal.classList.remove('active');
-            modal.style.display = 'none';
+    // Hide panel
+    function hidePanel() {
+        if (panel) {
+            // Hide shadow panel
+            panel.classList.remove('active');
+            
+            // Check if text-edit-panel exists and show it
+            const textEditPanel = document.getElementById('text-edit-panel');
+            if (textEditPanel) {
+                textEditPanel.style.display = 'block';
+            }
             
             // Show text panel
             if (textPanel) {
@@ -131,7 +147,7 @@ function setupShadowModal() {
     
     // Update preview text with current input
     function updatePreviewText() {
-        const previewText = document.getElementById('shadow-preview-text');
+        const previewText = panel.querySelector('#shadow-preview-text');
         const textInput = document.querySelector('.text-edit-input');
         if (previewText && textInput && textInput.value) {
             previewText.textContent = textInput.value;
@@ -180,11 +196,11 @@ function setupShadowModal() {
     
     // Apply shadow to preview
     function applyShadowToPreview(shadowType) {
-        const previewText = document.getElementById('shadow-preview-text');
+        const previewText = panel.querySelector('#shadow-preview-text');
         if (!previewText) return;
         
         // Get color from the color picker
-        const colorPicker = document.getElementById('shadow-color');
+        const colorPicker = panel.querySelector('#shadow-color');
         const color = colorPicker ? colorPicker.value : '#000000';
         const colorObj = hexToRgb(color);
         
@@ -241,7 +257,7 @@ function setupShadowModal() {
     
     // Apply custom shadow
     function applyCustomShadow() {
-        const previewText = document.getElementById('shadow-preview-text');
+        const previewText = panel.querySelector('#shadow-preview-text');
         if (!previewText) return;
         
         const intensity = document.getElementById('shadow-opacity').value / 100;
@@ -352,10 +368,10 @@ function setupShadowModal() {
         });
     }
     
-    // Connect shadow button to modal
+    // Connect shadow button to panel
     const shadowButton = document.getElementById('shadow-btn');
     if (shadowButton) {
-        shadowButton.addEventListener('click', showModal);
+        shadowButton.addEventListener('click', showPanel);
     }
     
     // Handle apply button
@@ -371,19 +387,19 @@ function setupShadowModal() {
             // Update shadow button text
             updateShadowButtonText();
             
-            // Close modal
-            hideModal();
+            // Close panel
+            hidePanel();
         });
     }
     
     // Handle cancel button
     if (cancelButton) {
-        cancelButton.addEventListener('click', hideModal);
+        cancelButton.addEventListener('click', hidePanel);
     }
     
-    // Close modal when clicking close button
+    // Close panel when clicking close button
     if (closeButton) {
-        closeButton.addEventListener('click', hideModal);
+        closeButton.addEventListener('click', hidePanel);
     }
     
     // Get shadow configuration
@@ -507,4 +523,4 @@ function setupShadowModal() {
 }
 
 // Initialize when the DOM is loaded
-document.addEventListener('DOMContentLoaded', setupShadowModal); 
+document.addEventListener('DOMContentLoaded', setupShadowPanel); 

@@ -676,17 +676,17 @@ function setupPanelSpecificHandlers() {
             e.stopPropagation();
             console.log('Text button clicked - calling addText directly');
             
-            // Get the text panel
-            const textPanel = document.getElementById('text-panel');
-            if (textPanel) {
+            // Get the text edit panel
+            const textEditPanel = document.getElementById('text-edit-panel');
+            if (textEditPanel) {
                 // Clear any existing text
-                const textInput = textPanel.querySelector('.text-edit-input');
+                const textInput = textEditPanel.querySelector('.text-edit-input');
                 if (textInput) {
                     textInput.value = '';
                 }
                 
                 // Show the panel
-                textPanel.classList.add('active');
+                textEditPanel.classList.add('active');
                 newTextButton.classList.add('active');
                 
                 // Focus the textarea after panel is visible
@@ -705,7 +705,7 @@ function setupPanelSpecificHandlers() {
                             // Cancel on Escape
                             if (e.key === 'Escape') {
                                 e.preventDefault();
-                                textPanel.classList.remove('active');
+                                textEditPanel.classList.remove('active');
                                 newTextButton.classList.remove('active');
                             }
                         });
@@ -713,7 +713,7 @@ function setupPanelSpecificHandlers() {
                 }, 300);
                 
                 // Handle the save button click
-                const saveButton = textPanel.querySelector('.text-edit-save');
+                const saveButton = textEditPanel.querySelector('.text-edit-save');
                 if (saveButton) {
                     // Remove existing event listeners by cloning
                     const newSaveButton = saveButton.cloneNode(true);
@@ -723,11 +723,11 @@ function setupPanelSpecificHandlers() {
                         const textValue = textInput.value.trim();
                         if (textValue) {
                             // Get selected color
-                            const activeColor = textPanel.querySelector('.color-option.active');
+                            const activeColor = textEditPanel.querySelector('.color-option.active');
                             const color = activeColor ? activeColor.getAttribute('data-color') : '#000000';
                             
                             // Get selected font
-                            const fontSelect = textPanel.querySelector('#font-select');
+                            const fontSelect = textEditPanel.querySelector('#font-select');
                             const font = fontSelect ? fontSelect.value : 'Arial';
                             
                             // Get shadow settings
@@ -741,55 +741,44 @@ function setupPanelSpecificHandlers() {
                             }
                             
                             // Close the panel
-                            textPanel.classList.remove('active');
+                            textEditPanel.classList.remove('active');
                             newTextButton.classList.remove('active');
                             
                             // Generate a preview image of the text
                             const previewCanvas = document.createElement('canvas');
-                            previewCanvas.width = 400;
-                            previewCanvas.height = 100;
-                            const ctx = previewCanvas.getContext('2d');
+                            const previewCtx = previewCanvas.getContext('2d');
+                            const fontSize = 80;
                             
-                            // Draw background
-                            ctx.fillStyle = '#f5f5f5';
-                            ctx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+                            // Set canvas size
+                            previewCanvas.width = 400;
+                            previewCanvas.height = 200;
                             
                             // Draw text
-                            ctx.font = `30px ${font}`;
-                            ctx.fillStyle = color;
-                            ctx.textAlign = 'center';
-                            ctx.textBaseline = 'middle';
-                            ctx.fillText(textValue, previewCanvas.width / 2, previewCanvas.height / 2);
+                            previewCtx.fillStyle = '#ffffff';
+                            previewCtx.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+                            previewCtx.fillStyle = color;
+                            previewCtx.font = `bold ${fontSize}px "${font}"`;
+                            previewCtx.textAlign = 'center';
+                            previewCtx.textBaseline = 'middle';
+                            previewCtx.fillText(textValue, previewCanvas.width/2, previewCanvas.height/2);
                             
-                            // Get data URL for preview
+                            // Convert to image
                             const previewImage = previewCanvas.toDataURL('image/png');
                             
                             // Show view selection modal
                             showViewSelectionModal(previewImage, (selectedView) => {
                                 if (selectedView) {
-                                    // Import 3D editor module to add the text
                                     import('./3d-editor.js')
                                         .then((editor) => {
                                             // Import scene module to change the camera view
                                             import('./scene.js')
                                                 .then((scene) => {
                                                     // Change camera view to selected view
-                                                    if (scene.changeCameraView) {
-                                                        scene.changeCameraView(selectedView);
-                                                    }
+                                                    scene.changeCameraView(selectedView);
                                                     
-                                                    // Get the model config
-                                                    const modelConfig = editor.getEditorState().modelConfig;
-                                                    const state = editor.getEditorState().state;
-                                                    const canvasData = editor.getEditorState().canvasData;
-                                                    
-                                                    // Calculate the center of the editable area
-                                                    const viewConfig = modelConfig[state.currentModel].views[selectedView];
-                                                    const centerX = (viewConfig.uvRect.u1 + viewConfig.uvRect.u2) / 2 * canvasData.width;
-                                                    const centerY = (viewConfig.uvRect.v1 + viewConfig.uvRect.v2) / 2 * canvasData.height;
-                                                    
-                                                    // Set font size
-                                                    const fontSize = 80; // Increased from 50 to 80
+                                                    // Calculate center position
+                                                    const centerX = editor.canvas.width / 2;
+                                                    const centerY = editor.canvas.height / 2;
                                                     
                                                     // Measure text dimensions
                                                     const tempCanvas = document.createElement('canvas');
@@ -854,7 +843,7 @@ function setupPanelSpecificHandlers() {
                 }
                 
                 // Handle the cancel button click
-                const cancelButton = textPanel.querySelector('.text-edit-cancel');
+                const cancelButton = textEditPanel.querySelector('.text-edit-cancel');
                 if (cancelButton) {
                     // Remove existing event listeners by cloning
                     const newCancelButton = cancelButton.cloneNode(true);
@@ -862,414 +851,31 @@ function setupPanelSpecificHandlers() {
                     
                     newCancelButton.addEventListener('click', () => {
                         // Close the panel
-                        textPanel.classList.remove('active');
+                        textEditPanel.classList.remove('active');
                         newTextButton.classList.remove('active');
                     });
                 }
                 
-                // Handle color selection
-                const colorOptions = textPanel.querySelectorAll('.color-option');
-                colorOptions.forEach(option => {
-                    option.addEventListener('click', () => {
-                        colorOptions.forEach(opt => opt.classList.remove('active'));
-                        option.classList.add('active');
-                    });
-                });
-                
-                // Setup advanced shadow controls
-                const setupShadowControls = () => {
-                    // Shadow configuration
-                    let shadowEnabled = true; // Set to true by default
-                    let currentShadowType = 'drop'; // Set default shadow type
-                    let shadowBlur = 5;
-                    let shadowDistance = 3;
-                    let shadowAngle = 45;
-                    let shadowOpacity = 0.5;
-                    let shadowColor = '#000000';
-                    let shadowConfig = null;
-                    
-                    // Shadow button
-                    const shadowBtn = textPanel.querySelector('#shadow-btn');
-                    if (shadowBtn) {
-                        shadowBtn.addEventListener('click', () => {
-                            // Show the shadow selection modal
-                            const shadowModal = document.getElementById('shadow-selection-modal');
-                            if (shadowModal) {
-                                // Initialize text preview with current text and color
-                                const textInput = textPanel.querySelector('.text-edit-input');
-                                const previewText = shadowModal.querySelector('#shadow-preview-text');
-                                if (textInput && previewText) {
-                                    const text = textInput.value.trim();
-                                    previewText.textContent = text || 'Preview Text';
-                                }
-                                
-                                // Set preview color
-                                const activeColor = textPanel.querySelector('.color-option.active');
-                                if (activeColor && previewText) {
-                                    previewText.style.color = activeColor.getAttribute('data-color') || '#000000';
-                                }
-                                
-                                // Show modal
-                                shadowModal.style.display = 'flex';
-                                
-                                // Setup the shadow controls inside the modal
-                                setupModalShadowControls(shadowModal);
-                            }
-                        });
-                    }
-                    
-                    // Function to setup all the shadow controls inside the modal
-                    const setupModalShadowControls = (modal) => {
-                        const shadowPreviews = modal.querySelectorAll('.shadow-preview');
-                        const customControls = modal.querySelector('#shadow-custom-controls');
-                        const previewText = modal.querySelector('#shadow-preview-text');
-                        const cancelBtn = modal.querySelector('#cancel-shadow-btn');
-                        const applyBtn = modal.querySelector('#apply-shadow-btn');
-                        const closeBtn = modal.querySelector('#close-shadow-modal');
-                        
-                        // Function to update preview text shadow
-                        const updatePreviewShadow = () => {
-                            if (!shadowEnabled) {
-                                previewText.style.textShadow = 'none';
-                                return;
-                            }
-                            
-                            // Calculate offsets based on angle and distance
-                            const angleRad = shadowAngle * Math.PI / 180;
-                            const offsetX = Math.cos(angleRad) * shadowDistance;
-                            const offsetY = Math.sin(angleRad) * shadowDistance;
-                            
-                            // Create shadow based on current type
-                            if (currentShadowType === 'custom') {
-                                // Convert hex color and opacity to rgba
-                                const r = parseInt(shadowColor.substr(1, 2), 16);
-                                const g = parseInt(shadowColor.substr(3, 2), 16);
-                                const b = parseInt(shadowColor.substr(5, 2), 16);
-                                const shadowRgba = `rgba(${r}, ${g}, ${b}, ${shadowOpacity})`;
-                                
-                                previewText.style.textShadow = `${offsetX}px ${offsetY}px ${shadowBlur}px ${shadowRgba}`;
-                            } else if (currentShadowType === 'drop') {
-                                // Regular drop shadow
-                                const r = parseInt(shadowColor.substr(1, 2), 16);
-                                const g = parseInt(shadowColor.substr(3, 2), 16);
-                                const b = parseInt(shadowColor.substr(5, 2), 16);
-                                const shadowRgba = `rgba(${r}, ${g}, ${b}, ${shadowOpacity})`;
-                                
-                                previewText.style.textShadow = `${offsetX}px ${offsetY}px ${shadowBlur}px ${shadowRgba}`;
-                            } else if (currentShadowType === 'inner') {
-                                // Inner shadows aren't directly supported in CSS for text
-                                // Using a workaround with text-stroke and colors
-                                const r = parseInt(shadowColor.substr(1, 2), 16);
-                                const g = parseInt(shadowColor.substr(3, 2), 16);
-                                const b = parseInt(shadowColor.substr(5, 2), 16);
-                                const shadowRgba = `rgba(${r}, ${g}, ${b}, ${shadowOpacity})`;
-                                
-                                previewText.style.textShadow = 
-                                    `0px 0px ${shadowBlur}px ${shadowRgba}, ` +
-                                    `0px 0px ${shadowBlur*0.8}px ${shadowRgba}`;
-                            } else if (currentShadowType === 'glow') {
-                                // Glow effect with multiple shadows
-                                const r = parseInt(shadowColor.substr(1, 2), 16);
-                                const g = parseInt(shadowColor.substr(3, 2), 16);
-                                const b = parseInt(shadowColor.substr(5, 2), 16);
-                                const shadowRgba = `rgba(${r}, ${g}, ${b}, ${shadowOpacity})`;
-                                
-                                previewText.style.textShadow = 
-                                    `0 0 ${shadowBlur*0.5}px ${shadowRgba}, ` +
-                                    `0 0 ${shadowBlur}px ${shadowRgba}, ` +
-                                    `0 0 ${shadowBlur*1.5}px ${shadowRgba}`;
-                            } else if (currentShadowType === 'none') {
-                                previewText.style.textShadow = 'none';
-                            } else if (currentShadowType === 'subtle') {
-                                previewText.style.textShadow = '1px 1px 2px rgba(0,0,0,0.2)';
-                            } else if (currentShadowType === 'medium') {
-                                previewText.style.textShadow = '2px 2px 4px rgba(0,0,0,0.4)';
-                            } else if (currentShadowType === 'strong') {
-                                previewText.style.textShadow = '3px 3px 6px rgba(0,0,0,0.6)';
-                            } else if (currentShadowType === 'neon') {
-                                previewText.style.textShadow = '0 0 5px rgba(0,0,255,0.8), 0 0 10px rgba(0,0,255,0.5)';
-                            } else if (currentShadowType === 'outline') {
-                                previewText.style.textShadow = '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000';
-                            }
-                        };
-                        
-                        // Update color preview
-                        const updateColorPreview = () => {
-                            const colorPreview = modal.querySelector('#shadow-color-preview');
-                            if (colorPreview) {
-                                const r = parseInt(shadowColor.substr(1, 2), 16);
-                                const g = parseInt(shadowColor.substr(3, 2), 16);
-                                const b = parseInt(shadowColor.substr(5, 2), 16);
-                                colorPreview.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${shadowOpacity})`;
-                            }
-                        };
-                        
-                        // Handle shadow preview selection
-                        shadowPreviews.forEach(preview => {
-                            const type = preview.getAttribute('data-shadow-type');
-                            
-                            // Reset border color
-                            if (type !== currentShadowType) {
-                                preview.style.borderColor = 'transparent';
-                            }
-                            
-                            preview.addEventListener('click', () => {
-                                // Update active state
-                                shadowPreviews.forEach(p => p.style.borderColor = 'transparent');
-                                preview.style.borderColor = 'var(--primary-color)';
-                                
-                                // Update current shadow type
-                                currentShadowType = type;
-                                
-                                // Show/hide custom controls
-                                customControls.style.display = currentShadowType === 'custom' ? 'block' : 'none';
-                                
-                                // Update preview
-                                updatePreviewShadow();
-                            });
-                        });
-                        
-                        // Setup slider controls
-                        const setupSlider = (id, valueId, unit, property, defaultValue, callback) => {
-                            const slider = modal.querySelector(`#${id}`);
-                            const valueDisplay = modal.querySelector(`#${valueId}`);
-                            
-                            if (slider && valueDisplay) {
-                                slider.value = defaultValue;
-                                valueDisplay.textContent = `${defaultValue}${unit}`;
-                                
-                                slider.addEventListener('input', () => {
-                                    const value = slider.value;
-                                    valueDisplay.textContent = `${value}${unit}`;
-                                    
-                                    if (property === 'shadowOpacity') {
-                                        shadowOpacity = unit === '%' ? value / 100 : parseFloat(value);
-                                    } else if (property === 'shadowBlur') {
-                                        shadowBlur = parseFloat(value);
-                                    } else if (property === 'shadowDistance') {
-                                        shadowDistance = parseFloat(value);
-                                    } else if (property === 'shadowAngle') {
-                                        shadowAngle = parseFloat(value);
-                                    }
-                                    
-                                    if (callback) callback();
-                                });
-                            }
-                        };
-                        
-                        // Setup all sliders
-                        setupSlider('shadow-intensity', 'intensity-value', '%', 'shadowOpacity', 50, () => {
-                            updateColorPreview();
-                            updatePreviewShadow();
-                        });
-                        
-                        setupSlider('shadow-blur', 'blur-value', 'px', 'shadowBlur', shadowBlur, updatePreviewShadow);
-                        setupSlider('shadow-distance', 'distance-value', 'px', 'shadowDistance', shadowDistance, updatePreviewShadow);
-                        setupSlider('shadow-angle', 'angle-value', '°', 'shadowAngle', shadowAngle, updatePreviewShadow);
-                        setupSlider('shadow-opacity', 'opacity-value', '%', 'shadowOpacity', Math.round(shadowOpacity * 100), () => {
-                            updateColorPreview();
-                            updatePreviewShadow();
-                        });
-                        
-                        // Handle shadow color selection
-                        const colorPicker = modal.querySelector('#shadow-color');
-                        
-                        if (colorPicker) {
-                            colorPicker.value = shadowColor;
-                            
-                            colorPicker.addEventListener('input', () => {
-                                shadowColor = colorPicker.value;
-                                updateColorPreview();
-                                updatePreviewShadow();
-                            });
-                        }
-                        
-                        // Initialize with current shadow type
-                        const activePreview = modal.querySelector(`.shadow-preview[data-shadow-type="${currentShadowType}"]`);
-                        if (activePreview) {
-                            activePreview.style.borderColor = 'var(--primary-color)';
-                        }
-                        
-                        // Handle Apply button
-                        if (applyBtn) {
-                            applyBtn.addEventListener('click', () => {
-                                // Store the shadow configuration
-                                if (shadowEnabled) {
-                                    if (currentShadowType === 'custom') {
-                                        shadowConfig = {
-                                            type: 'custom',
-                                            blur: shadowBlur,
-                                            distance: shadowDistance,
-                                            angle: shadowAngle,
-                                            opacity: shadowOpacity,
-                                            color: shadowColor
-                                        };
-                                    } else {
-                                        shadowConfig = {
-                                            type: currentShadowType
-                                        };
-                                    }
-                                } else {
-                                    shadowConfig = null;
-                                }
-                                
-                                // Show the shadow status on the button
-                                if (shadowBtn) {
-                                    if (shadowEnabled && currentShadowType !== 'none') {
-                                        const shadowTypeDisplay = currentShadowType.charAt(0).toUpperCase() + currentShadowType.slice(1);
-                                        shadowBtn.innerHTML = `<i class="fas fa-shadow"></i> Shadow: ${shadowTypeDisplay}`;
-                                        shadowBtn.style.color = 'var(--primary-color)';
-                                    } else {
-                                        shadowBtn.innerHTML = `<i class="fas fa-shadow"></i> Text Shadow`;
-                                        shadowBtn.style.color = '';
-                                    }
-                                }
-                                
-                                // Close the modal
-                                modal.style.display = 'none';
-                            });
-                        }
-                        
-                        // Handle Cancel button and Close button
-                        const closeModal = () => {
-                            modal.style.display = 'none';
-                        };
-                        
-                        if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
-                        if (closeBtn) closeBtn.addEventListener('click', closeModal);
-                        
-                        // Close when clicking outside
-                        modal.addEventListener('click', (e) => {
-                            if (e.target === modal) {
-                                closeModal();
-                            }
-                        });
-                        
-                        // Update initial preview
-                        updatePreviewShadow();
-                    };
-                    
-                    // Get shadow config for saving to text object
-                    window.getShadowConfig = () => {
-                        return {
-                            enabled: shadowEnabled,
-                            config: shadowConfig
-                        };
-                    };
-                };
-                
-                // Initialize shadow controls
-                setupShadowControls();
-                
-                // Set up the more colors button
-                const moreColorsBtn = textPanel.querySelector('#more-colors-btn');
-                if (moreColorsBtn) {
-                    // Remove existing event listener if any
-                    const newMoreColorsBtn = moreColorsBtn.cloneNode(true);
-                    moreColorsBtn.parentNode.replaceChild(newMoreColorsBtn, moreColorsBtn);
-
-                    newMoreColorsBtn.addEventListener('click', () => {
-                        // Show the color selection modal
-                        const colorModal = document.getElementById('color-selection-modal');
-                        if (colorModal) {
-                            colorModal.style.display = 'flex';
-                        }
-                    });
-                }
-                
-                // Set up color selection modal behavior only once
-                const colorModal = document.getElementById('color-selection-modal');
-                if (colorModal) {
-                    // Remove existing event listeners from color items
-                    const colorItems = colorModal.querySelectorAll('.color-item');
-                    colorItems.forEach(item => {
-                        const newItem = item.cloneNode(true);
-                        item.parentNode.replaceChild(newItem, item);
-                        
-                        newItem.addEventListener('click', () => {
-                            const color = newItem.getAttribute('data-color');
-                            // Update custom color option in text panel
-                            const colorOptions = textPanel.querySelectorAll('.color-option');
-                            const customColorOption = textPanel.querySelector('.custom-color-option');
-                            
-                            if (customColorOption) {
-                                // Update the custom color option
-                                customColorOption.style.background = color;
-                                customColorOption.setAttribute('data-color', color);
-                                // Set it as active
-                                colorOptions.forEach(opt => opt.classList.remove('active'));
-                                customColorOption.classList.add('active');
-                            }
-                            
-                            // Close the modal
-                            colorModal.style.display = 'none';
-                        });
-                    });
-                    
-                    // Set up modal color picker
-                    const modalColorPicker = colorModal.querySelector('#modal-color-picker');
-                    if (modalColorPicker) {
-                        const newModalColorPicker = modalColorPicker.cloneNode(true);
-                        modalColorPicker.parentNode.replaceChild(newModalColorPicker, modalColorPicker);
-                        
-                        newModalColorPicker.addEventListener('change', () => {
-                            const selectedColor = newModalColorPicker.value;
-                            const colorOptions = textPanel.querySelectorAll('.color-option');
-                            const customColorOption = textPanel.querySelector('.custom-color-option');
-                            
-                            if (customColorOption) {
-                                // Update the custom color option
-                                customColorOption.style.background = selectedColor;
-                                customColorOption.setAttribute('data-color', selectedColor);
-                                // Set it as active
-                                colorOptions.forEach(opt => opt.classList.remove('active'));
-                                customColorOption.classList.add('active');
-                            }
-                            
-                            // Close the modal
-                            colorModal.style.display = 'none';
-                        });
-                    }
-                    
-                    // Set up close button
-                    const closeColorModal = colorModal.querySelector('#close-color-modal');
-                    if (closeColorModal) {
-                        const newCloseBtn = closeColorModal.cloneNode(true);
-                        closeColorModal.parentNode.replaceChild(newCloseBtn, closeColorModal);
-                        
-                        newCloseBtn.addEventListener('click', () => {
-                            colorModal.style.display = 'none';
-                        });
-                    }
-                    
-                    // Close modal when clicking outside
-                    colorModal.addEventListener('click', (e) => {
-                        if (e.target === colorModal) {
-                            colorModal.style.display = 'none';
-                        }
-                    });
-                }
-                
                 // Handle panel close button
-                const closeButton = textPanel.querySelector('.panel-close');
+                const closeButton = textEditPanel.querySelector('.panel-close');
                 if (closeButton) {
                     closeButton.addEventListener('click', () => {
                         // Close the panel
-                        textPanel.classList.remove('active');
+                        textEditPanel.classList.remove('active');
                         newTextButton.classList.remove('active');
                     });
                 }
             } else {
                 // Fall back to direct 3D editor call if panel doesn't exist
-            import('./3d-editor.js')
-                .then((editor) => {
-                    // Call the addText function with empty text to start a new text
-                    editor.addText('', { fromButton: true });
-                })
-                .catch((error) => {
-                    console.error('Error importing 3d-editor module:', error);
-                    showToast('Failed to add text');
-                });
+                import('./3d-editor.js')
+                    .then((editor) => {
+                        // Call the addText function with empty text to start a new text
+                        editor.addText('', { fromButton: true });
+                    })
+                    .catch((error) => {
+                        console.error('Error importing 3d-editor module:', error);
+                        showToast('Failed to add text');
+                    });
             }
         });
     }
@@ -3690,13 +3296,26 @@ function initTextPanel() {
     
     if (shadowToggle) {
         shadowToggle.addEventListener('click', function() {
-            // Show the shadow selection modal
-            const modal = document.getElementById('shadow-selection-modal');
-            if (modal) {
-                modal.classList.add('active');
+            // Show the shadow panel instead of modal
+            const panel = document.getElementById('shadow-panel');
+            if (panel) {
+                panel.classList.add('active');
                 
                 // Update the shadow text based on current selection
                 updateShadowButtonText();
+                
+                // Position near the text panel
+                const textPanelRect = document.getElementById('text-panel').getBoundingClientRect();
+                panel.style.top = textPanelRect.top + 'px';
+                panel.style.left = (textPanelRect.right + 20) + 'px';
+                
+                // Update preview text
+                const previewText = panel.querySelector('#shadow-preview-text');
+                const activeTextInput = document.querySelector('.text-edit-input');
+                if (previewText && activeTextInput) {
+                    previewText.textContent = activeTextInput.value;
+                    previewText.style.color = getComputedStyle(activeTextInput).color;
+                }
             }
         });
     }
@@ -3738,6 +3357,71 @@ function initTextPanel() {
             this.classList.add('active');
         });
     });
+
+    const shadowBtn = document.getElementById('shadow-btn');
+    const moreColorsBtn = document.getElementById('more-colors-btn');
+
+    if (shadowBtn) {
+        shadowBtn.addEventListener('click', () => {
+            // Check if text input has focus
+            const activeElement = document.activeElement;
+            if (activeElement && activeElement.classList.contains('text-edit-input')) {
+                // Get current shadow settings
+                const currentShadow = activeElement.style.textShadow;
+                
+                // Store the active text input for later
+                window.activeTextInput = activeElement;
+                
+                // Show shadow panel
+                const panel = document.getElementById('shadow-panel');
+                if (panel) {
+                    // Position near the text panel
+                    const textPanelRect = document.getElementById('text-panel').getBoundingClientRect();
+                    panel.style.top = textPanelRect.top + 'px';
+                    panel.style.left = (textPanelRect.right + 20) + 'px';
+                    
+                    // Show the panel
+                    panel.classList.add('active');
+                    
+                    // Update preview text
+                    const previewText = panel.querySelector('#shadow-preview-text');
+                    if (previewText && activeElement) {
+                        previewText.textContent = activeElement.value;
+                        previewText.style.color = getComputedStyle(activeElement).color;
+                    }
+                }
+            }
+        });
+    }
+
+    if (moreColorsBtn) {
+        moreColorsBtn.addEventListener('click', () => {
+            // Check if text input has focus
+            const activeElement = document.activeElement;
+            if (activeElement && activeElement.classList.contains('text-edit-input')) {
+                // Store the active text input for later
+                window.activeTextInput = activeElement;
+                
+                // Show color panel
+                const panel = document.getElementById('color-panel');
+                if (panel) {
+                    // Position near the text panel
+                    const textPanelRect = document.getElementById('text-panel').getBoundingClientRect();
+                    panel.style.top = textPanelRect.top + 'px';
+                    panel.style.left = (textPanelRect.right + 20) + 'px';
+                    
+                    // Show the panel
+                    panel.classList.add('active');
+                    
+                    // Update panel title
+                    const panelTitle = panel.querySelector('.panel-header h3');
+                    if (panelTitle) {
+                        panelTitle.textContent = 'Text Color';
+                    }
+                }
+            }
+        });
+    }
 }
 
 // Function to update the shadow button text based on current selection

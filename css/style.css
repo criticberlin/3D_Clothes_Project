@@ -89,19 +89,19 @@
 	font-family: var(--font-sans);
 }
 
-body, html {
+body {
 	width: 100%;
-	height: 100%;
-	margin: 0;
-	padding: 0;
+	height: 100vh;
 	overflow: hidden;
+	background-color: var(--bg-primary);
+	color: var(--text-primary);
+	line-height: 1.5;
 }
 
 .app {
 	position: relative;
 	display: flex;
 	flex-direction: column;
-	width: 100%;
 	height: 100vh;
 	overflow: hidden;
 }
@@ -117,29 +117,17 @@ body, html {
 	flex: 1;
 	overflow: hidden;
 	position: relative;
-	width: 100%;
-	height: 100%;
 }
 
 .canvas-container {
 	position: relative;
 	flex: 1;
 	width: 100%;
-	height: 100%;
 	overflow: hidden;
 	display: flex;
 	justify-content: center;
 	align-items: center;
 	background-color: var(--bg-primary);
-	transition: all 0.3s ease-in-out; /* Add smooth transition for any changes */
-}
-
-/* Make sure the canvas itself is responsive */
-.canvas-container canvas {
-	width: 100% !important;
-	height: 100% !important;
-	transition: all 0.3s ease-in-out;
-	display: block;
 }
 
 /* Camera Controls - Make buttons float independently */
@@ -797,7 +785,7 @@ body, html {
 	
 	.canvas-container {
 		width: 100%;
-		height: 100%;
+		height: calc(100vh - 120px); /* Adjust for header and mobile action bar */
 	}
 	
 	.floating-controls {
@@ -806,7 +794,6 @@ body, html {
 		transform: translateY(-50%);
 		display: flex;
 		flex-direction: column;
-		
 		gap: 10px;
 		background-color: var(--bg-secondary);
 		padding: 10px;
@@ -2323,15 +2310,6 @@ body.dark-theme #editor-mode-toggle:hover {
     display: flex !important;
     opacity: 1;
     visibility: visible;
-    pointer-events: auto;
-}
-
-/* Add styles for when the panel is created */
-#photo-edit-panel.floating-panel {
-    display: flex !important;
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
 }
 
 #photo-edit-panel .preview-container {
@@ -6192,4 +6170,280 @@ body.dark-theme #editor-mode-toggle:hover {
 
 .shadow-custom-controls.active {
     display: block;
+}
+
+.shadow-control-group {
+    margin-bottom: 15px;
+}
+
+.shadow-control-group:last-child {
+    margin-bottom: 0;
+}
+
+.shadow-control-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.shadow-control-group input[type="range"] {
+    width: 100%;
+    margin: 5px 0;
+    cursor: grab;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    outline: none;
+}
+
+.shadow-control-group input[type="range"]:active {
+    cursor: grabbing;
+}
+
+.shadow-control-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    cursor: grab;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.shadow-control-group input[type="range"]:active::-webkit-slider-thumb {
+    cursor: grabbing;
+    width: 18px;
+    height: 18px;
+}
+
+.shadow-control-group input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    cursor: grab;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    border: none;
+}
+
+.shadow-control-group input[type="range"]:active::-moz-range-thumb {
+    cursor: grabbing;
+    width: 18px;
+    height: 18px;
+}
+
+.shadow-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.shadow-modal-actions button {
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.shadow-modal-actions .cancel-button {
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.shadow-modal-actions .apply-button {
+    border: none;
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.shadow-modal-actions button:hover {
+    opacity: 0.9;
+}
+
+.shadow-modal-actions button:active {
+    transform: scale(0.98);
+}
+
+/* Light Theme for Text Panel */
+:root.light-theme #text-panel {
+    background-color: #ffffff;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e0e0e0;
+}
+
+:root.light-theme #text-panel .panel-header {
+    background-color: #f8f8f8;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+:root.light-theme #text-panel .panel-header h3 {
+    color: #333333;
+}
+
+:root.light-theme #text-panel .panel-close {
+    color: #555555;
+}
+
+:root.light-theme #text-panel .panel-close:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+:root.light-theme #text-panel .text-edit-input {
+    background-color: #ffffff;
+    border: 1px solid #d0d0d0;
+    color: #333333;
+}
+
+:root.light-theme #text-panel .text-edit-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.15);
+}
+
+:root.light-theme #text-panel .font-select {
+    background-color: #ffffff;
+    border: 1px solid #d0d0d0;
+    color: #333333;
+}
+
+:root.light-theme #text-panel .font-select:focus {
+    border-color: var(--primary-color);
+}
+
+:root.light-theme #text-panel .text-edit-buttons .text-edit-save,
+:root.light-theme #text-panel .text-edit-buttons .text-edit-cancel {
+    background-color: #f8f8f8;
+    border: 1px solid #d0d0d0;
+    color: #333333;
+}
+
+:root.light-theme #text-panel .text-edit-buttons .text-edit-save:hover,
+:root.light-theme #text-panel .text-edit-buttons .text-edit-cancel:hover {
+    background-color: #e8e8e8;
+}
+
+:root.light-theme #text-panel .text-edit-buttons .text-edit-save {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+}
+
+:root.light-theme #text-panel .shadow-effects-btn {
+    background: linear-gradient(to right, #f2f2f2, #f8f8f8);
+    color: #333333;
+    border: 1px solid #d0d0d0;
+}
+
+:root.light-theme #text-panel .shadow-effects-btn:hover {
+    background: linear-gradient(to right, #e8e8e8, #f2f2f2);
+}
+
+/* Light Theme for Text Panel Color Options */
+:root.light-theme #text-panel .text-edit-colors {
+    background-color: #f8f8f8;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+:root.light-theme #text-panel .color-option {
+    border: 2px solid #e8e8e8;
+}
+
+:root.light-theme #text-panel .color-option:hover {
+    border-color: #c0c0c0;
+}
+
+:root.light-theme #text-panel .color-option.active {
+    border-color: var(--primary-color);
+}
+
+:root.light-theme #text-panel .color-picker-container {
+    background-color: #f0f0f0;
+}
+
+:root.light-theme #text-panel .custom-color {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Light Theme for Shadow Modal */
+:root.light-theme .shadow-modal-content {
+    background-color: #ffffff;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.12);
+}
+
+:root.light-theme .shadow-modal-header {
+    border-bottom: 1px solid #e0e0e0;
+}
+
+:root.light-theme .shadow-modal-header h3 {
+    color: #333333;
+}
+
+:root.light-theme #close-shadow-modal {
+    color: #555555;
+}
+
+:root.light-theme #close-shadow-modal:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+:root.light-theme .shadow-preview-text {
+    background-color: #f0f0f0;
+    color: #333333;
+}
+
+:root.light-theme .shadow-preview {
+    background-color: #f5f5f5;
+    border: 2px solid transparent;
+}
+
+:root.light-theme .shadow-preview:hover {
+    background-color: #e8e8e8;
+}
+
+:root.light-theme .shadow-preview.active {
+    border-color: var(--primary-color);
+    background-color: #e8e8e8;
+}
+
+:root.light-theme .shadow-custom-controls {
+    background-color: #f5f5f5;
+}
+
+:root.light-theme .shadow-control-group label {
+    color: #333333;
+}
+
+:root.light-theme .shadow-control-group input[type="range"] {
+    background: #e0e0e0;
+}
+
+:root.light-theme .shadow-control-group input[type="range"]::-webkit-slider-thumb {
+    background: var(--primary-color);
+}
+
+:root.light-theme .shadow-modal-actions .cancel-button {
+    background-color: #f0f0f0;
+    border: 1px solid #d0d0d0;
+    color: #333333;
+}
+
+:root.light-theme .shadow-modal-actions .apply-button {
+    background-color: var(--primary-color);
+}
+
+:root.light-theme .shadow-color-main {
+    background-color: #f5f5f5;
+}
+
+:root.light-theme .shadow-color-main label {
+    color: #333333;
+}
+
+:root.light-theme #color-value {
+    color: #555555;
 }

@@ -197,6 +197,99 @@
 
 			<!-- Main Content Container -->
 			<div class="main-container">
+				<!-- Shadow Panel (Floating) -->
+				<div class="floating-panel" id="shadow-panel">
+					<div class="panel-header">
+						<h3>Text Shadow Effects</h3>
+						<button class="panel-close" aria-label="Close Panel">
+							<i class="fas fa-times"></i>
+						</button>
+					</div>
+					<div class="panel-content">
+						<div id="shadow-preview-text" class="shadow-preview-text">Preview Text</div>
+						
+						<!-- Shadow Color Picker -->
+						<div class="shadow-color-main">
+							<label for="shadow-color">Shadow Color</label>
+							<div class="color-picker-wrapper">
+								<input type="color" id="shadow-color" value="#000000">
+								<div class="color-preview" id="color-preview"></div>
+								<span id="color-value">#000000</span>
+							</div>
+						</div>
+						
+						<div class="shadow-previews">
+							<div class="shadow-preview" data-shadow-type="drop">Drop Shadow</div>
+							<div class="shadow-preview" data-shadow-type="inner">Inner Shadow</div>
+							<div class="shadow-preview" data-shadow-type="glow">Glow Effect</div>
+							<div class="shadow-preview" data-shadow-type="custom">Custom Shadow</div>
+						</div>
+						<div id="shadow-custom-controls" class="shadow-custom-controls">
+							<div class="shadow-control-group">
+								<label for="shadow-blur">Blur</label>
+								<input type="range" id="shadow-blur" min="0" max="20" value="5">
+								<span id="blur-value">5px</span>
+							</div>
+							<div class="shadow-control-group">
+								<label for="shadow-distance">Distance</label>
+								<input type="range" id="shadow-distance" min="0" max="20" value="3">
+								<span id="distance-value">3px</span>
+							</div>
+							<div class="shadow-control-group">
+								<label for="shadow-angle">Angle</label>
+								<input type="range" id="shadow-angle" min="0" max="360" value="45">
+								<span id="angle-value">45°</span>
+							</div>
+							<div class="shadow-control-group">
+								<label for="shadow-opacity">Opacity</label>
+								<input type="range" id="shadow-opacity" min="0" max="100" value="50">
+								<span id="opacity-value">50%</span>
+							</div>
+						</div>
+						<div class="panel-actions">
+							<button id="cancel-shadow-btn" class="cancel-button">Cancel</button>
+							<button id="apply-shadow-btn" class="apply-button">Apply</button>
+						</div>
+					</div>
+				</div>
+
+				<!-- Color Selection Panel (Floating) -->
+				<div class="floating-panel" id="color-panel-extended">
+					<div class="panel-header">
+						<h3>Select Color</h3>
+						<button class="panel-close" aria-label="Close Panel">
+							<i class="fas fa-times"></i>
+						</button>
+					</div>
+					<div class="panel-content">
+						<div class="color-grid">
+							<div class="color-item" style="background-color: #000000;" data-color="#000000"></div>
+							<div class="color-item" style="background-color: #FFFFFF; border: 1px solid #ddd;" data-color="#FFFFFF"></div>
+							<div class="color-item" style="background-color: #FF0000;" data-color="#FF0000"></div>
+							<div class="color-item" style="background-color: #00FF00;" data-color="#00FF00"></div>
+							<div class="color-item" style="background-color: #0000FF;" data-color="#0000FF"></div>
+							<div class="color-item" style="background-color: #FFFF00;" data-color="#FFFF00"></div>
+							<div class="color-item" style="background-color: #FF00FF;" data-color="#FF00FF"></div>
+							<div class="color-item" style="background-color: #00FFFF;" data-color="#00FFFF"></div>
+							<div class="color-item" style="background-color: #FFA500;" data-color="#FFA500"></div>
+							<div class="color-item" style="background-color: #800080;" data-color="#800080"></div>
+							<div class="color-item" style="background-color: #008080;" data-color="#008080"></div>
+							<div class="color-item" style="background-color: #A52A2A;" data-color="#A52A2A"></div>
+							<div class="color-item" style="background-color: #4B0082;" data-color="#4B0082"></div>
+							<div class="color-item" style="background-color: #808080;" data-color="#808080"></div>
+							<div class="color-item" style="background-color: #D2B48C;" data-color="#D2B48C"></div>
+						</div>
+						<div class="custom-color-section">
+							<label for="modal-color-picker">Custom:</label>
+							<input type="color" id="modal-color-picker">
+						</div>
+						<div class="panel-actions">
+							<button id="cancel-color-btn" class="cancel-button">Cancel</button>
+							<button id="apply-color-btn" class="apply-button">Apply</button>
+						</div>
+					</div>
+				</div>
+
 				<!-- 3D Canvas Container - Now primary focus on mobile -->
 				<div class="canvas-container">
 					<!-- Edit Controls - Shown in edit mode -->
@@ -335,43 +428,6 @@
 						</div>
 					</div>
 					
-					<!-- Color Selection Panel -->
-					<div class="floating-panel" id="color-panel">
-						<div class="panel-header">
-							<h3>Change T-Shirt Color</h3>
-							<button class="panel-close" aria-label="Close Panel">
-								<i class="fas fa-times"></i>
-							</button>
-						</div>
-						<div class="panel-content">
-							<!-- Color Wheel -->
-							<div class="color-wheel-container">
-								<div class="color-wheel-wrapper">
-									<canvas id="color-wheel" width="200" height="200"></canvas>
-								</div>
-								<div class="color-info">
-									<div class="color-name" id="color-name">White</div>
-									<div class="color-code" id="color-hex">#FFFFFF</div>
-								</div>
-							</div>
-							
-							<!-- Preset Colors -->
-							<div class="preset-colors">
-								<h4>Preset Colors</h4>
-								<div class="colors">
-									<button class="color-btn active" data-color="#FFFFFF" style="background-color: #FFFFFF;" title="White"></button>
-									<button class="color-btn" data-color="#000000" style="background-color: #000000;" title="Black"></button>
-									<button class="color-btn" data-color="#4A4A4A" style="background-color: #4A4A4A;" title="Charcoal"></button>
-									<button class="color-btn" data-color="#162955" style="background-color: #162955;" title="Navy Blue"></button>
-									<button class="color-btn" data-color="#E1C699" style="background-color: #E1C699;" title="Beige"></button>
-									<button class="color-btn" data-color="#556B2F" style="background-color: #556B2F;" title="Olive Green"></button>
-									<button class="color-btn" data-color="#654321" style="background-color: #654321;" title="Brown"></button>
-									<button class="color-btn" data-color="#800020" style="background-color: #800020;" title="Burgundy"></button>
-								</div>
-							</div>
-						</div>
-					</div>
-					
 					<!-- Photo Upload Panel -->
 					<div class="floating-panel" id="photo-panel">
 						<div class="panel-header">
@@ -472,6 +528,110 @@
 						</div>
 					</div>
 
+					<!-- Text Panel -->
+					<div class="floating-panel" id="text-panel">
+						<div class="panel-header">
+							<h3>Add Text</h3>
+							<button class="panel-close" aria-label="Close Panel">
+								<i class="fas fa-times"></i>
+							</button>
+						</div>
+						<div class="panel-content">
+							<div class="text-edit-options">
+								<textarea class="text-edit-input" placeholder="Enter your text here..."></textarea>
+								
+								<div class="font-select-container">
+									<label for="font-select">Font</label>
+									<select id="font-select" class="font-select">
+										<option value="Arial">Arial</option>
+										<option value="Verdana">Verdana</option>
+										<option value="Times New Roman">Times New Roman</option>
+										<option value="Courier New">Courier New</option>
+										<option value="Georgia">Georgia</option>
+										<option value="Trebuchet MS">Trebuchet MS</option>
+										<option value="Impact">Impact</option>
+									</select>
+								</div>
+								
+								<div class="text-edit-colors">
+									<div class="color-options-wrapper">
+										<div class="color-row">
+											<div class="color-option active" data-color="#ffffff" style="background-color: #ffffff; border: 1px solid #dddddd;"></div>
+											<div class="color-option" data-color="#000000" style="background-color: #000000;"></div>
+											<div class="color-option" data-color="#ff0000" style="background-color: #ff0000;"></div>
+											<div class="color-option" data-color="#00ff00" style="background-color: #00ff00;"></div>
+										</div>
+										<div class="color-row">
+											<div class="color-option" data-color="#0000ff" style="background-color: #0000ff;"></div>
+											<div class="color-option" data-color="#ffff00" style="background-color: #ffff00;"></div>
+											<div class="color-option" data-color="#ff00ff" style="background-color: #ff00ff;"></div>
+											<div class="color-option custom-color" data-color="#cccccc" style="background: linear-gradient(135deg, red, blue);"></div>
+										</div>
+									</div>
+									<input type="color" id="custom-color-picker" class="hidden-color-picker">
+									<button class="color-picker-button" id="more-colors-btn" title="More Colors">
+										<i class="fas fa-palette"></i>
+									</button>
+								</div>
+								
+								<div class="text-style-buttons">
+									<button id="shadow-btn" class="text-style-btn" title="Text Shadow">
+										<i class="fas fa-layer-group"></i>
+									</button>
+								</div>
+								
+								<div class="text-edit-buttons">
+									<button class="text-edit-cancel">Cancel</button>
+									<button class="text-edit-save">Apply</button>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<!-- Color Panel -->
+					<div class="floating-panel" id="color-panel">
+						<div class="panel-header">
+							<h3>Text Color</h3>
+							<button class="panel-close" aria-label="Close Panel">
+								<i class="fas fa-times"></i>
+							</button>
+						</div>
+						<div class="panel-content">
+							<div class="color-wheel-container">
+								<div class="color-wheel-wrapper">
+									<canvas id="color-wheel" width="180" height="180"></canvas>
+								</div>
+								<div class="color-info">
+									<span class="color-name">Current Color</span>
+									<span class="color-code">#FFFFFF</span>
+								</div>
+							</div>
+							
+							<div class="preset-colors">
+								<h4>Preset Colors</h4>
+								<div class="colors">
+									<button class="color-btn" data-color="#FFFFFF" style="background-color: #FFFFFF;"></button>
+									<button class="color-btn" data-color="#000000" style="background-color: #000000;"></button>
+									<button class="color-btn" data-color="#FF0000" style="background-color: #FF0000;"></button>
+									<button class="color-btn" data-color="#00FF00" style="background-color: #00FF00;"></button>
+									<button class="color-btn" data-color="#0000FF" style="background-color: #0000FF;"></button>
+									<button class="color-btn" data-color="#FFFF00" style="background-color: #FFFF00;"></button>
+									<button class="color-btn" data-color="#FF00FF" style="background-color: #FF00FF;"></button>
+									<button class="color-btn" data-color="#00FFFF" style="background-color: #00FFFF;"></button>
+									<button class="color-btn" data-color="#FFA500" style="background-color: #FFA500;"></button>
+									<button class="color-btn" data-color="#800080" style="background-color: #800080;"></button>
+									<button class="color-btn" data-color="#008080" style="background-color: #008080;"></button>
+									<button class="color-btn" data-color="#A52A2A" style="background-color: #A52A2A;"></button>
+								</div>
+							</div>
+							
+							<div class="panel-actions">
+								<button id="cancel-text-color-btn" class="cancel-button">Cancel</button>
+								<button id="apply-text-color-btn" class="apply-button">Apply</button>
+							</div>
+						</div>
+					</div>
+
 					<!-- Photo Edit Panel -->
 					<div class="floating-panel" id="photo-edit-panel">
 						<div class="panel-header">
@@ -541,111 +701,6 @@
 									<button class="photo-edit-cancel">Cancel</button>
 									<button class="photo-edit-save">Save Changes</button>
 								</div>
-							</div>
-						</div>
-					</div>
-					
-					<!-- Text Upload Panel -->
-					<div id="text-panel" class="floating-panel">
-						<div class="panel-header">
-							<h3>Add Text</h3>
-							<button class="panel-close"><i class="fas fa-times"></i></button>
-						</div>
-						<div class="panel-content">
-							<h2>Add Text to Design</h2>
-							<p>Customize your text style</p>
-							<div class="text-edit-options">
-								<textarea class="text-edit-input" placeholder="Enter your text here"></textarea>
-								<div class="font-select-container">
-									<label for="font-select">Font</label>
-									<select id="font-select" class="font-select">
-										<option value="Arial">Arial</option>
-										<option value="Helvetica">Helvetica</option>
-										<option value="Times New Roman">Times New Roman</option>
-										<option value="Courier New">Courier New</option>
-										<option value="Verdana">Verdana</option>
-										<option value="Georgia">Georgia</option>
-										<option value="Palatino">Palatino</option>
-										<option value="Garamond">Garamond</option>
-										<option value="Bookman">Bookman</option>
-										<option value="Comic Sans MS">Comic Sans MS</option>
-										<option value="Trebuchet MS">Trebuchet MS</option>
-										<option value="Arial Black">Arial Black</option>
-										<option value="Impact">Impact</option>
-									</select>
-								</div>
-								<button class="shadow-effects-btn" id="shadow-btn">
-									<i class="fas fa-shadow"></i>
-									<span>Text Shadow</span>
-								</button>
-								<div class="text-edit-colors">
-									<div class="color-option" data-color="#000000" style="background-color: #000000;"></div>
-									<div class="color-option" data-color="#FFFFFF" style="background-color: #FFFFFF;"></div>
-									<div class="color-option" data-color="#FF5252" style="background-color: #FF5252;"></div>
-									<div class="color-option" data-color="#4CAF50" style="background-color: #4CAF50;"></div>
-									<div class="color-option" data-color="#2196F3" style="background-color: #2196F3;"></div>
-									<div class="color-option" data-color="#FFC107" style="background-color: #FFC107;"></div>
-									<div class="color-option" data-color="#9C27B0" style="background-color: #9C27B0;"></div>
-									<div class="color-option" data-color="#00BCD4" style="background-color: #00BCD4;"></div>
-									<div class="color-picker-container">
-										<div class="color-option custom-color" data-color="custom">
-											<i class="fas fa-plus"></i>
-										</div>
-										<input type="color" id="custom-color-picker" class="hidden-color-picker">
-									</div>
-								</div>
-								<div class="text-edit-buttons">
-									<button class="text-edit-cancel">Cancel</button>
-									<button class="text-edit-save">Add Text</button>
-								</div>
-							</div>
-						</div>
-					</div>
-					
-					<!-- Shape Upload Panel -->
-					<div class="floating-panel" id="shape-panel">
-						<div class="panel-header">
-							<h3>Add Shape</h3>
-							<button class="panel-close" aria-label="Close Panel">
-								<i class="fas fa-times"></i>
-							</button>
-						</div>
-						<div class="panel-content">
-							<div class="section-title">
-								<h3>Add Shape to Design</h3>
-								<p>Choose a shape and customize its appearance</p>
-							</div>
-							<div class="text-edit-options">
-								<div class="shape-options">
-									<div class="shape-option active" data-shape="rectangle">
-										<i class="fas fa-square"></i>
-										<span>Rectangle</span>
-									</div>
-									<div class="shape-option" data-shape="circle">
-										<i class="fas fa-circle"></i>
-										<span>Circle</span>
-									</div>
-									<div class="shape-option" data-shape="triangle">
-										<i class="fas fa-triangle"></i>
-										<span>Triangle</span>
-									</div>
-									<div class="shape-option" data-shape="star">
-										<i class="fas fa-star"></i>
-										<span>Star</span>
-									</div>
-								</div>
-								<div class="text-edit-colors">
-									<div class="color-option active" style="background-color: #000000" data-color="#000000"></div>
-									<div class="color-option" style="background-color: #FFFFFF" data-color="#FFFFFF"></div>
-									<div class="color-option" style="background-color: #FF0000" data-color="#FF0000"></div>
-									<div class="color-option" style="background-color: #00FF00" data-color="#00FF00"></div>
-									<div class="color-option" style="background-color: #0000FF" data-color="#0000FF"></div>
-									<div class="color-option" style="background-color: #FFFF00" data-color="#FFFF00"></div>
-								</div>
-							</div>
-							<div class="text-edit-buttons">
-								<button class="text-edit-cancel">Cancel</button>
-								<button class="text-edit-save">Add Shape</button>
 							</div>
 						</div>
 					</div>
@@ -757,95 +812,6 @@
 					<i class="fas fa-download"></i>
 					<span>Save</span>
 				</button>
-			</div>
-		</div>
-
-		<!-- Color Selection Modal -->
-		<div id="color-selection-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
-			<div style="background-color: var(--bg-primary); border-radius: 8px; padding: 20px; width: 90%; max-width: 400px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
-				<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-					<h3 style="margin: 0; font-size: 18px;">Select Color</h3>
-					<button id="close-color-modal" style="background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary);"><i class="fas fa-times"></i></button>
-				</div>
-				<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px;">
-					<div class="color-item" style="width: 40px; height: 40px; border-radius: 50%; background-color: #000000; cursor: pointer;" data-color="#000000"></div>
-					<div class="color-item" style="width: 40px; height: 40px; border-radius: 50%; background-color: #FFFFFF; cursor: pointer; border: 1px solid #ddd;" data-color="#FFFFFF"></div>
-					<div class="color-item" style="width: 40px; height: 40px; border-radius: 50%; background-color: #FF0000; cursor: pointer;" data-color="#FF0000"></div>
-					<div class="color-item" style="width: 40px; height: 40px; border-radius: 50%; background-color: #00FF00; cursor: pointer;" data-color="#00FF00"></div>
-					<div class="color-item" style="width: 40px; height: 40px; border-radius: 50%; background-color: #0000FF; cursor: pointer;" data-color="#0000FF"></div>
-					<div class="color-item" style="width: 40px; height: 40px; border-radius: 50%; background-color: #FFFF00; cursor: pointer;" data-color="#FFFF00"></div>
-					<div class="color-item" style="width: 40px; height: 40px; border-radius: 50%; background-color: #FF00FF; cursor: pointer;" data-color="#FF00FF"></div>
-					<div class="color-item" style="width: 40px; height: 40px; border-radius: 50%; background-color: #00FFFF; cursor: pointer;" data-color="#00FFFF"></div>
-					<div class="color-item" style="width: 40px; height: 40px; border-radius: 50%; background-color: #FFA500; cursor: pointer;" data-color="#FFA500"></div>
-					<div class="color-item" style="width: 40px; height: 40px; border-radius: 50%; background-color: #800080; cursor: pointer;" data-color="#800080"></div>
-					<div class="color-item" style="width: 40px; height: 40px; border-radius: 50%; background-color: #008080; cursor: pointer;" data-color="#008080"></div>
-					<div class="color-item" style="width: 40px; height: 40px; border-radius: 50%; background-color: #A52A2A; cursor: pointer;" data-color="#A52A2A"></div>
-					<div class="color-item" style="width: 40px; height: 40px; border-radius: 50%; background-color: #4B0082; cursor: pointer;" data-color="#4B0082"></div>
-					<div class="color-item" style="width: 40px; height: 40px; border-radius: 50%; background-color: #808080; cursor: pointer;" data-color="#808080"></div>
-					<div class="color-item" style="width: 40px; height: 40px; border-radius: 50%; background-color: #D2B48C; cursor: pointer;" data-color="#D2B48C"></div>
-				</div>
-				<div style="display: flex; align-items: center; gap: 10px;">
-					<label style="margin-bottom: 0; flex-shrink: 0;">Custom:</label>
-					<input type="color" id="modal-color-picker" style="width: 40px; height: 40px; border: none; background: none; cursor: pointer;">
-				</div>
-			</div>
-		</div>
-
-		<!-- Shadow Selection Modal -->
-		<div id="shadow-selection-modal" class="shadow-modal">
-			<div class="shadow-modal-content">
-				<div class="shadow-modal-header">
-					<h3>Text Shadow Effects</h3>
-					<button id="close-shadow-modal" class="close-button">
-						<i class="fas fa-times"></i>
-					</button>
-				</div>
-				<div class="shadow-modal-body">
-					<div id="shadow-preview-text" class="shadow-preview-text">Preview Text</div>
-					
-					<!-- Shadow Color Picker - Moved outside custom controls -->
-					<div class="shadow-color-main">
-						<label for="shadow-color">Shadow Color</label>
-						<div class="color-picker-wrapper">
-							<input type="color" id="shadow-color" value="#000000">
-							<div class="color-preview" id="color-preview"></div>
-							<span id="color-value">#000000</span>
-						</div>
-					</div>
-					
-					<div class="shadow-previews">
-						<div class="shadow-preview" data-shadow-type="drop">Drop Shadow</div>
-						<div class="shadow-preview" data-shadow-type="inner">Inner Shadow</div>
-						<div class="shadow-preview" data-shadow-type="glow">Glow Effect</div>
-						<div class="shadow-preview" data-shadow-type="custom">Custom Shadow</div>
-					</div>
-					<div id="shadow-custom-controls" class="shadow-custom-controls">
-						<div class="shadow-control-group">
-							<label for="shadow-blur">Blur</label>
-							<input type="range" id="shadow-blur" min="0" max="20" value="5">
-							<span id="blur-value">5px</span>
-						</div>
-						<div class="shadow-control-group">
-							<label for="shadow-distance">Distance</label>
-							<input type="range" id="shadow-distance" min="0" max="20" value="3">
-							<span id="distance-value">3px</span>
-						</div>
-						<div class="shadow-control-group">
-							<label for="shadow-angle">Angle</label>
-							<input type="range" id="shadow-angle" min="0" max="360" value="45">
-							<span id="angle-value">45°</span>
-						</div>
-						<div class="shadow-control-group">
-							<label for="shadow-opacity">Opacity</label>
-							<input type="range" id="shadow-opacity" min="0" max="100" value="50">
-							<span id="opacity-value">50%</span>
-						</div>
-					</div>
-					<div class="shadow-modal-actions">
-						<button id="cancel-shadow-btn" class="cancel-button">Cancel</button>
-						<button id="apply-shadow-btn" class="apply-button">Apply</button>
-					</div>
-				</div>
 			</div>
 		</div>
 

@@ -34,6 +34,7 @@ let transformControls = {
 let isEditingMode = false;
 let cameraControlsEnabled = true;
 let currentEditableArea = null;
+let stateChanged = false; // Add this variable to track state changes for history
 
 // New: Add global variables to track editing state
 let isEditingLocked = false;
@@ -2462,7 +2463,9 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
         </option>
     `).join('');
 
-    const colorButtons = TEXT_COLORS.map(color => `
+    // Only include black and white colors
+    const basicColors = ['#000000', '#FFFFFF'];
+    const colorButtons = basicColors.map(color => `
         <div class="color-option ${color === existingColor ? 'active' : ''}" 
              style="background-color: ${color}" 
              data-color="${color}">
@@ -2473,22 +2476,35 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
         <div class="section-title">
             <h3>${existingText ? 'Edit Your Text' : 'Add Text to Design'}</h3>
             <p>Enter your text and customize its appearance</p>
+        </div>
+        <textarea class="text-edit-input" placeholder="Enter your text here...">${existingText}</textarea>
+        <div class="text-edit-options">
+            <div class="font-select-container">
+                <label for="font-select">Font:</label>
+                <select id="font-select" class="font-select">
+                    ${fontOptions}
+                </select>
             </div>
-            <textarea class="text-edit-input" placeholder="Enter your text here...">${existingText}</textarea>
-            <div class="text-edit-options">
-                <div class="font-select-container">
-                    <label for="font-select">Font:</label>
-                    <select id="font-select" class="font-select">
-                        ${fontOptions}
-                    </select>
+            <div class="text-edit-colors">
+                ${colorButtons}
+                <div class="color-picker-container">
+                    <div class="color-option custom-color-option active" style="background-color: ${existingColor}">
+                        <i class="fas fa-palette"></i>
+                    </div>
+                    <input type="color" class="hidden-color-picker" value="${existingColor}">
                 </div>
-                <div class="text-edit-colors">
-                    ${colorButtons}
-                </div>
+                <button class="more-colors-btn">
+                    <i class="fas fa-plus"></i>
+                </button>
             </div>
-            <div class="text-edit-buttons">
-                <button class="text-edit-cancel">Cancel</button>
-                <button class="text-edit-save">Save</button>
+            <button class="shadow-btn">
+                <i class="fas fa-layer-group"></i>
+                <span>Shadow</span>
+            </button>
+        </div>
+        <div class="text-edit-buttons">
+            <button class="text-edit-cancel">Cancel</button>
+            <button class="text-edit-save">Save</button>
         </div>
     `;
     
@@ -2506,8 +2522,166 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
     panel.addEventListener('click', (e) => {
         e.stopPropagation();
     });
+
+    // Setup color picker functionality
+    const colorPicker = panel.querySelector('.hidden-color-picker');
+    const customColorOption = panel.querySelector('.custom-color-option');
+    const moreColorsBtn = panel.querySelector('.more-colors-btn');
+    const colorOptions = panel.querySelectorAll('.color-option:not(.custom-color-option)');
+
+    colorPicker.addEventListener('input', (e) => {
+        const color = e.target.value;
+        customColorOption.style.backgroundColor = color;
+        colorOptions.forEach(opt => opt.classList.remove('active'));
+        customColorOption.classList.add('active');
+    });
+
+    moreColorsBtn.addEventListener('click', () => {
+        const colorPanel = document.getElementById('color-panel-extended');
+        const shadowPanel = document.getElementById('shadow-panel');
+        
+        if (colorPanel) {
+            // Hide shadow panel if it's open
+            if (shadowPanel && shadowPanel.classList.contains('active')) {
+                shadowPanel.classList.remove('active');
+            }
+            
+            // Position it relative to the text panel
+            const textPanelRect = panel.getBoundingClientRect();
+            colorPanel.style.top = textPanelRect.top + 'px';
+            colorPanel.style.left = (textPanelRect.right + 20) + 'px';
+            
+            // Store a reference to the active text element
+            const activeColorOption = panel.querySelector('.color-option.active');
+            if (activeColorOption) {
+                colorPanel.dataset.targetColor = activeColorOption.getAttribute('data-color');
+            }
+            
+            // Hide the text edit panel completely
+            panel.style.display = 'none';
+            
+            // Show the color selection panel
+            colorPanel.classList.add('active');
+            
+            // Setup color panel interactions
+            setupColorPanel(colorPanel, panel);
+        }
+    });
+
+    // Setup shadow button functionality
+    const shadowBtn = panel.querySelector('.shadow-btn');
+    shadowBtn.addEventListener('click', () => {
+        const shadowPanel = document.getElementById('shadow-panel');
+        const colorPanel = document.getElementById('color-panel-extended');
+        
+        if (shadowPanel) {
+            // Hide color panel if it's open
+            if (colorPanel && colorPanel.classList.contains('active')) {
+                colorPanel.classList.remove('active');
+            }
+            
+            // Position it relative to the text panel
+            const textPanelRect = panel.getBoundingClientRect();
+            shadowPanel.style.top = textPanelRect.top + 'px';
+            shadowPanel.style.left = (textPanelRect.right + 20) + 'px';
+            
+            // Hide the text edit panel completely
+            panel.style.display = 'none';
+            
+            // Show the shadow panel
+            shadowPanel.classList.add('active');
+        }
+    });
     
     return panel;
+}
+
+// Setup color panel interactions
+function setupColorPanel(colorPanel, textPanel) {
+    const colorItems = colorPanel.querySelectorAll('.color-item');
+    const customColorPicker = colorPanel.querySelector('#modal-color-picker');
+    const cancelBtn = colorPanel.querySelector('#cancel-color-btn');
+    const applyBtn = colorPanel.querySelector('#apply-color-btn');
+    const closeBtn = colorPanel.querySelector('.panel-close');
+    
+    let selectedColor = colorPanel.dataset.targetColor || '#000000';
+    
+    // Set initial active state
+    colorItems.forEach(item => {
+        if (item.getAttribute('data-color') === selectedColor) {
+            item.classList.add('active');
+        }
+        
+        // Add click handler
+        item.addEventListener('click', () => {
+            colorItems.forEach(i => i.classList.remove('active'));
+            item.classList.add('active');
+            selectedColor = item.getAttribute('data-color');
+        });
+    });
+    
+    // Custom color picker
+    customColorPicker.addEventListener('input', (e) => {
+        selectedColor = e.target.value;
+        colorItems.forEach(i => i.classList.remove('active'));
+    });
+    
+    // Cancel button
+    cancelBtn.addEventListener('click', () => {
+        // Hide color panel
+        colorPanel.classList.remove('active');
+        
+        // Show the text edit panel again
+        if (textPanel) {
+            textPanel.style.display = 'block';
+        }
+    });
+    
+    // Close button
+    closeBtn.addEventListener('click', () => {
+        // Hide color panel
+        colorPanel.classList.remove('active');
+        
+        // Show the text edit panel again
+        if (textPanel) {
+            textPanel.style.display = 'block';
+        }
+    });
+    
+    // Apply button
+    applyBtn.addEventListener('click', () => {
+        // Find the color option in the text panel and update it
+        const colorOptions = textPanel.querySelectorAll('.color-option');
+        const customColorOption = textPanel.querySelector('.custom-color-option');
+        const hiddenColorPicker = textPanel.querySelector('.hidden-color-picker');
+        
+        // Try to find an existing color option that matches
+        let found = false;
+        colorOptions.forEach(option => {
+            if (option.getAttribute('data-color') === selectedColor) {
+                option.classList.add('active');
+                found = true;
+            } else {
+                option.classList.remove('active');
+            }
+        });
+        
+        // If no matching color found, use the custom color option
+        if (!found && customColorOption && hiddenColorPicker) {
+            colorOptions.forEach(opt => opt.classList.remove('active'));
+            customColorOption.classList.add('active');
+            customColorOption.style.backgroundColor = selectedColor;
+            hiddenColorPicker.value = selectedColor;
+        }
+        
+        // Hide color panel
+        colorPanel.classList.remove('active');
+        
+        // Show the text edit panel again
+        if (textPanel) {
+            textPanel.style.display = 'block';
+        }
+    });
 }
 
 // Add text to canvas
@@ -4445,7 +4619,7 @@ function onDoubleClick(event) {
     
     if (clickedObject && clickedObject.type === 'text') {
         // Use the existing panel if it exists
-        const existingPanel = document.getElementById('text-panel');
+        const existingPanel = document.getElementById('text-edit-panel');
         if (existingPanel) {
             // Set up the existing panel for editing
             const textInput = existingPanel.querySelector('.text-edit-input');
@@ -4500,113 +4674,96 @@ function onDoubleClick(event) {
                     const newText = newTextInput.value;
                     clickedObject.text = newText;
                 
-                // Calculate new text width based on current text
-                const tempCanvas = document.createElement('canvas');
-                const tempCtx = tempCanvas.getContext('2d');
-                tempCtx.font = `bold ${clickedObject.fontSize}px "${clickedObject.font || 'Arial'}"`;
-                const textMetrics = tempCtx.measureText(newText);
-                
-                // Store new dimensions
-                const newWidth = newText ? textMetrics.width : originalWidth;
-                const newHeight = clickedObject.fontSize * 1.2;
-                
-                // Keep the center position stable
+                    // Calculate new text width based on current text
+                    const tempCanvas = document.createElement('canvas');
+                    const tempCtx = tempCanvas.getContext('2d');
+                    tempCtx.font = `bold ${clickedObject.fontSize}px "${clickedObject.font || 'Arial'}"`;
+                    const textMetrics = tempCtx.measureText(newText);
+                    
+                    // Store new dimensions
+                    const newWidth = newText ? textMetrics.width : originalWidth;
+                    const newHeight = clickedObject.fontSize * 1.2;
+                    
+                    // Keep the center position stable
                     const originalCenter = {
                         x: originalLeft + originalWidth / 2,
                         y: originalTop + originalHeight / 2
                     };
                     
-                clickedObject.left = originalCenter.x - newWidth / 2;
-                clickedObject.top = originalCenter.y - newHeight / 2;
-                clickedObject.width = newWidth;
-                clickedObject.height = newHeight;
-                
-                // Update the texture and transform controls
-                updateShirt3DTexture();
-                });
-            }
-            
-            // Handle color selection
-            colorOptions.forEach(option => {
-                // Remove existing event listeners by cloning
-                const newOption = option.cloneNode(true);
-                option.parentNode.replaceChild(newOption, option);
-                
-                // Add new event listener
-                newOption.addEventListener('click', () => {
-                    colorOptions.forEach(opt => opt.classList.remove('active'));
-                    newOption.classList.add('active');
-                    clickedObject.color = newOption.getAttribute('data-color');
-                    updateShirt3DTexture();
-                });
-            });
-            
-            // Handle font selection
-            if (fontSelect) {
-                // Remove existing event listeners by cloning
-                const newFontSelect = fontSelect.cloneNode(true);
-                fontSelect.parentNode.replaceChild(newFontSelect, fontSelect);
-                
-                // Add new event listener
-                newFontSelect.addEventListener('change', () => {
-                    clickedObject.font = newFontSelect.value;
+                    clickedObject.left = originalCenter.x - newWidth / 2;
+                    clickedObject.top = originalCenter.y - newHeight / 2;
+                    clickedObject.width = newWidth;
+                    clickedObject.height = newHeight;
+                    
+                    // Update the texture and transform controls
                     updateShirt3DTexture();
                 });
             }
             
             // Handle save button
-            const saveBtn = existingPanel.querySelector('.text-edit-save');
-            if (saveBtn) {
+            const saveButton = existingPanel.querySelector('.text-edit-save');
+            if (saveButton) {
                 // Remove existing event listeners by cloning
-                const newSaveBtn = saveBtn.cloneNode(true);
-                saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
+                const newSaveButton = saveButton.cloneNode(true);
+                saveButton.parentNode.replaceChild(newSaveButton, saveButton);
                 
-                // Add new event listener
-                newSaveBtn.addEventListener('click', () => {
-                // Check if text is empty
-                    const trimmedText = textInput ? textInput.value.trim() : '';
-                if (!trimmedText) {
-                    return;
-                }
-                
-                    // Update the object and hide panel
-                updateShirt3DTexture();
-                    existingPanel.classList.remove('active');
+                newSaveButton.addEventListener('click', () => {
+                    const newText = textInput.value.trim();
+                    if (newText) {
+                        // Get selected color
+                        const activeColor = existingPanel.querySelector('.color-option.active');
+                        const color = activeColor ? activeColor.getAttribute('data-color') : originalColor;
+                        
+                        // Get selected font
+                        const fontSelect = existingPanel.querySelector('#font-select');
+                        const font = fontSelect ? fontSelect.value : originalFont;
+                        
+                        // Update text object
+                        clickedObject.text = newText;
+                        clickedObject.color = color;
+                        clickedObject.font = font;
+                        
+                        // Calculate new dimensions
+                        const tempCanvas = document.createElement('canvas');
+                        const tempCtx = tempCanvas.getContext('2d');
+                        tempCtx.font = `bold ${clickedObject.fontSize}px "${font}"`;
+                        const textMetrics = tempCtx.measureText(newText);
+                        
+                        // Update dimensions
+                        clickedObject.width = textMetrics.width;
+                        clickedObject.height = clickedObject.fontSize * 1.2;
+                        
+                        // Keep center position
+                        const center = {
+                            x: originalLeft + originalWidth / 2,
+                            y: originalTop + originalHeight / 2
+                        };
+                        
+                        clickedObject.left = center.x - clickedObject.width / 2;
+                        clickedObject.top = center.y - clickedObject.height / 2;
+                        
+                        // Update the texture
+                        updateShirt3DTexture();
+                        
+                        // Close the panel
+                        existingPanel.classList.remove('active');
+                        
+                        // Show success message
+                        showToast('Text updated successfully');
+                    } else {
+                        showToast('Text cannot be empty');
+                    }
                 });
             }
             
             // Handle cancel button
-            const cancelBtn = existingPanel.querySelector('.text-edit-cancel');
-            if (cancelBtn) {
+            const cancelButton = existingPanel.querySelector('.text-edit-cancel');
+            if (cancelButton) {
                 // Remove existing event listeners by cloning
-                const newCancelBtn = cancelBtn.cloneNode(true);
-                cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+                const newCancelButton = cancelButton.cloneNode(true);
+                cancelButton.parentNode.replaceChild(newCancelButton, cancelButton);
                 
-                // Add new event listener
-                newCancelBtn.addEventListener('click', () => {
-                // Restore original values
-                clickedObject.text = originalText;
-                clickedObject.color = originalColor;
-                clickedObject.font = originalFont;
-                clickedObject.width = originalWidth;
-                clickedObject.height = originalHeight;
-                clickedObject.left = originalLeft;
-                clickedObject.top = originalTop;
-                
-                updateShirt3DTexture();
-                    existingPanel.classList.remove('active');
-            });
-            }
-            
-            // Handle close button
-            const closeBtn = existingPanel.querySelector('.panel-close');
-            if (closeBtn) {
-                // Remove existing event listeners by cloning
-                const newCloseBtn = closeBtn.cloneNode(true);
-                closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
-                
-                // Add new event listener
-                newCloseBtn.addEventListener('click', () => {
+                newCancelButton.addEventListener('click', () => {
                     // Restore original values
                     clickedObject.text = originalText;
                     clickedObject.color = originalColor;
@@ -4616,88 +4773,133 @@ function onDoubleClick(event) {
                     clickedObject.left = originalLeft;
                     clickedObject.top = originalTop;
                     
+                    // Update the texture
                     updateShirt3DTexture();
+                    
+                    // Close the panel
                     existingPanel.classList.remove('active');
                 });
             }
             
-                        return;
-                    }
-                    
-        // Fall back to the old implementation if no existing panel
-        const textEditOverlay = createTextEditOverlay(
-            clickedObject.text,
-            clickedObject.color,
-            clickedObject.font
-        );
-        
-        if (textEditOverlay) {
-            const textInput = textEditOverlay.querySelector('.text-edit-input');
-            const fontSelect = textEditOverlay.querySelector('#font-select');
-            const colorOptions = textEditOverlay.querySelectorAll('.color-option');
-            const saveBtn = textEditOverlay.querySelector('.text-edit-save');
-            const cancelBtn = textEditOverlay.querySelector('.text-edit-cancel');
-            const closeBtn = textEditOverlay.querySelector('.panel-close');
-            const errorMsg = document.createElement('div');
+            // Handle close button
+            const closeButton = existingPanel.querySelector('.panel-close');
+            if (closeButton) {
+                closeButton.addEventListener('click', () => {
+                    // Close the panel
+                    existingPanel.classList.remove('active');
+                });
+            }
+        } else {
+            // Create a new text edit overlay if panel doesn't exist
+            const textEditOverlay = createTextEditOverlay(clickedObject.text, clickedObject.color, clickedObject.font);
             
-            // Create error message element
-            errorMsg.className = 'text-edit-error';
-            errorMsg.style.color = 'red';
-            errorMsg.style.marginTop = '8px';
-            errorMsg.style.fontSize = '14px';
-            errorMsg.style.display = 'none';
-            errorMsg.textContent = 'Text cannot be empty!';
-            
-            // Insert error message before buttons
-            const buttonsContainer = textEditOverlay.querySelector('.text-edit-buttons');
-            buttonsContainer.parentNode.insertBefore(errorMsg, buttonsContainer);
-            
-            // Store original values
-            const originalText = clickedObject.text;
-            const originalColor = clickedObject.color;
-            const originalFont = clickedObject.font;
-            const originalWidth = clickedObject.width;
-            const originalHeight = clickedObject.height;
-            const originalLeft = clickedObject.left;
-            const originalTop = clickedObject.top;
-            const originalCenter = {
-                x: originalLeft + originalWidth / 2,
-                y: originalTop + originalHeight / 2
-            };
-            
-            // Handle text changes
-            textInput.addEventListener('input', () => {
-                const newText = textInput.value;
-                clickedObject.text = newText;
+            if (textEditOverlay) {
+                const textInput = textEditOverlay.querySelector('.text-edit-input');
+                const fontSelect = textEditOverlay.querySelector('#font-select');
+                const colorOptions = textEditOverlay.querySelectorAll('.color-option');
+                const saveBtn = textEditOverlay.querySelector('.text-edit-save');
+                const cancelBtn = textEditOverlay.querySelector('.text-edit-cancel');
+                const closeBtn = textEditOverlay.querySelector('.panel-close');
+                const errorMsg = document.createElement('div');
                 
-                // Hide error message when user is typing
+                // Create error message element
+                errorMsg.className = 'text-edit-error';
+                errorMsg.style.color = 'red';
+                errorMsg.style.marginTop = '8px';
+                errorMsg.style.fontSize = '14px';
                 errorMsg.style.display = 'none';
+                errorMsg.textContent = 'Text cannot be empty!';
                 
-                // Calculate new text width based on current text
-                const tempCanvas = document.createElement('canvas');
-                const tempCtx = tempCanvas.getContext('2d');
-                tempCtx.font = `bold ${clickedObject.fontSize}px "${clickedObject.font || 'Arial'}"`;
-                const textMetrics = tempCtx.measureText(newText);
+                // Insert error message before buttons
+                const buttonsContainer = textEditOverlay.querySelector('.text-edit-buttons');
+                buttonsContainer.parentNode.insertBefore(errorMsg, buttonsContainer);
                 
-                // Store new dimensions
-                const newWidth = newText ? textMetrics.width : originalWidth;
-                const newHeight = clickedObject.fontSize * 1.2;
+                // Store original values
+                const originalText = clickedObject.text;
+                const originalColor = clickedObject.color;
+                const originalFont = clickedObject.font;
+                const originalWidth = clickedObject.width;
+                const originalHeight = clickedObject.height;
+                const originalLeft = clickedObject.left;
+                const originalTop = clickedObject.top;
+                const originalCenter = {
+                    x: originalLeft + originalWidth / 2,
+                    y: originalTop + originalHeight / 2
+                };
                 
-                // Keep the center position stable
-                clickedObject.left = originalCenter.x - newWidth / 2;
-                clickedObject.top = originalCenter.y - newHeight / 2;
-                clickedObject.width = newWidth;
-                clickedObject.height = newHeight;
-                
-                // Update the texture and transform controls
-                    updateShirt3DTexture();
-                if (transformControls && transformControls.visible) {
-                    updateTransformControls();
+                // Handle save button
+                if (saveBtn) {
+                    saveBtn.addEventListener('click', () => {
+                        const newText = textInput.value.trim();
+                        if (newText) {
+                            // Get selected color
+                            const activeColor = textEditOverlay.querySelector('.color-option.active');
+                            const color = activeColor ? activeColor.getAttribute('data-color') : originalColor;
+                            
+                            // Get selected font
+                            const font = fontSelect ? fontSelect.value : originalFont;
+                            
+                            // Update text object
+                            clickedObject.text = newText;
+                            clickedObject.color = color;
+                            clickedObject.font = font;
+                            
+                            // Calculate new dimensions
+                            const tempCanvas = document.createElement('canvas');
+                            const tempCtx = tempCanvas.getContext('2d');
+                            tempCtx.font = `bold ${clickedObject.fontSize}px "${font}"`;
+                            const textMetrics = tempCtx.measureText(newText);
+                            
+                            // Update dimensions
+                            clickedObject.width = textMetrics.width;
+                            clickedObject.height = clickedObject.fontSize * 1.2;
+                            
+                            // Keep center position
+                            clickedObject.left = originalCenter.x - clickedObject.width / 2;
+                            clickedObject.top = originalCenter.y - clickedObject.height / 2;
+                            
+                            // Update the texture
+                            updateShirt3DTexture();
+                            
+                            // Remove the overlay
+                            textEditOverlay.remove();
+                            
+                            // Show success message
+                            showToast('Text updated successfully');
+                        } else {
+                            errorMsg.style.display = 'block';
+                        }
+                    });
                 }
-            });
-            
-            // Rest of the original implementation...
-            // [code continues as before]
+                
+                // Handle cancel button
+                if (cancelBtn) {
+                    cancelBtn.addEventListener('click', () => {
+                        // Restore original values
+                        clickedObject.text = originalText;
+                        clickedObject.color = originalColor;
+                        clickedObject.font = originalFont;
+                        clickedObject.width = originalWidth;
+                        clickedObject.height = originalHeight;
+                        clickedObject.left = originalLeft;
+                        clickedObject.top = originalTop;
+                        
+                        // Update the texture
+                        updateShirt3DTexture();
+                        
+                        // Remove the overlay
+                        textEditOverlay.remove();
+                    });
+                }
+                
+                // Handle close button
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', () => {
+                        // Remove the overlay
+                        textEditOverlay.remove();
+                    });
+                }
+            }
         }
     } else if (clickedObject && clickedObject.type === 'shape') {
         console.log('Shape double-clicked:', clickedObject);
