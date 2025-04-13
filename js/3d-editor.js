@@ -1751,7 +1751,26 @@ function drawObjectToCanvas(object) {
             const isOutlineShadow = object.shadowConfig && object.shadowConfig.type === 'outline';
             
             if (!isOutlineShadow) {
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                // Use a color that contrasts with the text color instead of always white
+                // For dark colors, use white. For light colors, use black
+                // For black text specifically, use a matching black stroke
+                const textColor = object.color || '#000000';
+                const r = parseInt(textColor.substr(1, 2), 16);
+                const g = parseInt(textColor.substr(3, 2), 16);
+                const b = parseInt(textColor.substr(5, 2), 16);
+                
+                // Calculate brightness (0-255) using a common formula for luminance
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                
+                // If brightness > 125, color is considered light, use dark stroke
+                // Otherwise use light stroke for contrast
+                ctx.strokeStyle = brightness > 125 ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.8)';
+                
+                // For black text specifically, use a matching black stroke
+                if (textColor.toLowerCase() === '#000000') {
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+                }
+                
                 ctx.lineWidth = fontSize / 8; // Increased stroke width
                 ctx.strokeText(object.text, 0, 0);
             }
@@ -2485,17 +2504,71 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
                     ${fontOptions}
                 </select>
             </div>
-            <div class="text-edit-colors">
-                ${colorButtons}
-                <div class="color-picker-container">
-                    <div class="color-option custom-color-option active" style="background-color: ${existingColor}">
-                        <i class="fas fa-palette"></i>
+            <div class="text-edit-colors" style="display: flex; align-items: center; gap: 16px; margin: 16px 0;">
+                <!-- Black color option -->
+                <div class="color-option ${existingColor === '#000000' ? 'active' : ''}" 
+                    style="background-color: #000000; 
+                           width: 36px; 
+                           height: 36px; 
+                           border-radius: 50%; 
+                           cursor: pointer; 
+                           transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease; 
+                           box-shadow: ${existingColor === '#000000' ? '0 0 0 2px #5d9df5, 0 3px 8px rgba(0,0,0,0.2)' : '0 2px 5px rgba(0,0,0,0.2)'}" 
+                    data-color="#000000" title="Black">
                     </div>
-                    <input type="color" class="hidden-color-picker" value="${existingColor}">
+                
+                <!-- White color option -->
+                <div class="color-option ${existingColor === '#FFFFFF' ? 'active' : ''}" 
+                    style="background-color: #FFFFFF; 
+                           width: 36px; 
+                           height: 36px; 
+                           border-radius: 50%; 
+                           cursor: pointer; 
+                           border: 1px solid #eaeaea;
+                           transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease; 
+                           box-shadow: ${existingColor === '#FFFFFF' ? '0 0 0 2px #5d9df5, 0 3px 8px rgba(0,0,0,0.1)' : '0 2px 5px rgba(0,0,0,0.1)'}" 
+                    data-color="#FFFFFF" title="White">
                 </div>
-                <button class="more-colors-btn">
-                    <i class="fas fa-plus"></i>
-                </button>
+                
+                <!-- Custom color option (starts transparent) -->
+                <div class="color-picker-wrapper" style="display: flex; align-items: center; gap: 8px;">
+                    <div class="color-option custom-color ${!['#000000', '#FFFFFF'].includes(existingColor) ? 'active' : ''}" 
+                        style="width: 36px; 
+                               height: 36px; 
+                               border-radius: 50%; 
+                               cursor: pointer;
+                               background-color: ${!['#000000', '#FFFFFF'].includes(existingColor) ? existingColor : 'transparent'};
+                               border: 2px dashed #ccc;
+                               transition: all 0.3s ease;
+                               box-shadow: ${!['#000000', '#FFFFFF'].includes(existingColor) ? '0 0 0 2px #5d9df5, 0 3px 8px rgba(0,0,0,0.2)' : 'none'};"
+                        title="Custom color">
+                    </div>
+                    
+                    <!-- Pen/edit icon for opening color picker -->
+                    <div class="color-edit-icon" 
+                        style="width: 30px; 
+                               height: 30px; 
+                               border-radius: 50%;
+                               background-color: #f0f0f0;
+                               border: 1px solid #e0e0e0;
+                               display: flex; 
+                               align-items: center; 
+                               justify-content: center;
+                               cursor: pointer;
+                               transition: all 0.2s ease;">
+                        <i class="fas fa-pen" style="font-size: 12px; color: #666;"></i>
+                        
+                        <!-- Hidden color input -->
+                        <input type="color" 
+                               class="hidden-color-picker" 
+                               value="${!['#000000', '#FFFFFF'].includes(existingColor) ? existingColor : '#000000'}" 
+                               style="width: 0; 
+                                      height: 0; 
+                                      position: absolute; 
+                                      opacity: 0; 
+                                      pointer-events: none;">
+                    </div>
+                </div>
             </div>
             <button class="shadow-btn">
                 <i class="fas fa-layer-group"></i>
@@ -2523,165 +2596,501 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
         e.stopPropagation();
     });
 
+    // Setup save button to ensure color is applied
+    const saveButton = panel.querySelector('.text-edit-save');
+    if (saveButton) {
+        saveButton.addEventListener('click', () => {
+            // Get the chosen color from either active color option or custom color
+            let selectedColor;
+            const activeColor = panel.querySelector('.color-option.active');
+            if (activeColor) {
+                if (activeColor.classList.contains('custom-color')) {
+                    // Get the color from the color picker
+                    selectedColor = panel.querySelector('.hidden-color-picker').value;
+                } else {
+                    // Get the color from data attribute
+                    selectedColor = activeColor.getAttribute('data-color');
+                }
+            } else {
+                // Default to black if no active color
+                selectedColor = '#000000';
+            }
+            
+            // Store the selected color for use when creating the text object
+            panel.setAttribute('data-selected-color', selectedColor);
+            
+            console.log(`Saving with selected color: ${selectedColor}`);
+            
+            // Ensure the color is applied to the model immediately before save
+            if (window.selectedObject && window.selectedObject.type === 'text') {
+                window.selectedObject.color = selectedColor;
+                // Force a redraw of the canvas
+                updateShirt3DTexture();
+            }
+        });
+    }
+
     // Setup color picker functionality
     const colorPicker = panel.querySelector('.hidden-color-picker');
-    const customColorOption = panel.querySelector('.custom-color-option');
-    const moreColorsBtn = panel.querySelector('.more-colors-btn');
-    const colorOptions = panel.querySelectorAll('.color-option:not(.custom-color-option)');
+    const customColorOption = panel.querySelector('.custom-color');
+    const colorEditIcon = panel.querySelector('.color-edit-icon');
+    const colorOptions = panel.querySelectorAll('.color-option:not(.custom-color)');
 
+    // Handle color picker input
     colorPicker.addEventListener('input', (e) => {
         const color = e.target.value;
+        
+        // Update custom color option appearance
         customColorOption.style.backgroundColor = color;
-        colorOptions.forEach(opt => opt.classList.remove('active'));
+        customColorOption.style.borderColor = 'transparent';
+        customColorOption.style.borderStyle = 'solid';
+        
+        // Add animation
+        customColorOption.style.transform = 'scale(1.1)';
+        setTimeout(() => {
+            customColorOption.style.transform = 'scale(1)';
+        }, 200);
+        
+        // Remove active class from all options
+        panel.querySelectorAll('.color-option').forEach(opt => opt.classList.remove('active'));
+        
+        // Add active class to custom option
         customColorOption.classList.add('active');
+        
+        // Apply color to text
+        const textInput = panel.querySelector('.text-edit-input');
+        if (textInput) {
+            textInput.style.color = color;
+        }
+        
+        // Store color for use when saving the text
+        panel.setAttribute('data-current-color', color);
+
+        // Try different methods to apply the color to the 3D model
+        try {
+            // Method 1: Use the global selectedObject if available
+            if (window.selectedObject && window.selectedObject.type === 'text') {
+                window.selectedObject.color = color;
+                if (window.selectedObject.mesh && window.selectedObject.mesh.material) {
+                    if (Array.isArray(window.selectedObject.mesh.material)) {
+                        window.selectedObject.mesh.material.forEach(mat => {
+                            if (mat.color) mat.color.set(color);
+                        });
+                    } else if (window.selectedObject.mesh.material.color) {
+                        window.selectedObject.mesh.material.color.set(color);
+                    }
+                }
+                console.log(`Applied color ${color} to selectedObject`);
+            }
+            
+            // Method 2: Use global updateActiveTextColor function
+            if (typeof window.updateActiveTextColor === 'function') {
+                window.updateActiveTextColor(color);
+                console.log(`Called updateActiveTextColor with ${color}`);
+            }
+            
+            // Method 3: Use currentTextObject if available
+            if (window.currentTextObject) {
+                window.currentTextObject.color = color;
+                console.log(`Set currentTextObject.color to ${color}`);
+            }
+            
+            // Method 4: Use updateShirt3DTexture if available
+            if (typeof window.updateShirt3DTexture === 'function') {
+                window.updateShirt3DTexture();
+                console.log('Called updateShirt3DTexture');
+            }
+        } catch (err) {
+            console.warn('Error applying color to 3D model:', err);
+        }
     });
 
-    moreColorsBtn.addEventListener('click', () => {
-        const colorPanel = document.getElementById('color-panel-extended');
-        const shadowPanel = document.getElementById('shadow-panel');
+    // Make all color options activate when clicked
+    colorOptions.forEach(option => {
+        option.addEventListener('click', () => {
+            const color = option.getAttribute('data-color');
+            
+            // Remove active class from all options
+            panel.querySelectorAll('.color-option').forEach(opt => opt.classList.remove('active'));
+            
+            // Add active class to clicked option
+            option.classList.add('active');
+            
+            // Apply color to text
+            const textInput = panel.querySelector('.text-edit-input');
+            if (textInput) {
+                textInput.style.color = color;
+            }
+            
+            // Store color for use when saving the text
+            panel.setAttribute('data-current-color', color);
+            
+            // Try different methods to apply the color to the 3D model
+            try {
+                // Method 1: Use the global selectedObject if available
+                if (window.selectedObject && window.selectedObject.type === 'text') {
+                    window.selectedObject.color = color;
+                    if (window.selectedObject.mesh && window.selectedObject.mesh.material) {
+                        if (Array.isArray(window.selectedObject.mesh.material)) {
+                            window.selectedObject.mesh.material.forEach(mat => {
+                                if (mat.color) mat.color.set(color);
+                            });
+                        } else if (window.selectedObject.mesh.material.color) {
+                            window.selectedObject.mesh.material.color.set(color);
+                        }
+                    }
+                    console.log(`Applied color ${color} to selectedObject`);
+                }
+                
+                // Method 2: Use global updateActiveTextColor function
+                if (typeof window.updateActiveTextColor === 'function') {
+                    window.updateActiveTextColor(color);
+                    console.log(`Called updateActiveTextColor with ${color}`);
+                }
+                
+                // Method 3: Use currentTextObject if available
+                if (window.currentTextObject) {
+                    window.currentTextObject.color = color;
+                    console.log(`Set currentTextObject.color to ${color}`);
+                }
+                
+                // Method 4: Use updateShirt3DTexture if available
+                if (typeof window.updateShirt3DTexture === 'function') {
+                    window.updateShirt3DTexture();
+                    console.log('Called updateShirt3DTexture');
+                }
+            } catch (err) {
+                console.warn('Error applying color to 3D model:', err);
+            }
+        });
         
-        if (colorPanel) {
-            // Hide shadow panel if it's open
-            if (shadowPanel && shadowPanel.classList.contains('active')) {
-                shadowPanel.classList.remove('active');
+        // Add hover effects
+        option.addEventListener('mouseenter', () => {
+            if (!option.classList.contains('active')) {
+                option.style.transform = 'scale(1.05)';
             }
-            
-            // Position it relative to the text panel
-            const textPanelRect = panel.getBoundingClientRect();
-            colorPanel.style.top = textPanelRect.top + 'px';
-            colorPanel.style.left = (textPanelRect.right + 20) + 'px';
-            
-            // Store a reference to the active text element
-            const activeColorOption = panel.querySelector('.color-option.active');
-            if (activeColorOption) {
-                colorPanel.dataset.targetColor = activeColorOption.getAttribute('data-color');
+        });
+        
+        option.addEventListener('mouseleave', () => {
+            if (!option.classList.contains('active')) {
+                option.style.transform = 'scale(1)';
             }
-            
-            // Hide the text edit panel completely
-            panel.style.display = 'none';
-            
-            // Show the color selection panel
-            colorPanel.classList.add('active');
-            
-            // Setup color panel interactions
-            setupColorPanel(colorPanel, panel);
+        });
+    });
+
+    // Make the custom color option activate when clicked
+    customColorOption.addEventListener('click', () => {
+        // Instead of opening the color picker, apply the current custom color
+        applyCustomColor();
+    });
+    
+    // Make the edit icon open the color picker
+    colorEditIcon.addEventListener('click', () => {
+        colorPicker.click();
+    });
+    
+    // Function to apply the custom color without opening the color picker
+    function applyCustomColor() {
+        // Get current color directly from the custom color option's background-color
+        // This ensures we're using the actual visible color
+        let color;
+        
+        // First try to get it from the input value for consistency
+        color = colorPicker.value;
+        
+        // Skip if no custom color has been selected yet (in that case, open the picker)
+        if (customColorOption.style.backgroundColor === 'transparent' || 
+            customColorOption.style.backgroundColor === '' || 
+            customColorOption.style.backgroundColor === 'rgba(0, 0, 0, 0)') {
+            colorPicker.click(); // Open color picker if no color is selected
+            return;
         }
+        
+        console.log(`Applying custom color: ${color}`);
+        
+        // Remove active class from all options
+        panel.querySelectorAll('.color-option').forEach(opt => opt.classList.remove('active'));
+        
+        // Add active class to custom option
+        customColorOption.classList.add('active');
+        
+        // Apply color to text
+        const textInput = panel.querySelector('.text-edit-input');
+        if (textInput) {
+            textInput.style.color = color;
+        }
+        
+        // Add animation
+        customColorOption.style.transform = 'scale(1.1)';
+        setTimeout(() => {
+            customColorOption.style.transform = 'scale(1)';
+        }, 200);
+        
+        // Store color for use when saving the text
+        panel.setAttribute('data-current-color', color);
+        
+        // Use the direct calls that are used for the black and white colors
+        try {
+            // Method 1: Update selectedObject if available
+            if (window.selectedObject && window.selectedObject.type === 'text') {
+                window.selectedObject.color = color;
+                if (window.selectedObject.mesh && window.selectedObject.mesh.material) {
+                    if (Array.isArray(window.selectedObject.mesh.material)) {
+                        window.selectedObject.mesh.material.forEach(mat => {
+                            if (mat.color) mat.color.set(color);
+                        });
+                    } else if (window.selectedObject.mesh.material.color) {
+                        window.selectedObject.mesh.material.color.set(color);
+                    }
+                }
+                console.log(`Updated selectedObject color to ${color}`);
+            }
+            
+            // Method 2: Update currentTextObject
+            if (window.currentTextObject) {
+                window.currentTextObject.color = color;
+                console.log(`Updated currentTextObject.color to ${color}`);
+            }
+            
+            // Method 3: Call updateShirt3DTexture
+            if (typeof window.updateShirt3DTexture === 'function') {
+                window.updateShirt3DTexture();
+                console.log(`Called updateShirt3DTexture after setting color to ${color}`);
+            }
+            
+            // Method 4: Call updateActiveTextColor 
+            if (typeof window.updateActiveTextColor === 'function') {
+                window.updateActiveTextColor(color);
+                console.log(`Called updateActiveTextColor with ${color}`);
+            }
+            
+            // Method 5: As fallback, call applyColorTo3DModel
+            applyColorTo3DModel(color);
+            
+        } catch (err) {
+            console.error('Error applying custom color:', err);
+            // Fallback
+            applyColorTo3DModel(color);
+        }
+    }
+
+    // Add hover effect to edit icon
+    colorEditIcon.addEventListener('mouseenter', () => {
+        colorEditIcon.style.backgroundColor = '#e8e8e8';
+        colorEditIcon.style.transform = 'scale(1.05)';
+    });
+    
+    colorEditIcon.addEventListener('mouseleave', () => {
+        colorEditIcon.style.backgroundColor = '#f0f0f0';
+        colorEditIcon.style.transform = 'scale(1)';
+    });
+
+    // Add keyboard accessibility
+    const allColorElements = [...colorOptions, customColorOption, colorEditIcon];
+    allColorElements.forEach((element, index) => {
+        element.setAttribute('tabindex', '0');
+        
+        element.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                element.click();
+            }
+        });
     });
 
     // Setup shadow button functionality
     const shadowBtn = panel.querySelector('.shadow-btn');
-    shadowBtn.addEventListener('click', () => {
-        const shadowPanel = document.getElementById('shadow-panel');
+    shadowBtn.addEventListener('click', function(e) {
+        console.log("Shadow button clicked from 3d-editor.js");
+        e.preventDefault();
+        e.stopPropagation();
+        
         const colorPanel = document.getElementById('color-panel-extended');
         
-        if (shadowPanel) {
             // Hide color panel if it's open
             if (colorPanel && colorPanel.classList.contains('active')) {
-                colorPanel.classList.remove('active');
+        colorPanel.classList.remove('active');
             }
             
-            // Position it relative to the text panel
-            const textPanelRect = panel.getBoundingClientRect();
-            shadowPanel.style.top = textPanelRect.top + 'px';
-            shadowPanel.style.left = (textPanelRect.right + 20) + 'px';
-            
-            // Hide the text edit panel completely
-            panel.style.display = 'none';
-            
-            // Show the shadow panel
-            shadowPanel.classList.add('active');
+        // Directly toggle shadow options
+        if (window.directToggleShadowOptions) {
+            window.directToggleShadowOptions();
+        } else {
+            console.error("Shadow toggle function not available");
         }
     });
     
     return panel;
 }
 
+/**
+ * Applies the selected color to the active 3D text object
+ * @param {string} color - The color to apply (hex format)
+ */
+function applyColorTo3DModel(color) {
+    // Save to local storage for persistence
+    localStorage.setItem('lastTextColor', color);
+    
+    // If there's an active text object selected, update its color
+    if (selectedObject && selectedObject.type === 'text') {
+        // Update the object's color property
+        selectedObject.color = color;
+        
+        // Update the material color if it exists
+        if (selectedObject.mesh && selectedObject.mesh.material) {
+            if (Array.isArray(selectedObject.mesh.material)) {
+                // If material is an array, update all materials
+                selectedObject.mesh.material.forEach(mat => {
+                    if (mat.color) mat.color.set(color);
+                });
+            } else {
+                // Single material
+                if (selectedObject.mesh.material.color) {
+                    selectedObject.mesh.material.color.set(color);
+                }
+            }
+        }
+        
+        // Update the canvas texture if needed
+        updateShirt3DTexture();
+        
+        console.log(`Applied color ${color} to 3D text object`);
+        
+        // Save the current state after modifying the object
+        afterObjectModified();
+    } else {
+        // If no text object is selected, store the color for the next text object
+        console.log(`No active text object found, color ${color} saved for next text creation`);
+    }
+    
+    // If there's a global function to update active text color, call it too
+    if (typeof window.updateActiveTextColor === 'function') {
+        try {
+            window.updateActiveTextColor(color);
+        } catch (e) {
+            console.warn('Error in updateActiveTextColor:', e);
+        }
+    }
+}
+
 // Setup color panel interactions
 function setupColorPanel(colorPanel, textPanel) {
-    const colorItems = colorPanel.querySelectorAll('.color-item');
-    const customColorPicker = colorPanel.querySelector('#modal-color-picker');
-    const cancelBtn = colorPanel.querySelector('#cancel-color-btn');
-    const applyBtn = colorPanel.querySelector('#apply-color-btn');
-    const closeBtn = colorPanel.querySelector('.panel-close');
-    
-    let selectedColor = colorPanel.dataset.targetColor || '#000000';
-    
-    // Set initial active state
-    colorItems.forEach(item => {
-        if (item.getAttribute('data-color') === selectedColor) {
-            item.classList.add('active');
-        }
-        
-        // Add click handler
-        item.addEventListener('click', () => {
-            colorItems.forEach(i => i.classList.remove('active'));
-            item.classList.add('active');
-            selectedColor = item.getAttribute('data-color');
-        });
-    });
-    
-    // Custom color picker
-    customColorPicker.addEventListener('input', (e) => {
-        selectedColor = e.target.value;
-        colorItems.forEach(i => i.classList.remove('active'));
-    });
-    
-    // Cancel button
-    cancelBtn.addEventListener('click', () => {
-        // Hide color panel
-        colorPanel.classList.remove('active');
-        
-        // Show the text edit panel again
-        if (textPanel) {
-            textPanel.style.display = 'block';
-        }
-    });
-    
-    // Close button
-    closeBtn.addEventListener('click', () => {
-        // Hide color panel
-        colorPanel.classList.remove('active');
-        
-        // Show the text edit panel again
-        if (textPanel) {
-            textPanel.style.display = 'block';
+    const colorOptions = colorPanel.querySelectorAll('.color-option');
+    const customColorOption = colorPanel.querySelector('.custom-color');
+    const colorPicker = colorPanel.querySelector('.hidden-color-picker');
+    const colorIndicator = colorPanel.querySelector('.selected-color-indicator');
+    const textInput = textPanel.querySelector('textarea');
+
+    // Add hover animations
+    colorOptions.forEach(option => {
+        if (option.classList.contains('custom-color-option')) {
+            // Custom hover effects for the gradient button
+            option.addEventListener('mouseenter', () => {
+                option.style.transform = 'scale(1.05)';
+                option.style.boxShadow = '0 6px 15px rgba(0,0,0,0.25)';
+            });
+            
+            option.addEventListener('mouseleave', () => {
+                option.style.transform = 'scale(1)';
+                option.style.boxShadow = option.classList.contains('active') 
+                    ? '0 0 0 2px #5d9df5, 0 4px 10px rgba(0,0,0,0.2)' 
+                    : '0 2px 6px rgba(0,0,0,0.15)';
+            });
+        } else {
+            // Hover effects for black and white options
+            option.addEventListener('mouseenter', () => {
+                option.style.transform = 'scale(1.1)';
+                option.style.boxShadow = option.classList.contains('active')
+                    ? '0 0 0 2px #5d9df5, 0 4px 12px rgba(0,0,0,0.25)'
+                    : '0 4px 8px rgba(0,0,0,0.25)';
+            });
+            
+            option.addEventListener('mouseleave', () => {
+                option.style.transform = 'scale(1)';
+                option.style.boxShadow = option.classList.contains('active')
+                    ? '0 0 0 2px #5d9df5, 0 3px 8px rgba(0,0,0,0.2)'
+                    : '0 2px 5px rgba(0,0,0,0.2)';
+            });
         }
     });
-    
-    // Apply button
-    applyBtn.addEventListener('click', () => {
-        // Find the color option in the text panel and update it
-        const colorOptions = textPanel.querySelectorAll('.color-option');
-        const customColorOption = textPanel.querySelector('.custom-color-option');
-        const hiddenColorPicker = textPanel.querySelector('.hidden-color-picker');
-        
-        // Try to find an existing color option that matches
-        let found = false;
+
         colorOptions.forEach(option => {
-            if (option.getAttribute('data-color') === selectedColor) {
+        option.addEventListener('click', () => {
+            if (option.classList.contains('custom-color-option')) {
+                colorPicker.click();
+                return;
+            }
+            
+            // Remove active class from all options
+            colorOptions.forEach(opt => opt.classList.remove('active'));
+            
+            // Add active class to clicked option
                 option.classList.add('active');
-                found = true;
+            
+            // Update button styles based on active state
+            colorOptions.forEach(opt => {
+                if (opt.classList.contains('custom-color-option')) {
+                    opt.style.boxShadow = opt.classList.contains('active')
+                        ? '0 0 0 2px #5d9df5, 0 4px 10px rgba(0,0,0,0.2)'
+                        : '0 2px 6px rgba(0,0,0,0.15)';
             } else {
-                option.classList.remove('active');
+                    opt.style.boxShadow = opt.classList.contains('active')
+                        ? '0 0 0 2px #5d9df5, 0 3px 8px rgba(0,0,0,0.2)'
+                        : '0 2px 5px rgba(0,0,0,0.2)';
+                }
+            });
+            
+            const color = option.getAttribute('data-color');
+            
+            // Apply the selected color to the text
+            if (textInput && color) {
+                textInput.style.color = color;
+            }
+            
+            // Update colorState in 3D editor
+            if (window.currentTextObject) {
+                window.currentTextObject.color = color;
+                updateShirt3DTexture();
             }
         });
-        
-        // If no matching color found, use the custom color option
-        if (!found && customColorOption && hiddenColorPicker) {
-            colorOptions.forEach(opt => opt.classList.remove('active'));
-            customColorOption.classList.add('active');
-            customColorOption.style.backgroundColor = selectedColor;
-            hiddenColorPicker.value = selectedColor;
-        }
-        
-        // Hide color panel
-        colorPanel.classList.remove('active');
-        
-        // Show the text edit panel again
-        if (textPanel) {
-            textPanel.style.display = 'block';
-        }
     });
+
+    if (colorPicker) {
+        colorPicker.addEventListener('input', (e) => {
+            const color = e.target.value;
+            
+            // Update the color indicator with the selected color
+            if (colorIndicator) {
+                colorIndicator.style.backgroundColor = color;
+            }
+
+            // Remove active class from all options
+            colorOptions.forEach(opt => opt.classList.remove('active'));
+            
+            // Add active class to custom color option
+            customColorOption.classList.add('active');
+            
+            // Update button styles based on active state
+            colorOptions.forEach(opt => {
+                if (opt.classList.contains('custom-color-option')) {
+                    opt.style.boxShadow = '0 0 0 2px #5d9df5, 0 4px 10px rgba(0,0,0,0.2)';
+                } else {
+                    opt.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+                }
+            });
+            
+            // Apply the selected color to the text
+            if (textInput && color) {
+                textInput.style.color = color;
+            }
+            
+            // Update colorState in 3D editor
+            if (window.currentTextObject) {
+                window.currentTextObject.color = color;
+                updateShirt3DTexture();
+            }
+        });
+    }
 }
 
 // Add text to canvas
@@ -2710,40 +3119,151 @@ export async function addText(text = '', options = {}) {
             const textarea = panel.querySelector('.text-edit-input');
             const colorOptions = panel.querySelectorAll('.color-option');
             const fontSelect = panel.querySelector('#font-select');
-            let selectedColor = options.color || '#000000';
-            let selectedFont = options.font || 'Arial';
-
-            // Focus the textarea
-            textarea.focus();
-            textarea.select();
-
-            // Handle color selection
-            colorOptions.forEach(option => {
-                option.addEventListener('click', () => {
-                    colorOptions.forEach(opt => opt.classList.remove('active'));
-                    option.classList.add('active');
-                    selectedColor = option.dataset.color;
-                });
-            });
+            const saveButton = panel.querySelector('.text-edit-save');
+            const cancelButton = panel.querySelector('.text-edit-cancel');
+            const closeButton = panel.querySelector('.panel-close');
             
+            let selectedColor = options.color || '#000000';
+            
+            // Set initial color if provided in options
+            if (options.color) {
+                // If color is not black or white, set custom color option as active
+                if (!['#000000', '#FFFFFF'].includes(options.color)) {
+                    // Find the custom color option
+                    const customColorOption = panel.querySelector('.custom-color');
+                    if (customColorOption) {
+                        // Set its background color
+                        customColorOption.style.backgroundColor = options.color;
+                        customColorOption.style.borderColor = 'transparent';
+                        customColorOption.style.borderStyle = 'solid';
+                        
+                        // Set the color picker value
+                        const colorPicker = panel.querySelector('.hidden-color-picker');
+                        if (colorPicker) {
+                            colorPicker.value = options.color;
+                        }
+                        
+                        // Make it active
+                        panel.querySelectorAll('.color-option').forEach(opt => {
+                            opt.classList.remove('active');
+                        });
+                        customColorOption.classList.add('active');
+                    }
+                } else {
+                    // Set the black or white option as active
+            colorOptions.forEach(option => {
+                        const color = option.getAttribute('data-color');
+                        if (color === options.color) {
+                    option.classList.add('active');
+                        } else {
+                            option.classList.remove('active');
+                        }
+                    });
+                }
+                
+                // Apply color to text input
+                if (textarea) {
+                    textarea.style.color = options.color;
+                }
+            }
+            
+            // Initialize selectedColor from active color option
+            const activeOption = panel.querySelector('.color-option.active');
+            if (activeOption) {
+                if (activeOption.classList.contains('custom-color')) {
+                    // Get color from picker
+                    const colorPicker = panel.querySelector('.hidden-color-picker');
+                    if (colorPicker) {
+                        selectedColor = colorPicker.value;
+                    }
+                } else {
+                    selectedColor = activeOption.getAttribute('data-color');
+                }
+            }
+            
+            let selectedFont = options.font || 'Arial';
+            let shadowEnabled = options.shadow || false;
+            let shadowConfig = options.shadowConfig || { type: 'light' };
+            
+            // Handle the save button click
+            saveButton.addEventListener('click', () => {
+                const textValue = textarea.value.trim();
+                
+                if (textValue) {
+                    // Get color from active color option or data attribute
+                    const activeOption = panel.querySelector('.color-option.active');
+                    if (activeOption) {
+                        if (activeOption.classList.contains('custom-color')) {
+                            // Get color from picker
+                            const colorPicker = panel.querySelector('.hidden-color-picker');
+                            if (colorPicker) {
+                                selectedColor = colorPicker.value;
+                            }
+                        } else {
+                            selectedColor = activeOption.getAttribute('data-color');
+                        }
+                    } else {
+                        // Try to get color from panel data attribute
+                        const storedColor = panel.getAttribute('data-current-color');
+                        if (storedColor) {
+                            selectedColor = storedColor;
+                        }
+                    }
+                    
+                    // Get font from selector
+                    if (fontSelect) {
+                        selectedFont = fontSelect.value;
+                    }
+                    
+                    console.log(`Saving text with color: ${selectedColor}, font: ${selectedFont}`);
+                    
+                    // Close the panel
+                    panel.classList.remove('active');
+                    
+                    // Return the text, color and font
+                    resolve({
+                        text: textValue,
+                        color: selectedColor,
+                        font: selectedFont,
+                        shadow: shadowEnabled,
+                        shadowConfig: shadowConfig
+                    });
+                } else {
+                    textarea.focus();
+                    // Show error message
+                    const errorMsg = document.createElement('div');
+                    errorMsg.className = 'error-message';
+                    errorMsg.textContent = 'Please enter some text';
+                    errorMsg.style.color = 'red';
+                    errorMsg.style.marginTop = '5px';
+                    
+                    // Remove any existing error message
+                    const existingError = panel.querySelector('.error-message');
+                    if (existingError) {
+                        existingError.remove();
+                    }
+                    
+                    // Add error message below textarea
+                    textarea.parentNode.insertBefore(errorMsg, textarea.nextSibling);
+                    
+                    // Remove error message after 3 seconds
+                    setTimeout(() => {
+                        errorMsg.remove();
+                    }, 3000);
+                }
+            });
+
             // Handle close button
-            panel.querySelector('.panel-close').addEventListener('click', () => {
-                panel.remove();
+            closeButton.addEventListener('click', () => {
+                // Close the panel
+                panel.classList.remove('active');
                 reject('cancelled');
             });
 
-            // Handle save
-            panel.querySelector('.text-edit-save').addEventListener('click', () => {
-                const newText = textarea.value.trim();
-                if (newText) {
-                    resolve({ text: newText, color: selectedColor, font: fontSelect.value });
-                }
-                panel.remove();
-            });
-
-            // Handle cancel
-            panel.querySelector('.text-edit-cancel').addEventListener('click', () => {
-                panel.remove();
+            // Handle cancel button
+            cancelButton.addEventListener('click', () => {
+                // Close the panel
+                panel.classList.remove('active');
                 reject('cancelled');
             });
 
@@ -2753,7 +3273,7 @@ export async function addText(text = '', options = {}) {
                     e.preventDefault();
                     const newText = textarea.value.trim();
                     if (newText) {
-                        resolve({ text: newText, color: selectedColor, font: fontSelect.value });
+                        resolve({ text: newText, color: selectedColor, font: selectedFont, shadow: shadowEnabled, shadowConfig: shadowConfig });
                     }
                     panel.remove();
                 }

@@ -160,6 +160,208 @@
 				}
 			});
 		</script>
+
+		<style>
+			/* Modern shadow button style */
+			.shadow-btn {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				padding: 10px 15px;
+				background: linear-gradient(145deg, #ffffff, #f5f7fa);
+				border: none;
+				border-radius: 12px;
+				color: #4a5568;
+				font-weight: 600;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 
+							 0 2px 4px rgba(0, 0, 0, 0.03),
+							inset 0 -2px 0 rgba(0, 0, 0, 0.06);
+				transition: all 0.2s ease;
+				cursor: pointer;
+				outline: none;
+				position: relative;
+				overflow: hidden;
+			}
+			
+			.shadow-btn i {
+				font-size: 1.1em;
+				color: #4a5568;
+			}
+			
+			.shadow-btn:hover {
+				transform: translateY(-2px);
+				box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1), 
+							 0 3px 6px rgba(0, 0, 0, 0.05),
+							inset 0 -2px 0 rgba(0, 0, 0, 0.06);
+				background: linear-gradient(145deg, #ffffff, #f0f4f8);
+			}
+			
+			.shadow-btn:active {
+				transform: translateY(1px);
+				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06),
+							inset 0 1px 2px rgba(0, 0, 0, 0.04);
+				background: linear-gradient(145deg, #f5f7fa, #ffffff);
+			}
+			
+			.shadow-btn::after {
+				content: '';
+				position: absolute;
+				width: 100%;
+				height: 100%;
+				top: 0;
+				left: 0;
+				pointer-events: none;
+				background-image: radial-gradient(circle, #fff 10%, transparent 10.01%);
+				background-repeat: no-repeat;
+				background-position: 50%;
+				transform: scale(10, 10);
+				opacity: 0;
+				transition: transform 0.5s, opacity 0.8s;
+			}
+			
+			.shadow-btn:active::after {
+				transform: scale(0, 0);
+				opacity: 0.3;
+				transition: 0s;
+			}
+			
+			/* Modern cancel and apply buttons */
+			.cancel-button, .apply-button {
+				padding: 10px 22px;
+				border: none;
+				border-radius: 12px;
+				font-weight: 600;
+				font-size: 14px;
+				letter-spacing: 0.4px;
+				transition: all 0.2s ease;
+				cursor: pointer;
+				position: relative;
+				overflow: hidden;
+				min-width: 100px;
+			}
+			
+			.cancel-button {
+				background: linear-gradient(145deg, #f1f5f9, #e2e8f0);
+				color: #64748b;
+				box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05), 
+							inset 0 -2px 0 rgba(0, 0, 0, 0.05);
+			}
+			
+			.apply-button {
+				background: linear-gradient(145deg, #3b82f6, #2563eb);
+				color: white;
+				box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3), 
+							inset 0 -2px 0 rgba(0, 0, 0, 0.1);
+			}
+			
+			.cancel-button:hover {
+				transform: translateY(-2px);
+				background: linear-gradient(145deg, #f8fafc, #f1f5f9);
+				box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08), 
+							inset 0 -2px 0 rgba(0, 0, 0, 0.05);
+			}
+			
+			.apply-button:hover {
+				transform: translateY(-2px);
+				background: linear-gradient(145deg, #4f94ff, #3b82f6);
+				box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4), 
+							inset 0 -2px 0 rgba(0, 0, 0, 0.1);
+			}
+			
+			.cancel-button:active, .apply-button:active {
+				transform: translateY(1px);
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05),
+							inset 0 1px 1px rgba(0, 0, 0, 0.1);
+			}
+			
+			.cancel-button::after, .apply-button::after {
+				content: '';
+				position: absolute;
+				width: 100%;
+				height: 100%;
+				top: 0;
+				left: 0;
+				pointer-events: none;
+				background-image: radial-gradient(circle, rgba(255, 255, 255, 0.2) 10%, transparent 10.01%);
+				background-repeat: no-repeat;
+				background-position: 50%;
+				transform: scale(10, 10);
+				opacity: 0;
+				transition: transform 0.3s, opacity 0.5s;
+			}
+			
+			.cancel-button:active::after, .apply-button:active::after {
+				transform: scale(0, 0);
+				opacity: 0.3;
+				transition: 0s;
+			}
+
+			/* Force all textareas to be non-resizable */
+			textarea {
+				resize: none !important;
+				overflow: auto !important;
+			}
+			
+			/* Specifically target the text-edit-input class */
+			.text-edit-input {
+				resize: none !important;
+				overflow: auto !important;
+			}
+
+			/* Modern Scrollbar Styling */
+			:root {
+				--scrollbar-track: rgba(0, 0, 0, 0.05);
+				--scrollbar-thumb: rgba(136, 136, 136, 0.35);
+				--scrollbar-thumb-hover: rgba(136, 136, 136, 0.5);
+				--scrollbar-width: 8px;
+				--scrollbar-radius: 4px;
+			}
+
+			.light-theme {
+				--scrollbar-track: rgba(0, 0, 0, 0.03);
+				--scrollbar-thumb: rgba(100, 116, 139, 0.25);
+				--scrollbar-thumb-hover: rgba(100, 116, 139, 0.4);
+			}
+
+			.dark-theme {
+				--scrollbar-track: rgba(255, 255, 255, 0.02);
+				--scrollbar-thumb: rgba(180, 180, 180, 0.25);
+				--scrollbar-thumb-hover: rgba(180, 180, 180, 0.4);
+			}
+
+			/* Webkit browsers (Chrome, Safari, newer Edge) */
+			::-webkit-scrollbar {
+				width: var(--scrollbar-width);
+				height: var(--scrollbar-width);
+			}
+
+			::-webkit-scrollbar-track {
+				background: var(--scrollbar-track);
+				border-radius: var(--scrollbar-radius);
+			}
+
+			::-webkit-scrollbar-thumb {
+				background: var(--scrollbar-thumb);
+				border-radius: var(--scrollbar-radius);
+				transition: background 0.2s ease;
+			}
+
+			::-webkit-scrollbar-thumb:hover {
+				background: var(--scrollbar-thumb-hover);
+			}
+
+			/* Firefox */
+			* {
+				scrollbar-width: thin;
+				scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+			}
+
+			/* Modern scrollbar for textareas and specific UI elements */
+			textarea, .panel-content, .floating-panel {
+				scrollbar-width: thin;
+				scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+			}
+		</style>
 	</head>
 	<body>
 		<!-- Landing Page -->
@@ -197,62 +399,6 @@
 
 			<!-- Main Content Container -->
 			<div class="main-container">
-				<!-- Shadow Panel (Floating) -->
-				<div class="floating-panel" id="shadow-panel">
-					<div class="panel-header">
-						<h3>Text Shadow Effects</h3>
-						<button class="panel-close" aria-label="Close Panel">
-							<i class="fas fa-times"></i>
-						</button>
-					</div>
-					<div class="panel-content">
-						<div id="shadow-preview-text" class="shadow-preview-text">Preview Text</div>
-						
-						<!-- Shadow Color Picker -->
-						<div class="shadow-color-main">
-							<label for="shadow-color">Shadow Color</label>
-							<div class="color-picker-wrapper">
-								<input type="color" id="shadow-color" value="#000000">
-								<div class="color-preview" id="color-preview"></div>
-								<span id="color-value">#000000</span>
-							</div>
-						</div>
-						
-						<div class="shadow-previews">
-							<div class="shadow-preview" data-shadow-type="drop">Drop Shadow</div>
-							<div class="shadow-preview" data-shadow-type="inner">Inner Shadow</div>
-							<div class="shadow-preview" data-shadow-type="glow">Glow Effect</div>
-							<div class="shadow-preview" data-shadow-type="custom">Custom Shadow</div>
-						</div>
-						<div id="shadow-custom-controls" class="shadow-custom-controls">
-							<div class="shadow-control-group">
-								<label for="shadow-blur">Blur</label>
-								<input type="range" id="shadow-blur" min="0" max="20" value="5">
-								<span id="blur-value">5px</span>
-							</div>
-							<div class="shadow-control-group">
-								<label for="shadow-distance">Distance</label>
-								<input type="range" id="shadow-distance" min="0" max="20" value="3">
-								<span id="distance-value">3px</span>
-							</div>
-							<div class="shadow-control-group">
-								<label for="shadow-angle">Angle</label>
-								<input type="range" id="shadow-angle" min="0" max="360" value="45">
-								<span id="angle-value">45°</span>
-							</div>
-							<div class="shadow-control-group">
-								<label for="shadow-opacity">Opacity</label>
-								<input type="range" id="shadow-opacity" min="0" max="100" value="50">
-								<span id="opacity-value">50%</span>
-							</div>
-						</div>
-						<div class="panel-actions">
-							<button id="cancel-shadow-btn" class="cancel-button">Cancel</button>
-							<button id="apply-shadow-btn" class="apply-button">Apply</button>
-						</div>
-					</div>
-				</div>
-
 				<!-- Color Selection Panel (Floating) -->
 				<div class="floating-panel" id="color-panel-extended">
 					<div class="panel-header">
@@ -538,7 +684,7 @@
 						</div>
 						<div class="panel-content">
 							<div class="text-edit-options">
-								<textarea class="text-edit-input" placeholder="Enter your text here..."></textarea>
+								<textarea class="text-edit-input" placeholder="Enter your text here..." style="height: 15px; resize: none !important; overflow: auto !important;"></textarea>
 								
 								<div class="font-select-container">
 									<label for="font-select">Font</label>
@@ -575,8 +721,9 @@
 								</div>
 								
 								<div class="text-style-buttons">
-									<button id="shadow-btn" class="text-style-btn" title="Text Shadow">
+									<button class="shadow-btn" onclick="if(window.directToggleShadowOptions) directToggleShadowOptions(); else console.error('Shadow function not loaded');">
 										<i class="fas fa-layer-group"></i>
+										<span>Shadow</span>
 									</button>
 								</div>
 								
@@ -748,6 +895,7 @@
 									id="ai-prompt"
 									placeholder="Describe your design idea... (e.g. 'A cosmic astronaut floating in space with stars and nebulae')"
 									aria-label="AI Prompt"
+									style="resize: none;"
 								></textarea>
 								<button id="ai-generate" class="button primary">
 									<i class="fas fa-brain"></i>
@@ -817,6 +965,11 @@
 
 		<!-- Script Imports -->
 		<script type="module" src="js/main.js"></script>
+		<!-- Consolidated color picker implementation -->
+		<script src="js/simplified-color-picker.js"></script>
+		<!-- Advanced color picker fix with improved handling -->
+		<script src="js/color-picker-fix.js"></script>
+		<!-- Load shadow controls last to ensure all DOM elements are ready -->
 		<script src="js/shadow-controls.js"></script>
 
 		<!-- Direct camera control script -->

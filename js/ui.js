@@ -815,12 +815,39 @@ function setupPanelSpecificHandlers() {
                                                         shadowConfig: shadowConfig
                                                     };
                                                     
+                                                    console.log(`Creating text with color: ${color}`, textObj);
+                                                    
                                                     // Add the text object to canvas
                                                     editor.addObject(textObj);
                                                     
                                                     // Add to panel items if function is available
                                                     if (typeof editor.addPanelItem === 'function') {
                                                         editor.addPanelItem('text', textObj);
+                                                    }
+                                                    
+                                                    // Specifically force update the color to ensure it applies correctly
+                                                    try {
+                                                        // Set the color on the object
+                                                        if (editor.selectedObject && editor.selectedObject.id === textObj.id) {
+                                                            editor.selectedObject.color = color;
+                                                            
+                                                            // Update the material color if it exists
+                                                            if (editor.selectedObject.mesh && editor.selectedObject.mesh.material) {
+                                                                if (Array.isArray(editor.selectedObject.mesh.material)) {
+                                                                    // If material is an array, update all materials
+                                                                    editor.selectedObject.mesh.material.forEach(mat => {
+                                                                        if (mat.color) mat.color.set(color);
+                                                                    });
+                                                                } else {
+                                                                    // Single material
+                                                                    if (editor.selectedObject.mesh.material.color) {
+                                                                        editor.selectedObject.mesh.material.color.set(color);
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    } catch (err) {
+                                                        console.warn('Error updating text color:', err);
                                                     }
                                                     
                                                     // Update the texture
@@ -2041,11 +2068,11 @@ function createPanel(id, title, container) {
                 <div class="text-edit-colors" style="display: flex; gap: 10px; padding: 8px; align-items: center;">
                     <div class="color-option" style="background-color: #000000; width: 30px; height: 30px; border-radius: 50%; cursor: pointer;" data-color="#000000"></div>
                     <div class="color-option" style="background-color: #FFFFFF; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; border: 1px solid #ddd;" data-color="#FFFFFF"></div>
-                    <div class="color-option custom-color-option" style="background: linear-gradient(135deg, #ff0000, #ff9900, #33cc33, #3399ff, #cc33ff); width: 30px; height: 30px; border-radius: 50%; cursor: pointer;" data-color="#ff0000"></div>
-                    <button id="more-colors-btn" class="more-colors-button" style="padding: 6px 12px; border-radius: 4px; background-color: rgba(var(--primary-color-rgb), 0.1); border: 1px solid rgba(var(--primary-color-rgb), 0.2); color: var(--primary-color); cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 5px;">
-                        <i class="fas fa-palette"></i> More Colors
-                    </button>
-                    <input type="color" id="custom-color-picker" class="hidden-color-picker" style="position: absolute; opacity: 0; pointer-events: none; height: 0; width: 0;">
+                    <div class="color-option translucent-option" style="background-color: rgba(255, 255, 255, 0.5); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; border: 1px solid #ddd;" data-color="rgba(255, 255, 255, 0.5)"></div>
+                    <div class="color-picker-button" style="width: 30px; height: 30px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; background-color: rgba(var(--primary-color-rgb), 0.1); border: 1px solid rgba(var(--primary-color-rgb), 0.2);">
+                        <i class="fas fa-palette" style="color: var(--primary-color);"></i>
+                        <input type="color" id="color-wheel-picker" class="hidden-color-picker" style="position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer;">
+                    </div>
                 </div>
                 <div class="text-edit-buttons">
                     <button class="text-edit-cancel">Cancel</button>
@@ -3320,26 +3347,23 @@ function initTextPanel() {
         });
     }
     
-    // Custom color picker
-    const customColorOption = document.querySelector('.custom-color');
-    const colorPicker = document.getElementById('custom-color-picker');
+    // Color wheel picker
+    const colorWheelPicker = document.getElementById('color-wheel-picker');
     
-    if (customColorOption && colorPicker) {
-        customColorOption.addEventListener('click', function() {
-            colorPicker.click();
-        });
-        
-        colorPicker.addEventListener('change', function() {
+    if (colorWheelPicker) {
+        colorWheelPicker.addEventListener('input', function() {
             const color = this.value;
-            customColorOption.setAttribute('data-color', color);
             
             // Remove active class from all color options
             document.querySelectorAll('.color-option').forEach(option => {
                 option.classList.remove('active');
             });
             
-            // Add active class to the custom color option
-            customColorOption.classList.add('active');
+            // Apply the selected color to the active text input
+            const activeElement = document.activeElement;
+            if (activeElement && activeElement.classList.contains('text-edit-input')) {
+                activeElement.style.color = color;
+            }
         });
     }
     
@@ -3347,78 +3371,34 @@ function initTextPanel() {
     const colorOptions = document.querySelectorAll('.color-option');
     colorOptions.forEach(option => {
         option.addEventListener('click', function() {
-            // Skip if it's the custom color option (handled separately)
-            if (this.classList.contains('custom-color')) return;
-            
             // Remove active class from all options
             colorOptions.forEach(opt => opt.classList.remove('active'));
             
             // Add active class to clicked option
             this.classList.add('active');
+            
+            // Apply color to active text input
+            const color = this.getAttribute('data-color');
+            const activeElement = document.activeElement;
+            if (activeElement && activeElement.classList.contains('text-edit-input')) {
+                activeElement.style.color = color;
+            }
         });
     });
 
     const shadowBtn = document.getElementById('shadow-btn');
-    const moreColorsBtn = document.getElementById('more-colors-btn');
 
     if (shadowBtn) {
-        shadowBtn.addEventListener('click', () => {
-            // Check if text input has focus
-            const activeElement = document.activeElement;
-            if (activeElement && activeElement.classList.contains('text-edit-input')) {
-                // Get current shadow settings
-                const currentShadow = activeElement.style.textShadow;
-                
-                // Store the active text input for later
-                window.activeTextInput = activeElement;
-                
-                // Show shadow panel
-                const panel = document.getElementById('shadow-panel');
-                if (panel) {
-                    // Position near the text panel
-                    const textPanelRect = document.getElementById('text-panel').getBoundingClientRect();
-                    panel.style.top = textPanelRect.top + 'px';
-                    panel.style.left = (textPanelRect.right + 20) + 'px';
-                    
-                    // Show the panel
-                    panel.classList.add('active');
-                    
-                    // Update preview text
-                    const previewText = panel.querySelector('#shadow-preview-text');
-                    if (previewText && activeElement) {
-                        previewText.textContent = activeElement.value;
-                        previewText.style.color = getComputedStyle(activeElement).color;
-                    }
-                }
-            }
-        });
-    }
-
-    if (moreColorsBtn) {
-        moreColorsBtn.addEventListener('click', () => {
-            // Check if text input has focus
-            const activeElement = document.activeElement;
-            if (activeElement && activeElement.classList.contains('text-edit-input')) {
-                // Store the active text input for later
-                window.activeTextInput = activeElement;
-                
-                // Show color panel
-                const panel = document.getElementById('color-panel');
-                if (panel) {
-                    // Position near the text panel
-                    const textPanelRect = document.getElementById('text-panel').getBoundingClientRect();
-                    panel.style.top = textPanelRect.top + 'px';
-                    panel.style.left = (textPanelRect.right + 20) + 'px';
-                    
-                    // Show the panel
-                    panel.classList.add('active');
-                    
-                    // Update panel title
-                    const panelTitle = panel.querySelector('.panel-header h3');
-                    if (panelTitle) {
-                        panelTitle.textContent = 'Text Color';
-                    }
-                }
+        shadowBtn.addEventListener('click', function(e) {
+            console.log("Shadow button clicked from UI.js");
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Directly toggle shadow options without conditions
+            if (window.toggleShadowOptions) {
+                window.toggleShadowOptions();
+            } else {
+                console.error("Shadow toggle function not available");
             }
         });
     }
