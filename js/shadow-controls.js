@@ -114,6 +114,7 @@ window.directToggleShadowOptions = function() {
             <div class="shadow-actions">
                 <button id="reset-shadow-btn">Reset</button>
                 <button id="apply-shadow-btn">Apply</button>
+                <button id="debug-shadow-btn" style="background: #777; margin-left: 8px;">Debug</button>
             </div>
         `;
         
@@ -507,6 +508,26 @@ window.directToggleShadowOptions = function() {
                 // Store settings on the element
                 window.activeTextElement.shadowSettings = shadowSettings;
                 
+                // Also update standard shadow properties used by drawObjectToCanvas
+                window.activeTextElement.shadow = presetName !== 'none';
+                window.activeTextElement.shadowConfig = {
+                    type: presetName === 'outline' ? 'outline' : 
+                          presetName === 'none' ? 'none' : 
+                          presetName === 'subtle' ? 'subtle' :
+                          presetName === 'strong' ? 'strong' :
+                          presetName === 'glow' ? 'neon' : 'medium',
+                    color: color,
+                    blur: blur,
+                    offsetX: offsetX,
+                    offsetY: offsetY
+                };
+                
+                // Update the 3D texture immediately to see changes
+                if (typeof window.updateShirt3DTexture === 'function') {
+                    window.updateShirt3DTexture();
+                    console.log("Immediately updating 3D texture with new shadow settings");
+                }
+                
                 // COMPLETELY NEW APPROACH: Create a high-resolution canvas texture for the text
                 try {
                     // Create a high-resolution canvas (4x the size for better quality)
@@ -635,6 +656,12 @@ window.directToggleShadowOptions = function() {
                                 window.renderer.render(window.scene, window.camera);
                                 
                                 console.log("Successfully applied high-quality text texture");
+                                
+                                // Update the shirt 3D texture to ensure changes are visible
+                                if (typeof window.updateShirt3DTexture === 'function') {
+                                    window.updateShirt3DTexture();
+                                    console.log("Called updateShirt3DTexture to refresh the model");
+                                }
                             });
                         } else {
                             // Fallback approach if THREE isn't available
@@ -723,6 +750,23 @@ window.directToggleShadowOptions = function() {
         if (nonePreset) {
             nonePreset.click();
         }
+        
+        // Setup debug button
+        const debugBtn = shadowOptions.querySelector('#debug-shadow-btn');
+        debugBtn.addEventListener('click', function() {
+            console.log("DEBUG - Active text element:", window.activeTextElement);
+            if (window.activeTextElement) {
+                console.log("Shadow settings:", window.activeTextElement.shadow, window.activeTextElement.shadowConfig);
+                console.log("Text properties:", {
+                    text: window.activeTextElement.text,
+                    color: window.activeTextElement.color,
+                    font: window.activeTextElement.font,
+                    fontSize: window.activeTextElement.fontSize
+                });
+            } else {
+                console.log("No active text element found!");
+            }
+        });
         
     } else {
         console.log("Using existing shadow container");
