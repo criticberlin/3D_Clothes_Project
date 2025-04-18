@@ -2973,126 +2973,6 @@ function applyColorTo3DModel(color) {
     }
 }
 
-// Setup color panel interactions
-function setupColorPanel(colorPanel, textPanel) {
-    const colorOptions = colorPanel.querySelectorAll('.color-option');
-    const customColorOption = colorPanel.querySelector('.custom-color');
-    const colorPicker = colorPanel.querySelector('.hidden-color-picker');
-    const colorIndicator = colorPanel.querySelector('.selected-color-indicator');
-    const textInput = textPanel.querySelector('textarea');
-
-    // Add hover animations
-    colorOptions.forEach(option => {
-        if (option.classList.contains('custom-color-option')) {
-            // Custom hover effects for the gradient button
-            option.addEventListener('mouseenter', () => {
-                option.style.transform = 'scale(1.05)';
-                option.style.boxShadow = '0 6px 15px rgba(0,0,0,0.25)';
-            });
-            
-            option.addEventListener('mouseleave', () => {
-                option.style.transform = 'scale(1)';
-                option.style.boxShadow = option.classList.contains('active') 
-                    ? '0 0 0 2px #5d9df5, 0 4px 10px rgba(0,0,0,0.2)' 
-                    : '0 2px 6px rgba(0,0,0,0.15)';
-            });
-        } else {
-            // Hover effects for black and white options
-            option.addEventListener('mouseenter', () => {
-                option.style.transform = 'scale(1.1)';
-                option.style.boxShadow = option.classList.contains('active')
-                    ? '0 0 0 2px #5d9df5, 0 4px 12px rgba(0,0,0,0.25)'
-                    : '0 4px 8px rgba(0,0,0,0.25)';
-            });
-            
-            option.addEventListener('mouseleave', () => {
-                option.style.transform = 'scale(1)';
-                option.style.boxShadow = option.classList.contains('active')
-                    ? '0 0 0 2px #5d9df5, 0 3px 8px rgba(0,0,0,0.2)'
-                    : '0 2px 5px rgba(0,0,0,0.2)';
-            });
-        }
-    });
-
-        colorOptions.forEach(option => {
-        option.addEventListener('click', () => {
-            if (option.classList.contains('custom-color-option')) {
-                colorPicker.click();
-                return;
-            }
-            
-            // Remove active class from all options
-            colorOptions.forEach(opt => opt.classList.remove('active'));
-            
-            // Add active class to clicked option
-                option.classList.add('active');
-            
-            // Update button styles based on active state
-            colorOptions.forEach(opt => {
-                if (opt.classList.contains('custom-color-option')) {
-                    opt.style.boxShadow = opt.classList.contains('active')
-                        ? '0 0 0 2px #5d9df5, 0 4px 10px rgba(0,0,0,0.2)'
-                        : '0 2px 6px rgba(0,0,0,0.15)';
-            } else {
-                    opt.style.boxShadow = opt.classList.contains('active')
-                        ? '0 0 0 2px #5d9df5, 0 3px 8px rgba(0,0,0,0.2)'
-                        : '0 2px 5px rgba(0,0,0,0.2)';
-                }
-            });
-            
-            const color = option.getAttribute('data-color');
-            
-            // Apply the selected color to the text
-            if (textInput && color) {
-                textInput.style.color = color;
-            }
-            
-            // Update colorState in 3D editor
-            if (window.currentTextObject) {
-                window.currentTextObject.color = color;
-                updateShirt3DTexture();
-            }
-        });
-    });
-
-    if (colorPicker) {
-        colorPicker.addEventListener('input', (e) => {
-            const color = e.target.value;
-            
-            // Update the color indicator with the selected color
-            if (colorIndicator) {
-                colorIndicator.style.backgroundColor = color;
-            }
-
-            // Remove active class from all options
-            colorOptions.forEach(opt => opt.classList.remove('active'));
-            
-            // Add active class to custom color option
-            customColorOption.classList.add('active');
-            
-            // Update button styles based on active state
-            colorOptions.forEach(opt => {
-                if (opt.classList.contains('custom-color-option')) {
-                    opt.style.boxShadow = '0 0 0 2px #5d9df5, 0 4px 10px rgba(0,0,0,0.2)';
-                } else {
-                    opt.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
-                }
-            });
-            
-            // Apply the selected color to the text
-            if (textInput && color) {
-                textInput.style.color = color;
-            }
-            
-            // Update colorState in 3D editor
-            if (window.currentTextObject) {
-                window.currentTextObject.color = color;
-                updateShirt3DTexture();
-            }
-        });
-    }
-}
-
 // Add text to canvas
 export async function addText(text = '', options = {}) {
     try {
@@ -3965,25 +3845,6 @@ function highlightEditableArea(area) {
     ctx.restore();
 }
 
-/**
- * NEW: Check if the current mouse position is inside the editable area
- * @returns {boolean} - True if inside the editable area
- */
-function checkIfInEditableArea() {
-    if (!currentEditableArea || !isEditingMode) return false;
-
-    // Get the UV position from raycaster
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObject(shirtMesh);
-
-    if (intersects.length === 0) return false;
-
-    const uv = intersects[0].uv;
-    const { u1, v1, u2, v2 } = currentEditableArea;
-
-    // Check if UV is within the editable area boundaries
-    return (uv.x >= u1 && uv.x <= u2 && uv.y >= v1 && uv.y <= v2);
-}
 
 /**
  * NEW: Toggle editing mode for a specific area
@@ -4092,29 +3953,6 @@ export function setTransformMode(mode) {
         
         Logger.log(`Set transform mode: ${mode}`);
     }
-}
-
-/**
- * NEW: Show bounding boxes for editable areas
- * This can help users understand where they can click to edit
- */
-export function showEditableAreas(show = true) {
-    // Update state but always set to false to prevent blue boundaries
-    state.showEditableAreas = false;
-
-    // Redraw
-    updateShirt3DTexture();
-
-    return false;
-}
-
-/**
- * Draw all editable areas on the texture
- * @param {CanvasRenderingContext2D} ctx - The canvas context
- */
-function drawEditableAreas(ctx) {
-    // Disabled to prevent blue boundaries from being drawn
-    return;
 }
 
 /**
