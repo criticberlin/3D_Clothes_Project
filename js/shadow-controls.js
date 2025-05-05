@@ -307,8 +307,16 @@ window.directToggleShadowOptions = function() {
         
         document.head.appendChild(style);
         
-        // Append the shadow container to the text panel content
+        // Find the text-edit-buttons container to insert shadow panel before it
+        const textEditButtons = textPanelContent.querySelector('.text-edit-buttons');
+        
+        if (textEditButtons) {
+            // Insert before the buttons container for better UI flow
+            textPanelContent.insertBefore(shadowContainer, textEditButtons);
+        } else {
+            // Fallback: append to the text panel content if buttons container not found
         textPanelContent.appendChild(shadowContainer);
+        }
         
         // Shadow presets configuration
         const shadowPresets = {
@@ -322,45 +330,45 @@ window.directToggleShadowOptions = function() {
                 opacity: 100
             },
             subtle: {
-                type: 'drop',
+                type: 'subtle',
                 color: '#000000',
-                blur: 2,
+                blur: 3,
                 offsetX: 1,
                 offsetY: 1,
                 spread: 0,
-                opacity: 20
+                opacity: 25
             },
             medium: {
-                type: 'drop',
+                type: 'medium',
                 color: '#000000',
-                blur: 4,
+                blur: 5,
                 offsetX: 2,
                 offsetY: 2,
                 spread: 0,
-                opacity: 30
+                opacity: 35
             },
             strong: {
-                type: 'drop',
+                type: 'strong',
                 color: '#000000',
-                blur: 6,
+                blur: 8,
                 offsetX: 3,
                 offsetY: 3,
                 spread: 0,
-                opacity: 40
+                opacity: 50
             },
             glow: {
-                type: 'drop',
+                type: 'glow',
                 color: '#4285f4',
-                blur: 8,
+                blur: 12,
                 offsetX: 0,
                 offsetY: 0,
                 spread: 0,
                 opacity: 80
             },
             neon: {
-                type: 'drop',
+                type: 'neon',
                 color: '#00b4d8',
-                blur: 10,
+                blur: 15,
                 offsetX: 0,
                 offsetY: 0,
                 spread: 2,
@@ -372,17 +380,19 @@ window.directToggleShadowOptions = function() {
                 blur: 0,
                 offsetX: 0,
                 offsetY: 0,
-                spread: 1,
+                spread: 1.5,
                 opacity: 100
             },
             '3d': {
                 type: 'drop',
-                color: '#777777',
+                color: '#333333',
                 blur: 0,
                 offsetX: 3,
                 offsetY: 3,
+                angle: 135,
+                distance: 4,
                 spread: 0,
-                opacity: 100
+                opacity: 70
             },
             custom: {
                 type: 'drop',
@@ -390,6 +400,8 @@ window.directToggleShadowOptions = function() {
                 blur: 5,
                 offsetX: 2,
                 offsetY: 2,
+                angle: 135,
+                distance: 3,
                 spread: 0,
                 opacity: 60
             }
@@ -486,217 +498,72 @@ window.directToggleShadowOptions = function() {
             const presetName = activePreset?.getAttribute('data-preset');
             
             if (window.activeTextElement) {
-                console.log("Creating high-quality text texture for 3D model...");
+                console.log("Applying shadow settings to text object...");
                 
-                // Get text properties for rendering
-                const text = window.activeTextElement.text || "Sample Text";
-                const fontSize = window.activeTextElement.fontSize || 80;
-                const fontFamily = window.activeTextElement.font || "Arial";
+                // Update the shadow properties on the active text element
+                window.activeTextElement.shadow = presetName !== 'none'; // Enable shadow if not 'none'
                 
-                // Create shadow settings object
-                const shadowSettings = {
-                    type: presetName === 'outline' ? 'outline' : 
-                          presetName === 'none' ? 'none' : 'drop',
+                // Calculate angle and distance from X and Y offsets for more natural 3D control
+                const distance = Math.sqrt(offsetX*offsetX + offsetY*offsetY);
+                const angle = Math.atan2(offsetY, offsetX) * 180 / Math.PI;
+                
+                // Create shadow configuration based on the selected preset
+                window.activeTextElement.shadowConfig = {
+                    type: presetName,
                     color: color,
-                    blur: blur * 1.25,
-                    offsetX: offsetX,
-                    offsetY: offsetY,
-                    preset: presetName
+                    blur: blur,
+                    distance: distance,
+                    angle: angle,
+                    offsetX: offsetX,  // Keep original offsets for backward compatibility
+                    offsetY: offsetY,  // Keep original offsets for backward compatibility
+                    opacity: 0.8,      // Default opacity
+                    spread: presetName === 'outline' ? 1.5 : 0  // Set spread for outline
                 };
                 
-                // Store settings on the element
-                window.activeTextElement.shadowSettings = shadowSettings;
+                // Apply special settings for specific shadow types
+                if (presetName === 'glow') {
+                    window.activeTextElement.shadowConfig.opacity = 0.8;
+                    window.activeTextElement.shadowConfig.blur = Math.max(blur, 12); // Minimum blur for glow
+                } else if (presetName === 'neon') {
+                    window.activeTextElement.shadowConfig.opacity = 1.0;
+                    window.activeTextElement.shadowConfig.blur = Math.max(blur, 15); // Minimum blur for neon
+                } else if (presetName === 'strong') {
+                    window.activeTextElement.shadowConfig.opacity = 0.6;
+                    window.activeTextElement.shadowConfig.blur = Math.max(blur, 8); // Minimum blur for strong
+                } else if (presetName === 'outline') {
+                    window.activeTextElement.shadowConfig.spread = blur / 4 + 0.5; // Use blur to control outline thickness
+                }
                 
-                // COMPLETELY NEW APPROACH: Create a high-resolution canvas texture for the text
-                try {
-                    // Create a high-resolution canvas (4x the size for better quality)
-                    const canvas = document.createElement('canvas');
-                    const scale = 4; // Increased scale for super sharp rendering
-                    canvas.width = Math.max(1024, text.length * fontSize * scale * 0.6);
-                    canvas.height = fontSize * scale * 2;
-                    
-                    const ctx = canvas.getContext('2d');
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    
-                    // Use a better text rendering approach with proper scaling
-                    ctx.scale(scale, scale);
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    
-                    // For white text - add a dark contrasting background during generation 
-                    // (will be transparent in final render)
-                    if (window.activeTextElement.color === '#ffffff' || window.activeTextElement.color === 'white') {
-                        ctx.fillStyle = 'rgba(0,0,0,0.1)'; // Very light black for testing contrast
-                        ctx.fillRect(0, 0, canvas.width/scale, canvas.height/scale);
-                    }
-                    
-                    // Set maximum quality settings
-                    ctx.imageSmoothingEnabled = true;
-                    ctx.imageSmoothingQuality = 'high';
-                    
-                    // Apply correct font with weight
-                    ctx.font = `bold ${fontSize}px "${fontFamily}"`;
-                    
-                    // Apply different effects based on shadow type
-                    if (shadowSettings.type === 'outline') {
-                        // Create strong outline effect for better visibility
-                        ctx.strokeStyle = color;
-                        ctx.lineWidth = 3; // Thicker outline for better visibility
-                        ctx.lineJoin = 'round'; // Round joins for smoother outlines
-                        ctx.miterLimit = 2;
-                        
-                        // Draw several outlined versions for a stronger effect
-                        for (let i = 0; i < 3; i++) {
-                            ctx.strokeText(text, canvas.width/(2*scale), canvas.height/(2*scale));
-                        }
-                        
-                        // Fill with transparent or original color
-                        ctx.fillStyle = 'rgba(255,255,255,0)';
-                        ctx.fillText(text, canvas.width/(2*scale), canvas.height/(2*scale));
-                        
-                    } else if (shadowSettings.type === 'drop') {
-                        // Apply drop shadow effect
-                        ctx.shadowColor = color;
-                        ctx.shadowBlur = blur * 1.5; // Increase blur for better shadow effect
-                        ctx.shadowOffsetX = offsetX;
-                        ctx.shadowOffsetY = offsetY;
-                        
-                        // For white text on light backgrounds, add a subtle outline as well
-                        if (window.activeTextElement.color === '#ffffff' || window.activeTextElement.color === 'white') {
-                            // First draw a subtle black outline to improve contrast
-                            ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-                            ctx.lineWidth = 1;
-                            ctx.strokeText(text, canvas.width/(2*scale), canvas.height/(2*scale));
-                        }
-                        
-                        // Draw the main text with shadow
-                        ctx.fillStyle = window.activeTextElement.color || color;
-                        ctx.fillText(text, canvas.width/(2*scale), canvas.height/(2*scale));
-                        
-                    } else {
-                        // No shadow - still ensure text is crisp and visible
-                        
-                        // For white text on light backgrounds, add a subtle outline
-                        if (window.activeTextElement.color === '#ffffff' || window.activeTextElement.color === 'white') {
-                            ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-                            ctx.lineWidth = 0.5;
-                            ctx.strokeText(text, canvas.width/(2*scale), canvas.height/(2*scale));
-                        }
-                        
-                        ctx.fillStyle = window.activeTextElement.color || color;
-                        ctx.fillText(text, canvas.width/(2*scale), canvas.height/(2*scale));
-                    }
-                    
-                    // Convert canvas to a data URL
-                    const textureDataURL = canvas.toDataURL('image/png');
-                    
-                    // Apply this high-quality texture to the 3D model
-                    if (window.scene) {
-                        console.log("Applying high-quality canvas texture to 3D text...");
-                        
-                        // Create a loader for the texture
-                        if (window.THREE) {
-                            const textureLoader = new window.THREE.TextureLoader();
-                            
-                            // Load the texture asynchronously
-                            textureLoader.load(textureDataURL, function(texture) {
-                                // Set high-quality texture properties
-                                texture.anisotropy = window.renderer.capabilities.maxAnisotropy || 16;
-                                texture.minFilter = window.THREE.LinearMipMapLinearFilter;
-                                texture.magFilter = window.THREE.LinearFilter;
-                                texture.generateMipmaps = true;
-                                texture.needsUpdate = true;
-                                
-                                // Find and update all relevant text objects
-                                window.scene.traverse(function(object) {
-                                    if (object.type === "Mesh" && 
-                                       (object.userData.type === "text" || 
-                                        (object.name && object.name.toLowerCase().includes("text")))) {
-                                        
-                                        console.log("Applying high-quality texture to:", object.name || "unnamed text");
-                                        
-                                        // Create a material that uses the high-res texture
-                                        const material = new window.THREE.MeshBasicMaterial({
-                                            map: texture,
-                                            transparent: true,
-                                            side: window.THREE.DoubleSide,
-                                            depthWrite: true,
-                                            depthTest: true
-                                        });
-                                        
-                                        // Replace the object's material
-                                        object.material = material;
-                                        object.material.needsUpdate = true;
-                                    }
-                                });
-                                
-                                // Force a high-quality render
-                                window.renderer.setPixelRatio(Math.max(window.devicePixelRatio || 1, 2));
-                                window.renderer.render(window.scene, window.camera);
-                                
-                                console.log("Successfully applied high-quality text texture");
-                            });
-                        } else {
-                            // Fallback approach if THREE isn't available
-                            try {
-                                // Find text objects in the scene
-                                window.scene.traverse(function(object) {
-                                    if (object.type === "Mesh" && 
-                                       (object.userData.type === "text" || 
-                                        (object.name && object.name.toLowerCase().includes("text")))) {
-                                        
-                                        // Create an image element to load the texture
-                                        const img = new Image();
-                                        img.onload = function() {
-                                            // Apply the texture to the object if possible
-                                            if (object.material && object.material.map) {
-                                                object.material.map.image = img;
-                                                object.material.map.needsUpdate = true;
-                                                object.material.needsUpdate = true;
-                                                
-                                                // Force a render
-                                                if (window.renderer && window.camera) {
-                                                    window.renderer.render(window.scene, window.camera);
-                                                }
-                                            }
-                                        };
-                                        img.src = textureDataURL;
-                                    }
-                                });
-                            } catch (e) {
-                                console.warn("Error using fallback texture approach:", e);
-                            }
-                        }
-                    }
-                    
-                    // Call any existing update functions as a fallback
-                    if (window.updateActiveTextShadow) {
-                        window.updateActiveTextShadow(shadowSettings);
-                    }
-                    
-                    if (window.refreshTextRendering) {
-                        window.refreshTextRendering();
-                    }
-                    
-                    console.log("Applied high-quality text rendering");
-                } catch (e) {
-                    console.warn("Error creating high-quality text:", e);
-                    
-                    // Fallback to original approach if canvas texture fails
+                // Save custom preset for future use if this is a custom setting
+                if (presetName === 'custom') {
                     try {
-                        if (window.updateActiveTextShadow) {
-                            window.updateActiveTextShadow(shadowSettings);
-                        }
-                    } catch (fallbackError) {
-                        console.error("Critical error applying text effects:", fallbackError);
+                        localStorage.setItem('customShadowPreset', JSON.stringify(window.activeTextElement.shadowConfig));
+                    } catch (e) {
+                        console.error('Error saving custom shadow preset:', e);
                     }
                 }
+                
+                // Close the shadow panel
+                shadowContainer.style.display = 'none';
+                        
+                // Update the canvas to reflect the changes
+                if (typeof window.updateShirt3DTexture === 'function') {
+                    console.log("Updating 3D texture with new shadow settings...");
+                    window.updateShirt3DTexture();
+                    } else {
+                    console.error("updateShirt3DTexture function not found");
+                }
+                
+                // Show success toast if the function exists
+                if (typeof window.showToast === 'function') {
+                    window.showToast("Shadow applied");
+                }
             } else {
-                console.warn("No active text element found to apply shadow");
+                console.error("No active text element found");
+                if (typeof window.showToast === 'function') {
+                    window.showToast("Error: No text selected", "error");
+                }
             }
-            
-            // Hide options
-            shadowContainer.style.display = 'none';
         });
         
         // Handle reset button
@@ -739,6 +606,11 @@ window.directToggleShadowOptions = function() {
         shadowContainer.style.display = 'none';
     } else {
         shadowContainer.style.display = 'block';
+        
+        // Scroll to make the shadow options visible
+        setTimeout(() => {
+            shadowContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 50);
     }
     
     console.log("Shadow panel toggle complete");

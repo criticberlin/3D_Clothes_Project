@@ -1978,6 +1978,52 @@ body.dark-theme #editor-mode-toggle:hover {
 	background-color: var(--bg-hover);
 }
 
+/* Ensure the selected font is visible in dropdown button */
+.font-select {
+	font-family: inherit;
+}
+
+/* Apply the selected font to the font selector */
+.font-select[value="Arial"] {
+	font-family: Arial, sans-serif;
+}
+
+.font-select[value="Times New Roman"] {
+	font-family: "Times New Roman", Times, serif;
+}
+
+.font-select[value="Helvetica"] {
+	font-family: Helvetica, Arial, sans-serif;
+}
+
+.font-select[value="Verdana"] {
+	font-family: Verdana, Geneva, sans-serif;
+}
+
+.font-select[value="Georgia"] {
+	font-family: Georgia, serif;
+}
+
+.font-select[value="Courier New"] {
+	font-family: "Courier New", Courier, monospace;
+}
+
+.font-select[value="Tahoma"] {
+	font-family: Tahoma, Geneva, sans-serif;
+}
+
+.font-select[value="Trebuchet MS"] {
+	font-family: "Trebuchet MS", sans-serif;
+}
+
+.font-select[value="Impact"] {
+	font-family: Impact, Charcoal, sans-serif;
+}
+
+.font-select[value="Comic Sans MS"] {
+	font-family: "Comic Sans MS", cursive, sans-serif;
+}
+
 /* Landing Page Styles */
 .landing-page {
     position: fixed;
