@@ -2605,6 +2605,12 @@ const AVAILABLE_FONTS = [
 ];
 
 function createTextEditOverlay(existingText = '', existingColor = '#000000', existingFont = 'Arial', existingShadow = { type: 'none' }) {
+    // Close any other floating panels that might be open
+    const activeFloatingPanels = document.querySelectorAll('.floating-panel.active:not(#text-edit-panel)');
+    activeFloatingPanels.forEach(panel => {
+        panel.classList.remove('active');
+    });
+    
     // Create a floating panel
     const panel = document.createElement('div');
     panel.className = 'floating-panel';
@@ -2909,6 +2915,12 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
     colorPicker.addEventListener('input', (e) => {
         const color = e.target.value;
         
+        // Close any shadow options if open
+        const shadowContainer = panel.querySelector('.shadow-container-wrapper');
+        if (shadowContainer && shadowContainer.style.display === 'block') {
+            shadowContainer.style.display = 'none';
+        }
+        
         // Update custom color option appearance
         customColorOption.style.backgroundColor = color;
         customColorOption.style.borderColor = 'transparent';
@@ -2972,6 +2984,12 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
     colorOptions.forEach(option => {
         option.addEventListener('click', () => {
             const color = option.getAttribute('data-color');
+            
+            // Close any shadow options if open
+            const shadowContainer = panel.querySelector('.shadow-container-wrapper');
+            if (shadowContainer && shadowContainer.style.display === 'block') {
+                shadowContainer.style.display = 'none';
+            }
             
             // Remove active class from all options
             panel.querySelectorAll('.color-option').forEach(opt => opt.classList.remove('active'));
@@ -3065,6 +3083,12 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
         
         console.log(`Applying custom color: ${color}`);
         
+        // Close any shadow options if open
+        const shadowContainer = panel.querySelector('.shadow-container-wrapper');
+        if (shadowContainer && shadowContainer.style.display === 'block') {
+            shadowContainer.style.display = 'none';
+        }
+        
         // Remove active class from all options
         panel.querySelectorAll('.color-option').forEach(opt => opt.classList.remove('active'));
         
@@ -3156,13 +3180,12 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
         e.preventDefault();
         e.stopPropagation();
         
+        // Close color panel if it's open
         const colorPanel = document.getElementById('color-panel-extended');
+        if (colorPanel && colorPanel.classList.contains('active')) {
+            colorPanel.classList.remove('active');
+        }
         
-            // Hide color panel if it's open
-            if (colorPanel && colorPanel.classList.contains('active')) {
-        colorPanel.classList.remove('active');
-            }
-            
         // Directly toggle shadow options
         if (window.directToggleShadowOptions) {
             window.directToggleShadowOptions();
@@ -5868,6 +5891,17 @@ function onDoubleClick(event) {
         }
     } 
     // Rest of the function for other object types
+    else if (clickedObject && (clickedObject.type === 'image' || clickedObject.type === 'photo')) {
+        console.log('Photo double-clicked:', clickedObject);
+        
+        // Create and show the photo edit overlay
+        const photoEditPanel = createPhotoEditOverlay(clickedObject);
+        
+        if (photoEditPanel) {
+            // Show the panel
+            photoEditPanel.classList.add('active');
+        }
+    }
 }
 
 /**

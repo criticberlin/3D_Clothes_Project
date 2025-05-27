@@ -16,6 +16,13 @@ window.directToggleShadowOptions = function() {
         return;
     }
     
+    // Close any other open panels first
+    // Find all color panels or other overlays that might be open
+    const colorPanel = document.getElementById('color-panel-extended');
+    if (colorPanel && colorPanel.classList.contains('active')) {
+        colorPanel.classList.remove('active');
+    }
+    
     // Find the content area in the text panel where we'll add the shadow options
     const textPanelContent = textPanel.querySelector('.panel-content') || textPanel.querySelector('.text-edit-options');
     if (!textPanelContent) {
@@ -605,6 +612,15 @@ window.directToggleShadowOptions = function() {
     if (shadowContainer.style.display === 'block') {
         shadowContainer.style.display = 'none';
     } else {
+        // Hide any color pickers that might be visible
+        const colorPickers = document.querySelectorAll('.color-picker-popup, .color-picker-container');
+        colorPickers.forEach(picker => {
+            if (picker.style.display === 'block' || picker.classList.contains('active')) {
+                picker.style.display = 'none';
+                picker.classList.remove('active');
+            }
+        });
+        
         shadowContainer.style.display = 'block';
         
         // Scroll to make the shadow options visible
