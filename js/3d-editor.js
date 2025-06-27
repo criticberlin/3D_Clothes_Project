@@ -833,6 +833,11 @@ function selectObject(object) {
 
     // Set the object as active
     object.active = true;
+    
+    // If it's a text object, set it as the active text element for shadow tools
+    if (object.type === 'text') {
+        window.activeTextElement = object;
+    }
 
     // Update the texture to show selection overlay
     updateShirt3DTexture();
@@ -846,6 +851,12 @@ function selectObject(object) {
 function deselectObject() {
     if (selectedObject) {
         selectedObject.active = false;
+        
+        // Clear active text element reference if this was a text object
+        if (selectedObject.type === 'text' && window.activeTextElement === selectedObject) {
+            window.activeTextElement = null;
+        }
+        
         selectedObject = null;
 
         // Remove transform controls
@@ -1651,63 +1662,205 @@ function drawObjectToCanvas(object) {
             if (object.shadowConfig) {
                 const config = object.shadowConfig;
                 
-                if (config.type === 'custom') {
-                    // Calculate offsets based on angle and distance
-                    const angleRad = config.angle * Math.PI / 180;
-                    const offsetX = Math.cos(angleRad) * config.distance;
-                    const offsetY = Math.sin(angleRad) * config.distance;
+                // Detect view for surface-aware shadow adjustments
+                const viewName = object.view || getCurrentActiveView();
+                const viewConfig = modelConfig[state.currentModel]?.views[viewName] || {};
+                
+                // Calculate shadow perspective adjustment based on view
+                // Map different views to different shadow angles to simulate 3D surfaces
+                let surfaceAngleAdjustment = 0;
+                let surfaceDepthFactor = 1.0;
+                
+                // Adjust shadow based on view position (simulate curved surfaces)
+                if (viewName === 'front') {
+                    surfaceAngleAdjustment = 0; // No adjustment for front
+                    surfaceDepthFactor = 1.0;
+                } else if (viewName === 'back') {
+                    surfaceAngleAdjustment = 180; // Opposite direction for back
+                    surfaceDepthFactor = 1.0;
+                } else if (viewName === 'left') {
+                    surfaceAngleAdjustment = -30; // Angled for left side
+                    surfaceDepthFactor = 0.8;
+                } else if (viewName === 'right') {
+                    surfaceAngleAdjustment = 30; // Angled for right side
+                    surfaceDepthFactor = 0.8;
+                }
+                
+                // Get position within the view area (0-1) to adjust shadow based on position
+                // This creates a more realistic effect where shadows change based on surface curvature
+                const viewWidth = (viewConfig.uvRect?.u2 - viewConfig.uvRect?.u1) * canvasData.width || canvasData.width;
+                const viewHeight = (viewConfig.uvRect?.v2 - viewConfig.uvRect?.v1) * canvasData.height || canvasData.height;
+                const viewCenterX = (viewConfig.uvRect?.u1 || 0) * canvasData.width + viewWidth / 2;
+                const viewCenterY = (viewConfig.uvRect?.v1 || 0) * canvasData.height + viewHeight / 2;
+                
+                // Calculate position ratio within view (-1 to 1)
+                const positionXRatio = (object.left + object.width / 2 - viewCenterX) / (viewWidth / 2);
+                const positionYRatio = (object.top + object.height / 2 - viewCenterY) / (viewHeight / 2);
+                
+                // Adjust shadow angle and distance based on position (simulate curved surface)
+                const curvatureAdjustmentX = positionXRatio * 15; // Up to 15 degrees adjustment based on horizontal position
+                const curvatureAdjustmentY = positionYRatio * 10; // Up to 10 degrees adjustment based on vertical position
+                const totalAngleAdjustment = surfaceAngleAdjustment + curvatureAdjustmentX + curvatureAdjustmentY;
+                
+                if (config.type === 'custom' || config.type === 'drop') {
+                    // Calculate base offsets from angle and distance
+                    let baseAngle = (config.angle + totalAngleAdjustment) * Math.PI / 180;
+                    let baseDistance = config.distance * surfaceDepthFactor;
+                    
+                    // Create more realistic shadow by varying the blur based on distance
+                    // Further shadows should be more blurred
+                    const dynamicBlur = config.blur * (1 + baseDistance / 20);
+                    
+                    // Add subtle secondary shadow for more realism (ambient occlusion effect)
+                    if (baseDistance > 3) {
+                        // Draw a subtle ambient occlusion shadow first
+                        const aoColor = hexToRgba(config.color || '#000000', 0.15);
+                        ctx.shadowColor = aoColor;
+                        ctx.shadowBlur = dynamicBlur * 2;
+                        ctx.shadowOffsetX = 0;
+                        ctx.shadowOffsetY = 1;
+                        ctx.fillText(object.text, 0, 0);
+                    }
+                    
+                    // Calculate primary shadow offsets
+                    const offsetX = Math.cos(baseAngle) * baseDistance;
+                    const offsetY = Math.sin(baseAngle) * baseDistance;
                     
                     // Convert hex color and opacity to rgba
-                    const r = parseInt(config.color.substr(1, 2), 16);
-                    const g = parseInt(config.color.substr(3, 2), 16);
-                    const b = parseInt(config.color.substr(5, 2), 16);
-                    const shadowRgba = `rgba(${r}, ${g}, ${b}, ${config.opacity})`;
+                    const shadowColor = hexToRgba(config.color || '#000000', config.opacity || 0.6);
                     
-                    ctx.shadowColor = shadowRgba;
-                    ctx.shadowBlur = config.blur;
+                    // Apply main shadow
+                    ctx.shadowColor = shadowColor;
+                    ctx.shadowBlur = dynamicBlur;
                     ctx.shadowOffsetX = offsetX;
                     ctx.shadowOffsetY = offsetY;
                 } else if (config.type === 'subtle') {
+                    // Enhanced subtle shadow with surface awareness
+                    const baseAngle = totalAngleAdjustment * Math.PI / 180;
+                    const offsetX = Math.cos(baseAngle) * 1.5;
+                    const offsetY = Math.sin(baseAngle) * 1.5;
+                    
                     ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
-                    ctx.shadowBlur = 2;
-                    ctx.shadowOffsetX = 1;
-                    ctx.shadowOffsetY = 1;
+                    ctx.shadowBlur = 2 + Math.abs(positionXRatio) * 2;
+                    ctx.shadowOffsetX = offsetX;
+                    ctx.shadowOffsetY = offsetY;
                 } else if (config.type === 'medium') {
+                    // Enhanced medium shadow with surface awareness
+                    const baseAngle = totalAngleAdjustment * Math.PI / 180;
+                    const offsetX = Math.cos(baseAngle) * 3;
+                    const offsetY = Math.sin(baseAngle) * 3;
+                    
                     ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-                    ctx.shadowBlur = 4;
-                    ctx.shadowOffsetX = 2;
-                    ctx.shadowOffsetY = 2;
+                    ctx.shadowBlur = 4 + Math.abs(positionXRatio) * 3;
+                    ctx.shadowOffsetX = offsetX;
+                    ctx.shadowOffsetY = offsetY;
                 } else if (config.type === 'strong') {
+                    // Enhanced strong shadow with surface awareness
+                    const baseAngle = totalAngleAdjustment * Math.PI / 180;
+                    const offsetX = Math.cos(baseAngle) * 4 * surfaceDepthFactor;
+                    const offsetY = Math.sin(baseAngle) * 4 * surfaceDepthFactor;
+                    
+                    // Add a subtle ambient occlusion shadow first
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+                    ctx.shadowBlur = 10;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 1;
+                    ctx.fillText(object.text, 0, 0);
+                    
+                    // Apply main shadow
                     ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-                    ctx.shadowBlur = 6;
-                    ctx.shadowOffsetX = 3;
-                    ctx.shadowOffsetY = 3;
-                } else if (config.type === 'neon') {
-                    ctx.shadowColor = 'rgba(0, 0, 255, 0.8)';
-                    ctx.shadowBlur = 5;
+                    ctx.shadowBlur = 6 + Math.abs(positionXRatio + positionYRatio) * 3;
+                    ctx.shadowOffsetX = offsetX;
+                    ctx.shadowOffsetY = offsetY;
+                } else if (config.type === 'glow') {
+                    // Enhanced glow effect with surface-aware intensity
+                    // Glow should be stronger in the center of the view and fade near edges
+                    const distanceFromCenter = Math.sqrt(positionXRatio*positionXRatio + positionYRatio*positionYRatio);
+                    const intensityFactor = Math.max(0.6, 1 - distanceFromCenter * 0.3);
+                    
+                    // Larger blur for more realistic glow that varies with position
+                    const dynamicBlur = 15 + Math.abs(positionXRatio) * 5;
+                    
+                    // Create a subtle directional component to the glow based on view
+                    const baseAngle = totalAngleAdjustment * Math.PI / 180;
+                    const smallOffsetX = Math.cos(baseAngle) * 2 * surfaceDepthFactor;
+                    const smallOffsetY = Math.sin(baseAngle) * 2 * surfaceDepthFactor;
+                    
+                    // Apply the enhanced glow
+                    const glowColor = `rgba(66, 133, 244, ${0.8 * intensityFactor})`;
+                    ctx.shadowColor = glowColor;
+                    ctx.shadowBlur = dynamicBlur;
+                    ctx.shadowOffsetX = smallOffsetX;
+                    ctx.shadowOffsetY = smallOffsetY;
+                    
+                    // For glow, we should draw the text twice for a more intense effect
+                    ctx.fillText(object.text, 0, 0);
+                    
+                    // Second pass with smaller blur and no offset for the core glow
+                    ctx.shadowBlur = dynamicBlur * 0.6;
                     ctx.shadowOffsetX = 0;
                     ctx.shadowOffsetY = 0;
+                } else if (config.type === 'neon') {
+                    // Enhanced neon effect with surface-aware properties
+                    const distanceFromCenter = Math.sqrt(positionXRatio*positionXRatio + positionYRatio*positionYRatio);
+                    const intensityFactor = Math.max(0.7, 1 - distanceFromCenter * 0.2);
+                    
+                    // Create a more intense, vibrant neon effect
+                    const dynamicBlur = 10 + Math.abs(positionXRatio) * 4;
+                    const neonColor = `rgba(0, 180, 216, ${0.9 * intensityFactor})`;
+                    
+                    // First pass - outer glow
+                    ctx.shadowColor = neonColor;
+                    ctx.shadowBlur = dynamicBlur;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                    ctx.fillText(object.text, 0, 0);
+                    
+                    // Second pass - inner glow (more intense)
+                    ctx.shadowBlur = dynamicBlur * 0.5;
+                    ctx.fillStyle = '#ffffff'; // Bright white center for neon effect
+                    ctx.fillText(object.text, 0, 0);
+                    
+                    // Reset fill style to original color
+                    ctx.fillStyle = object.color || '#000000';
                 } else if (config.type === 'outline') {
                     // For outline, we handle it differently by drawing the text multiple times
-                    // in slightly different positions
+                    // to create a stroke effect
+                    
+                    // Get outline color (default to black if not specified)
+                    const outlineColor = config.color || '#000000';
+                    const outlineOpacity = config.opacity || 1.0;
+                    const outlineWidth = config.spread || 1;
+                    
+                    // Modify outline thickness based on surface depth factor
+                    const adjustedOutlineWidth = outlineWidth * (0.8 + 0.4 * surfaceDepthFactor);
+                    
+                    // Save current fill style and reset shadow
+                    const originalFill = ctx.fillStyle;
                     ctx.shadowColor = 'transparent';
                     ctx.shadowBlur = 0;
                     ctx.shadowOffsetX = 0;
                     ctx.shadowOffsetY = 0;
                     
-                    // Save current state
-                    ctx.save();
+                    // Set outline color
+                    ctx.fillStyle = hexToRgba(outlineColor, outlineOpacity);
                     
-                    // Draw the outline (4 times for all directions)
-                    ctx.fillStyle = '#000000';
-                    ctx.fillText(object.text, -1, -1);
-                    ctx.fillText(object.text, 1, -1);
-                    ctx.fillText(object.text, -1, 1);
-                    ctx.fillText(object.text, 1, 1);
+                    // Draw text multiple times with slight offsets to create outline effect
+                    // Thickness varies slightly based on position to simulate perspective
+                    const variation = Math.abs(positionXRatio) * 0.3; // Small variation based on position
+                    const steps = Math.max(8, Math.floor(12 * adjustedOutlineWidth)); // More steps for smoother outline
+                    const angleStep = (Math.PI * 2) / steps;
                     
-                    // Restore to original state
-                    ctx.restore();
-                    ctx.fillStyle = object.color || '#000000';
+                    for (let i = 0; i < steps; i++) {
+                        const angle = i * angleStep;
+                        const offsetX = Math.cos(angle) * adjustedOutlineWidth * (1 + variation);
+                        const offsetY = Math.sin(angle) * adjustedOutlineWidth * (1 + variation);
+                        ctx.fillText(object.text, offsetX, offsetY);
+                    }
+                    
+                    // Draw original text on top
+                    ctx.fillStyle = originalFill;
+                    ctx.fillText(object.text, 0, 0);
                 }
             } else {
                 // Set shadow properties based on intensity
@@ -1766,9 +1919,9 @@ function drawObjectToCanvas(object) {
                 // Otherwise use light stroke for contrast
                 ctx.strokeStyle = brightness > 125 ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.8)';
                 
-                // For black text specifically, use a matching black stroke
+                // For black text specifically, use a white stroke instead of black for better visibility
                 if (textColor.toLowerCase() === '#000000') {
-                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
                 }
                 
                 ctx.lineWidth = fontSize / 8; // Increased stroke width
@@ -2451,7 +2604,7 @@ const AVAILABLE_FONTS = [
     { name: 'Comic Sans MS', value: 'Comic Sans MS' }
 ];
 
-function createTextEditOverlay(existingText = '', existingColor = '#000000', existingFont = 'Arial') {
+function createTextEditOverlay(existingText = '', existingColor = '#000000', existingFont = 'Arial', existingShadow = { type: 'none' }) {
     // Create a floating panel
     const panel = document.createElement('div');
     panel.className = 'floating-panel';
@@ -2477,7 +2630,7 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
     content.className = 'panel-content';
 
     const fontOptions = AVAILABLE_FONTS.map(font => `
-        <option value="${font.value}" ${font.value === existingFont ? 'selected' : ''}>
+        <option value="${font.value}" ${font.value === existingFont ? 'selected' : ''} style="font-family: '${font.value}';">
             ${font.name}
         </option>
     `).join('');
@@ -2500,7 +2653,7 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
         <div class="text-edit-options">
             <div class="font-select-container">
                 <label for="font-select">Font:</label>
-                <select id="font-select" class="font-select">
+                <select id="font-select" class="font-select" style="font-family: '${existingFont}';">
                     ${fontOptions}
                 </select>
             </div>
@@ -2540,7 +2693,7 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
                                background-color: ${!['#000000', '#FFFFFF'].includes(existingColor) ? existingColor : 'transparent'};
                                border: 2px dashed #ccc;
                                transition: all 0.3s ease;
-                               box-shadow: ${!['#000000', '#FFFFFF'].includes(existingColor) ? '0 0 0 2px #5d9df5, 0 3px 8px rgba(0,0,0,0.2)' : 'none'};"
+                               box-shadow: ${!['#000000', '#FFFFFF'].includes(existingColor) ? '0 0 0 2px #5d9df5, 0 3px 8px rgba(0,0,0,0.2)' : 'none'};" 
                         title="Custom color">
                     </div>
                     
@@ -2570,6 +2723,33 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
                     </div>
                 </div>
             </div>
+            
+            <!-- Add stroke toggle -->
+            <div class="text-stroke-toggle" style="display: flex; align-items: center; gap: 16px; margin: 16px 0;">
+                <label for="stroke-toggle" style="margin-right: 10px;">Text Outline:</label>
+                <div class="toggle-switch" style="position: relative; display: inline-block; width: 50px; height: 24px;">
+                    <input type="checkbox" id="stroke-toggle" ${typeof existingText === 'object' && existingText.stroke === true ? 'checked' : ''} style="opacity: 0; width: 0; height: 0;">
+                    <span class="toggle-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px;">
+                        <span class="toggle-knob" style="position: absolute; content: ''; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%;"></span>
+                    </span>
+                </div>
+            </div>
+            
+            <style>
+                .toggle-switch input:checked + .toggle-slider {
+                    background-color: #4caf50;
+                }
+                .toggle-switch input:checked + .toggle-slider .toggle-knob {
+                    transform: translateX(26px);
+                }
+                .toggle-switch:hover .toggle-slider {
+                    box-shadow: 0 0 2px 1px rgba(0, 0, 0, 0.2);
+                }
+                .toggle-switch input:focus + .toggle-slider {
+                    box-shadow: 0 0 1px #4caf50;
+                }
+            </style>
+            
             <button class="shadow-btn">
                 <i class="fas fa-layer-group"></i>
                 <span>Shadow</span>
@@ -2577,7 +2757,7 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
         </div>
         <div class="text-edit-buttons">
             <button class="text-edit-cancel">Cancel</button>
-            <button class="text-edit-save">Save</button>
+            <button class="text-edit-save">${existingText ? 'Update' : 'Save'}</button>
         </div>
     `;
     
@@ -2595,6 +2775,18 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
     panel.addEventListener('click', (e) => {
         e.stopPropagation();
     });
+
+    // Set up font select to display the font in its own style
+    const fontSelect = panel.querySelector('#font-select');
+    if (fontSelect) {
+        // Set initial font style
+        fontSelect.style.fontFamily = fontSelect.value;
+        
+        // Update font style when selection changes
+        fontSelect.addEventListener('change', function() {
+            this.style.fontFamily = this.value;
+        });
+    }
 
     // Setup save button to ensure color is applied
     const saveButton = panel.querySelector('.text-edit-save');
@@ -2635,7 +2827,84 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
     const customColorOption = panel.querySelector('.custom-color');
     const colorEditIcon = panel.querySelector('.color-edit-icon');
     const colorOptions = panel.querySelectorAll('.color-option:not(.custom-color)');
+    
+    // Setup stroke toggle functionality
+    const strokeToggle = panel.querySelector('#stroke-toggle');
+    if (strokeToggle) {
+        // Add click handler to the toggle slider to make it interactive
+        const toggleSlider = strokeToggle.nextElementSibling;
+        if (toggleSlider) {
+            // Initialize toggle slider color based on checkbox state
+            toggleSlider.style.backgroundColor = strokeToggle.checked ? '#4caf50' : '#ccc';
+            
+            toggleSlider.addEventListener('click', () => {
+                // Toggle the checkbox state
+                strokeToggle.checked = !strokeToggle.checked;
+                
+                // Trigger the change event manually
+                const changeEvent = new Event('change');
+                strokeToggle.dispatchEvent(changeEvent);
+            });
+        }
+        
+        strokeToggle.addEventListener('change', (e) => {
+            // Update preview if there's a selected object
+            if (window.selectedObject && window.selectedObject.type === 'text') {
+                window.selectedObject.stroke = e.target.checked;
+                
+                // Force a redraw of the canvas with updated stroke
+                updateShirt3DTexture();
+                
+                // Save state after modification to enable undo/redo
+                afterObjectModified();
+                
+                console.log(`Stroke toggle changed to: ${e.target.checked}`);
+                
+                // Change the toggle color to provide visual feedback
+                const toggleSlider = strokeToggle.nextElementSibling;
+                if (toggleSlider) {
+                    toggleSlider.style.backgroundColor = e.target.checked ? '#4caf50' : '#ccc';
+                }
+            }
+        });
+    }
 
+    // Set text input color based on theme
+    const textInput = panel.querySelector('.text-edit-input');
+    if (textInput) {
+        // Check if page is in dark mode or light mode
+        const isLightTheme = document.documentElement.classList.contains('light-theme');
+        // Set text color accordingly
+        textInput.style.color = isLightTheme ? '#000000' : '#FFFFFF';
+        
+        // Create a MutationObserver to watch for theme changes
+        const themeObserver = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                if (mutation.attributeName === 'class') {
+                    // Update text color based on new theme
+                    const newIsLightTheme = document.documentElement.classList.contains('light-theme');
+                    textInput.style.color = newIsLightTheme ? '#000000' : '#FFFFFF';
+                }
+            }
+        });
+        
+        // Start observing theme changes
+        themeObserver.observe(document.documentElement, { attributes: true });
+        
+        // Clean up observer when panel is removed
+        const cleanup = () => themeObserver.disconnect();
+        panel.addEventListener('remove', cleanup);
+        
+        // Also add cleanup to buttons
+        const closeBtn = panel.querySelector('.panel-close');
+        const saveBtn = panel.querySelector('.text-edit-save');
+        const cancelBtn = panel.querySelector('.text-edit-cancel');
+        
+        if (closeBtn) closeBtn.addEventListener('click', cleanup);
+        if (saveBtn) saveBtn.addEventListener('click', cleanup);
+        if (cancelBtn) cancelBtn.addEventListener('click', cleanup);
+    }
+    
     // Handle color picker input
     colorPicker.addEventListener('input', (e) => {
         const color = e.target.value;
@@ -2656,12 +2925,6 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
         
         // Add active class to custom option
         customColorOption.classList.add('active');
-        
-        // Apply color to text
-        const textInput = panel.querySelector('.text-edit-input');
-        if (textInput) {
-            textInput.style.color = color;
-        }
         
         // Store color for use when saving the text
         panel.setAttribute('data-current-color', color);
@@ -2715,12 +2978,6 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
             
             // Add active class to clicked option
             option.classList.add('active');
-            
-            // Apply color to text
-            const textInput = panel.querySelector('.text-edit-input');
-            if (textInput) {
-                textInput.style.color = color;
-            }
             
             // Store color for use when saving the text
             panel.setAttribute('data-current-color', color);
@@ -2813,12 +3070,6 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
         
         // Add active class to custom option
         customColorOption.classList.add('active');
-        
-        // Apply color to text
-        const textInput = panel.querySelector('.text-edit-input');
-        if (textInput) {
-            textInput.style.color = color;
-        }
         
         // Add animation
         customColorOption.style.transform = 'scale(1.1)';
@@ -2920,6 +3171,25 @@ function createTextEditOverlay(existingText = '', existingColor = '#000000', exi
         }
     });
     
+    // Add stroke toggle event listener for the text panel
+    const textStrokeToggle = document.querySelector('#stroke-toggle');
+    if (textStrokeToggle) {
+        textStrokeToggle.addEventListener('change', (e) => {
+            const isChecked = e.target.checked;
+            // Apply immediate visual feedback to the toggle
+            const toggleSlider = textStrokeToggle.nextElementSibling;
+            if (toggleSlider) {
+                toggleSlider.style.backgroundColor = isChecked ? '#4caf50' : '#ccc';
+            }
+            
+            // Update canvas preview if we're editing text
+            if (existingText && window.selectedObject && window.selectedObject.type === 'text') {
+                window.selectedObject.stroke = isChecked;
+                updateShirt3DTexture();
+            }
+        });
+    }
+    
     return panel;
 }
 
@@ -2987,7 +3257,7 @@ export async function addText(text = '', options = {}) {
         const position = options.fromButton ? getButtonPosition('text-upload-btn') : null;
         
         // Show text editor and wait for result
-        const panel = createTextEditOverlay(text, options.color || '#000000', options.font || 'Arial');
+        const panel = createTextEditOverlay(text, options.color || '#000000', options.font || 'Arial', options.shadow || { type: 'none' });
         
         // Position the panel
         positionFloatingPanel(panel, position);
@@ -3062,7 +3332,7 @@ export async function addText(text = '', options = {}) {
             }
             
             let selectedFont = options.font || 'Arial';
-            let shadowEnabled = options.shadow || false;
+            let shadowEnabled = options.shadow || { type: 'none' };
             let shadowConfig = options.shadowConfig || { type: 'light' };
             
             // Handle the save button click
@@ -3095,7 +3365,11 @@ export async function addText(text = '', options = {}) {
                         selectedFont = fontSelect.value;
                     }
                     
-                    console.log(`Saving text with color: ${selectedColor}, font: ${selectedFont}`);
+                    // Get stroke toggle value
+                    const strokeToggle = panel.querySelector('#stroke-toggle');
+                    const strokeEnabled = strokeToggle ? strokeToggle.checked : true;
+                    
+                    console.log(`Saving text with color: ${selectedColor}, font: ${selectedFont}, stroke: ${strokeEnabled}`);
                     
                     // Close the panel
                     panel.classList.remove('active');
@@ -3106,7 +3380,8 @@ export async function addText(text = '', options = {}) {
                         color: selectedColor,
                         font: selectedFont,
                         shadow: shadowEnabled,
-                        shadowConfig: shadowConfig
+                        shadowConfig: shadowConfig,
+                        stroke: strokeEnabled
                     });
                 } else {
                     textarea.focus();
@@ -3153,7 +3428,7 @@ export async function addText(text = '', options = {}) {
                     e.preventDefault();
                     const newText = textarea.value.trim();
                     if (newText) {
-                        resolve({ text: newText, color: selectedColor, font: selectedFont, shadow: shadowEnabled, shadowConfig: shadowConfig });
+                        resolve({ text: newText, color: selectedColor, font: selectedFont, shadow: shadowEnabled, shadowConfig: shadowConfig, stroke: strokeEnabled });
                     }
                     panel.remove();
                 }
@@ -3233,8 +3508,10 @@ export async function addText(text = '', options = {}) {
                             lineHeight: 1.2,
                             backgroundColor: 'transparent',
                             padding: 0,
-                            stroke: null,
-                            strokeWidth: 0
+                            stroke: textResult.stroke !== undefined ? textResult.stroke : false,
+                            strokeWidth: 0,
+                            shadow: textResult.shadow,
+                            shadowConfig: textResult.shadowConfig
                         };
 
                         // Add to canvas
@@ -4979,6 +5256,18 @@ function onDoubleClick(event) {
         // Use the existing panel if it exists
         const existingPanel = document.getElementById('text-edit-panel');
         if (existingPanel) {
+            // Set the header title to 'Edit Text'
+            const headerTitle = existingPanel.querySelector('.panel-header h3');
+            if (headerTitle) {
+                headerTitle.textContent = 'Edit Text';
+            }
+            
+            // Set the section title to 'Edit Your Text'
+            const sectionTitle = existingPanel.querySelector('.section-title h3');
+            if (sectionTitle) {
+                sectionTitle.textContent = 'Edit Your Text';
+            }
+            
             // Set up the existing panel for editing
             const textInput = existingPanel.querySelector('.text-edit-input');
             const fontSelect = existingPanel.querySelector('#font-select');
@@ -4987,6 +5276,37 @@ function onDoubleClick(event) {
             // Set the text value
             if (textInput) {
                 textInput.value = clickedObject.text || '';
+                
+                // Set text color based on theme
+                const isLightTheme = document.documentElement.classList.contains('light-theme');
+                textInput.style.color = isLightTheme ? '#000000' : '#FFFFFF';
+                
+                // Create a MutationObserver to watch for theme changes
+                const themeObserver = new MutationObserver((mutations) => {
+                    for (const mutation of mutations) {
+                        if (mutation.attributeName === 'class') {
+                            // Update text color based on new theme
+                            const newIsLightTheme = document.documentElement.classList.contains('light-theme');
+                            textInput.style.color = newIsLightTheme ? '#000000' : '#FFFFFF';
+                        }
+                    }
+                });
+                
+                // Start observing theme changes
+                themeObserver.observe(document.documentElement, { attributes: true });
+                
+                // Clean up observer when panel is closed
+                const cleanup = () => themeObserver.disconnect();
+                
+                // Add cleanup to panel hide events
+                existingPanel.addEventListener('remove', cleanup);
+                const closeButton = existingPanel.querySelector('.panel-close');
+                const saveButton = existingPanel.querySelector('.text-edit-save');
+                const cancelButton = existingPanel.querySelector('.text-edit-cancel');
+                
+                if (closeButton) closeButton.addEventListener('click', cleanup);
+                if (saveButton) saveButton.addEventListener('click', cleanup);
+                if (cancelButton) cancelButton.addEventListener('click', cleanup);
             }
             
             // Select the correct font
@@ -4997,6 +5317,12 @@ function onDoubleClick(event) {
                         break;
                     }
                 }
+                
+                // Set the current font style and update on change
+                fontSelect.style.fontFamily = fontSelect.value;
+                fontSelect.addEventListener('change', function() {
+                    this.style.fontFamily = this.value;
+                });
             }
             
             // Select the correct color
@@ -5069,17 +5395,41 @@ function onDoubleClick(event) {
                     const newText = textInput.value.trim();
                     if (newText) {
                         // Get selected color
+                        let color = originalColor; // Default to original color
                         const activeColor = existingPanel.querySelector('.color-option.active');
-                        const color = activeColor ? activeColor.getAttribute('data-color') : originalColor;
+                        
+                        if (activeColor) {
+                            if (activeColor.classList.contains('custom-color')) {
+                                // Get color from the color picker for custom color
+                                const colorPicker = existingPanel.querySelector('.hidden-color-picker');
+                                if (colorPicker) {
+                                    color = colorPicker.value;
+                                }
+                            } else {
+                                // Get color from data attribute for preset colors
+                                color = activeColor.getAttribute('data-color');
+                            }
+                        } else {
+                            // Try to get color from panel data attribute as a fallback
+                            const storedColor = existingPanel.getAttribute('data-current-color');
+                            if (storedColor) {
+                                color = storedColor;
+                            }
+                        }
                         
                         // Get selected font
                         const fontSelect = existingPanel.querySelector('#font-select');
                         const font = fontSelect ? fontSelect.value : originalFont;
                         
+                        // Get stroke toggle value
+                        const strokeToggle = existingPanel.querySelector('#stroke-toggle');
+                        const strokeEnabled = strokeToggle ? strokeToggle.checked : true;
+                        
                         // Update text object
                         clickedObject.text = newText;
                         clickedObject.color = color;
                         clickedObject.font = font;
+                        clickedObject.stroke = strokeEnabled;
                         
                         // Calculate new dimensions
                         const tempCanvas = document.createElement('canvas');
@@ -5149,9 +5499,21 @@ function onDoubleClick(event) {
             }
         } else {
             // Create a new text edit overlay if panel doesn't exist
-            const textEditOverlay = createTextEditOverlay(clickedObject.text, clickedObject.color, clickedObject.font);
+            const textEditOverlay = createTextEditOverlay(clickedObject.text, clickedObject.color, clickedObject.font, clickedObject.shadow);
             
             if (textEditOverlay) {
+                // Ensure the header shows 'Edit Text'
+                const headerTitle = textEditOverlay.querySelector('.panel-header h3');
+                if (headerTitle) {
+                    headerTitle.textContent = 'Edit Text';
+                }
+                
+                // Ensure the section title shows 'Edit Your Text'
+                const sectionTitle = textEditOverlay.querySelector('.section-title h3');
+                if (sectionTitle) {
+                    sectionTitle.textContent = 'Edit Your Text';
+                }
+                
                 const textInput = textEditOverlay.querySelector('.text-edit-input');
                 const fontSelect = textEditOverlay.querySelector('#font-select');
                 const colorOptions = textEditOverlay.querySelectorAll('.color-option');
@@ -5159,6 +5521,17 @@ function onDoubleClick(event) {
                 const cancelBtn = textEditOverlay.querySelector('.text-edit-cancel');
                 const closeBtn = textEditOverlay.querySelector('.panel-close');
                 const errorMsg = document.createElement('div');
+                
+                // Set up font select with the proper font style
+                if (fontSelect) {
+                    // Set the initial font style based on clickedObject's font
+                    fontSelect.style.fontFamily = clickedObject.font;
+                    
+                    // Update font style when selection changes
+                    fontSelect.addEventListener('change', function() {
+                        this.style.fontFamily = this.value;
+                    });
+                }
                 
                 // Create error message element
                 errorMsg.className = 'text-edit-error';
@@ -5168,9 +5541,53 @@ function onDoubleClick(event) {
                 errorMsg.style.display = 'none';
                 errorMsg.textContent = 'Text cannot be empty!';
                 
+                // Set text color based on theme
+                if (textInput) {
+                    const isLightTheme = document.documentElement.classList.contains('light-theme');
+                    textInput.style.color = isLightTheme ? '#000000' : '#FFFFFF';
+                    
+                    // Create a MutationObserver to watch for theme changes
+                    const themeObserver = new MutationObserver((mutations) => {
+                        for (const mutation of mutations) {
+                            if (mutation.attributeName === 'class') {
+                                // Update text color based on new theme
+                                const newIsLightTheme = document.documentElement.classList.contains('light-theme');
+                                textInput.style.color = newIsLightTheme ? '#000000' : '#FFFFFF';
+                            }
+                        }
+                    });
+                    
+                    // Start observing theme changes
+                    themeObserver.observe(document.documentElement, { attributes: true });
+                    
+                    // Clean up observer when panel is removed
+                    const cleanup = () => themeObserver.disconnect();
+                    
+                    // Add cleanup to button events
+                    textEditOverlay.addEventListener('remove', cleanup);
+                    if (closeBtn) closeBtn.addEventListener('click', cleanup);
+                    if (saveBtn) saveBtn.addEventListener('click', cleanup);
+                    if (cancelBtn) cancelBtn.addEventListener('click', cleanup);
+                }
+                
                 // Insert error message before buttons
                 const buttonsContainer = textEditOverlay.querySelector('.text-edit-buttons');
                 buttonsContainer.parentNode.insertBefore(errorMsg, buttonsContainer);
+                
+                // Set up stroke toggle for live preview
+                const strokeToggle = textEditOverlay.querySelector('#stroke-toggle');
+                if (strokeToggle) {
+                    // Make sure the toggle shows the current state
+                    strokeToggle.checked = clickedObject.stroke !== false;
+                    
+                    // Add event listener for immediate preview
+                    strokeToggle.addEventListener('change', (e) => {
+                        clickedObject.stroke = e.target.checked;
+                        // Force a redraw of the canvas
+                        updateShirt3DTexture();
+                        console.log(`Stroke toggle changed to: ${e.target.checked}`);
+                    });
+                }
                 
                 // Store original values
                 const originalText = clickedObject.text;
@@ -5191,18 +5608,41 @@ function onDoubleClick(event) {
                         const newText = textInput.value.trim();
                         if (newText) {
                             // Get selected color
+                            let color = originalColor; // Default to original color
                             const activeColor = textEditOverlay.querySelector('.color-option.active');
-                            const color = activeColor ? activeColor.getAttribute('data-color') : originalColor;
+                            
+                            if (activeColor) {
+                                if (activeColor.classList.contains('custom-color')) {
+                                    // Get color from the color picker for custom colors
+                                    const colorPicker = textEditOverlay.querySelector('.hidden-color-picker');
+                                    if (colorPicker) {
+                                        color = colorPicker.value;
+                                    }
+                                } else {
+                                    // Get color from data attribute for preset colors
+                                    color = activeColor.getAttribute('data-color');
+                                }
+                            } else {
+                                // Try to get color from panel data attribute as fallback
+                                const storedColor = textEditOverlay.getAttribute('data-current-color');
+                                if (storedColor) {
+                                    color = storedColor;
+                                }
+                            }
                             
                             // Get selected font
                             const font = fontSelect ? fontSelect.value : originalFont;
+                            
+                            // Get stroke toggle value
+                            const strokeToggle = textEditOverlay.querySelector('#stroke-toggle');
+                            const strokeEnabled = strokeToggle ? strokeToggle.checked : true;
                             
                             // Update text object
                             clickedObject.text = newText;
                             clickedObject.color = color;
                             clickedObject.font = font;
-                            
-                            // Calculate new dimensions
+                            clickedObject.stroke = strokeEnabled;
+
                             const tempCanvas = document.createElement('canvas');
                             const tempCtx = tempCanvas.getContext('2d');
                             tempCtx.font = `bold ${clickedObject.fontSize}px "${font}"`;
@@ -6767,3 +7207,89 @@ window.toggleEditorInteraction = toggleEditorInteraction;
 
 // Re-export the addPanelItem function from state.js
 export { addPanelItem } from './state.js';
+
+// Function to update text input colors based on current theme
+function updateTextInputTheme() {
+    const isLightTheme = document.documentElement.classList.contains('light-theme');
+    const textInputs = document.querySelectorAll('.text-edit-input');
+    
+    textInputs.forEach(input => {
+        input.style.color = isLightTheme ? '#000000' : '#FFFFFF';
+    });
+}
+
+// Add a MutationObserver to watch for theme changes
+const themeChangeObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+        if (mutation.attributeName === 'class') {
+            // Update all text input colors when theme changes
+            updateTextInputTheme();
+        }
+    }
+});
+
+// Start observing theme changes on the document
+themeChangeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['class']
+});
+
+// Initial call to set the correct theme
+updateTextInputTheme();
+
+// Add this helper function for the shadow rendering at the appropriate location in the file
+/**
+ * Convert hex color and opacity to rgba string
+ * @param {string} hex - Hex color code
+ * @param {number} opacity - Opacity value between 0 and 1
+ * @returns {string} RGBA color string
+ */
+function hexToRgba(hex, opacity) {
+    // Default to black if invalid hex
+    if (!hex || typeof hex !== 'string' || !hex.match(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/)) {
+        hex = '#000000';
+    }
+    
+    // Remove # if present
+    hex = hex.replace('#', '');
+    
+    // Convert shorthand hex to full form
+    if (hex.length === 3) {
+        hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    }
+    
+    // Convert hex to rgb
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    
+    // Ensure opacity is valid
+    const alpha = (opacity !== undefined && opacity >= 0 && opacity <= 1) ? opacity : 1;
+    
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/**
+ * Get the current active view from the scene
+ * @returns {string} Current view name
+ */
+function getCurrentActiveView() {
+    // Default to front view
+    let currentView = 'front';
+    
+    // Check if we can get the current view from scene.js
+    try {
+        if (window.getCurrentView && typeof window.getCurrentView === 'function') {
+            const sceneView = window.getCurrentView();
+            if (sceneView) {
+                currentView = sceneView;
+            }
+        }
+    } catch (e) {
+        console.warn('Could not get current view from scene.js', e);
+    }
+    
+    return currentView;
+}
+
+

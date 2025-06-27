@@ -166,15 +166,6 @@ export function showViewSelectionModal(imageData, callback, modelType = null, ti
     const container = document.createElement('div');
     container.classList.add('view-selection-container');
     
-    let previewHtml = '';
-    if (imageData) {
-        previewHtml = `
-            <div class="image-preview">
-                <img src="${imageData}" alt="Design element preview" />
-            </div>
-        `;
-    }
-    
     // Build container base HTML
     container.innerHTML = `
         <div class="panel-header">
@@ -185,7 +176,6 @@ export function showViewSelectionModal(imageData, callback, modelType = null, ti
         </div>
         <div class="panel-content">
             <p>Select which part of the ${currentModelType} to place your design:</p>
-            ${previewHtml}
             <div class="view-options"></div>
             <button class="cancel-view-selection">Cancel</button>
         </div>
