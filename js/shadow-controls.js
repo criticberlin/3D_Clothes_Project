@@ -53,6 +53,9 @@ window.directToggleShadowOptions = function() {
     if (!shadowContainer) {
         console.log("Creating new shadow options container for", textPanel.id);
         
+        // Set initial CSS variable for glow color - default blue
+        document.documentElement.style.setProperty('--glow-color', 'rgba(66, 133, 244, 0.8)');
+        
         // Create a container wrapper for the shadow options
         shadowContainer = document.createElement('div');
         shadowContainer.className = 'shadow-container-wrapper';
@@ -295,7 +298,7 @@ window.directToggleShadowOptions = function() {
             }
             
             .shadow-preset[data-preset="glow"] {
-                text-shadow: 0 0 8px rgba(66, 133, 244, 0.8);
+                text-shadow: 0 0 8px var(--glow-color, rgba(66, 133, 244, 0.8));
                 color: white;
             }
             
@@ -439,6 +442,11 @@ window.directToggleShadowOptions = function() {
                 preview.style.color = 'transparent';
             } else if (presetName === 'none') {
                 // Do nothing - already reset
+            } else if (presetName === 'glow') {
+                // Set the CSS variable for glow color
+                preview.style.setProperty('--glow-color', hexToRgba(color, 0.8));
+                preview.style.textShadow = `0 0 ${blur}px var(--glow-color)`;
+                preview.style.color = 'white';
             } else {
                 // Default: apply drop shadow
                 preview.style.textShadow = `${offsetX}px ${offsetY}px ${blur}px ${color}`;
@@ -473,6 +481,12 @@ window.directToggleShadowOptions = function() {
                     shadowOptions.querySelector('#shadow-offset-x').value = preset.offsetX;
                     shadowOptions.querySelector('#shadow-offset-y').value = preset.offsetY;
                     
+                    // Set the CSS variable for glow color if glow preset is selected
+                    if (presetName === 'glow') {
+                        const glowColor = hexToRgba(preset.color, 0.8);
+                        document.documentElement.style.setProperty('--glow-color', glowColor);
+                    }
+                    
                     // Update the preview
                     updatePreview();
                 }
@@ -482,7 +496,20 @@ window.directToggleShadowOptions = function() {
         // Handle range & color inputs
         const inputs = shadowOptions.querySelectorAll('input[type="range"], input[type="color"]');
         inputs.forEach(input => {
-            input.addEventListener('input', updatePreview);
+            input.addEventListener('input', function() {
+                // If this is a color input and we're using the glow preset, update the CSS variable
+                if (input.type === 'color') {
+                    const activePreset = shadowOptions.querySelector('.shadow-preset.active');
+                    const presetName = activePreset?.getAttribute('data-preset');
+                    
+                    if (presetName === 'glow') {
+                        const glowColor = hexToRgba(input.value, 0.8);
+                        document.documentElement.style.setProperty('--glow-color', glowColor);
+                    }
+                }
+                
+                updatePreview();
+            });
         });
     
     // Handle apply button
@@ -497,11 +524,20 @@ window.directToggleShadowOptions = function() {
             const activePreset = shadowOptions.querySelector('.shadow-preset.active');
             const presetName = activePreset?.getAttribute('data-preset');
             
+            console.log('Applying shadow with color:', color, 'and preset:', presetName);
+            
             if (window.activeTextElement) {
                 console.log("Applying shadow settings to text object...");
                 
                 // Update the shadow properties on the active text element
                 window.activeTextElement.shadow = presetName !== 'none'; // Enable shadow if not 'none'
+                
+                // Clear global color variables if shadow is set to none
+                if (presetName === 'none') {
+                    window.glowShadowColor = null;
+                    window.neonShadowColor = null;
+                    console.log('Cleared global shadow color variables');
+                }
                 
                 // Calculate angle and distance from X and Y offsets for more natural 3D control
                 const distance = Math.sqrt(offsetX*offsetX + offsetY*offsetY);
@@ -520,13 +556,22 @@ window.directToggleShadowOptions = function() {
                     spread: presetName === 'outline' ? 1.5 : 0  // Set spread for outline
                 };
                 
+                console.log('Set shadow config:', window.activeTextElement.shadowConfig);
+                
                 // Apply special settings for specific shadow types
                 if (presetName === 'glow') {
                     window.activeTextElement.shadowConfig.opacity = 0.8;
                     window.activeTextElement.shadowConfig.blur = Math.max(blur, 12); // Minimum blur for glow
+                    
+                    // Store the color in a global variable to ensure it's used when drawing
+                    window.glowShadowColor = color;
+                    console.log('Set global glow color to:', window.glowShadowColor);
                 } else if (presetName === 'neon') {
                     window.activeTextElement.shadowConfig.opacity = 1.0;
                     window.activeTextElement.shadowConfig.blur = Math.max(blur, 15); // Minimum blur for neon
+                    
+                    // Store the color in a global variable to ensure it's used when drawing
+                    window.neonShadowColor = color;
                 } else if (presetName === 'strong') {
                     window.activeTextElement.shadowConfig.opacity = 0.6;
                     window.activeTextElement.shadowConfig.blur = Math.max(blur, 8); // Minimum blur for strong
@@ -617,3 +662,19 @@ window.directToggleShadowOptions = function() {
 };
 
 console.log("Modern shadow controls loaded"); 
+
+// Utility function to convert hex color to rgba
+function hexToRgba(hex, opacity) {
+    if (!hex) return `rgba(0, 0, 0, ${opacity})`;
+    
+    // Remove the # if present
+    hex = hex.replace('#', '');
+    
+    // Parse the hex values
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    
+    // Return the rgba string
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+} 

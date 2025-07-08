@@ -39,6 +39,7 @@ let stateChanged = false; // Add this variable to track state changes for histor
 // New: Add global variables to track editing state
 let isEditingLocked = false;
 let currentLockedView = null;
+let isAddingContent = false; // New flag to track when user is adding content
 
 // References to canvas and other objects
 let canvasData = {
@@ -297,6 +298,7 @@ function onMouseDown(event) {
         // If it wasn't a UI element, deselect current object
         if (!event.target.closest('.ui-element')) {
             deselectObject();
+            isAddingContent = false; // Reset flag when clicking outside the shirt
         }
         
         // Ensure camera is unlocked
@@ -858,10 +860,22 @@ function deselectObject() {
         }
         
         selectedObject = null;
-
+        
         // Remove transform controls
         removeTransformControls();
-
+        
+        // Reset transform mode
+        transformMode = 'none';
+        
+        // Reset cursor
+        document.body.style.cursor = cursors.default;
+        
+        // Reset adding content flag when deselecting
+        isAddingContent = false;
+        
+        // Update the texture
+        updateShirt3DTexture();
+        
         Logger.log('Deselected object');
     }
 }
@@ -1508,7 +1522,8 @@ export function updateShirt3DTexture() {
     }
 
     // Draw editable area if in editing mode and we have a current area
-    if (isEditingMode && currentEditableArea) {
+    // Only show borders when adding content or when an object is selected
+    if ((isEditingMode && currentEditableArea) && (isAddingContent || selectedObject)) {
         highlightEditableArea(currentEditableArea);
     }
 
@@ -1786,8 +1801,26 @@ function drawObjectToCanvas(object) {
                     const smallOffsetX = Math.cos(baseAngle) * 2 * surfaceDepthFactor;
                     const smallOffsetY = Math.sin(baseAngle) * 2 * surfaceDepthFactor;
                     
-                    // Apply the enhanced glow
-                    const glowColor = `rgba(66, 133, 244, ${0.8 * intensityFactor})`;
+                    // Debug the shadow config
+                    console.log('Glow shadow config:', config);
+                    console.log('Object shadow config:', object.shadowConfig);
+                    
+                    // Check for global color override first, then config color, then default
+                    let colorToUse;
+                    if (window.glowShadowColor) {
+                        colorToUse = window.glowShadowColor;
+                        console.log('Using global glow color:', colorToUse);
+                    } else if (config.color) {
+                        colorToUse = config.color;
+                        console.log('Using config glow color:', colorToUse);
+                    } else {
+                        colorToUse = '#4285f4'; // Default blue
+                        console.log('Using default glow color:', colorToUse);
+                    }
+                    
+                    // Apply the enhanced glow using the user-selected color
+                    console.log('Final glow color used:', colorToUse);
+                    const glowColor = hexToRgba(colorToUse, 0.8 * intensityFactor);
                     ctx.shadowColor = glowColor;
                     ctx.shadowBlur = dynamicBlur;
                     ctx.shadowOffsetX = smallOffsetX;
@@ -1807,7 +1840,18 @@ function drawObjectToCanvas(object) {
                     
                     // Create a more intense, vibrant neon effect
                     const dynamicBlur = 10 + Math.abs(positionXRatio) * 4;
-                    const neonColor = `rgba(0, 180, 216, ${0.9 * intensityFactor})`;
+                    
+                    // Check for global color override first, then config color, then default
+                    let colorToUse;
+                    if (window.neonShadowColor) {
+                        colorToUse = window.neonShadowColor;
+                    } else if (config.color) {
+                        colorToUse = config.color;
+                    } else {
+                        colorToUse = '#00b4d8'; // Default cyan
+                    }
+                    
+                    const neonColor = hexToRgba(colorToUse, 0.9 * intensityFactor);
                     
                     // First pass - outer glow
                     ctx.shadowColor = neonColor;
@@ -2423,8 +2467,11 @@ export function removeObject(object) {
  */
 export function addImage(imageUrl, options = {}) {
     return new Promise((resolve, reject) => {
+        // Set flag to show borders while adding content
+        isAddingContent = true;
+        
         // Get current view
-        const targetView = options.view || state.cameraView;
+        const targetView = options.view || getCurrentActiveView();
         
         // Create new image with high quality settings
         const img = new Image();
@@ -2557,6 +2604,9 @@ export function addImage(imageUrl, options = {}) {
             
             // Update the 3D texture
             updateShirt3DTexture();
+            
+            // Reset flag after adding content
+            isAddingContent = false;
             
             // Resolve with the created object
             resolve(obj);
@@ -3246,7 +3296,9 @@ function applyColorTo3DModel(color) {
 // Add text to canvas
 export async function addText(text = '', options = {}) {
     try {
-        // Check if we're showing the existing fixed panel managed by UI.js
+        // Set flag to show borders while adding content
+        isAddingContent = true;
+        
         if (options.useExistingPanel === true) {
             // The panel is already shown and managed by UI.js
             console.log('Using existing text panel from UI.js');
@@ -3537,9 +3589,16 @@ export async function addText(text = '', options = {}) {
             });
         });
     } catch (error) {
+        // Reset flag on error
+        isAddingContent = false;
         console.error('Error in addText:', error);
         throw error;
     }
+
+    // Reset flag after adding content or cancellation
+    isAddingContent = false;
+    
+    return textResult;
 }
 
 // Define shape types and their default properties
@@ -3629,14 +3688,19 @@ function createShapeEditOverlay(existingShape = null, position = null) {
 
 export async function addShape(shapeType = '', options = {}) {
     try {
+        // Set flag to show borders while adding content
+        isAddingContent = true;
+        
         // Get the position if this is called from a button click
         const position = options.fromButton ? getButtonPosition('add-shape-btn') : null;
         
         // Show shape editor and wait for result
-        const panel = createShapeEditOverlay(null);
+        const panel = createShapeEditOverlay(null, position);
         
-        // Position the panel
-        positionFloatingPanel(panel, position);
+        if (!panel) {
+            isAddingContent = false; // Reset flag if panel creation fails
+            throw new Error('Failed to create shape editor panel');
+        }
         
         // Add active class to show the panel
         panel.classList.add('active');
@@ -3817,20 +3881,16 @@ export async function addShape(shapeType = '', options = {}) {
             });
         }
     } catch (error) {
+        // Reset flag on error
+        isAddingContent = false;
         console.error('Error in addShape:', error);
         throw error;
     }
-}
 
-// Handle adding shape from the UI
-async function handleAddShape() {
-    try {
-        await addShape('', { fromButton: true });
-    } catch (error) {
-        if (error !== 'cancelled') {
-            console.error('Error handling shape addition:', error);
-        }
-    }
+    // Reset flag after adding content or cancellation
+    isAddingContent = false;
+    
+    return shapeResult;
 }
 
 /**
@@ -4318,23 +4378,26 @@ function unlockFromView() {
     isEditingLocked = false;
     currentLockedView = null;
     currentEditableArea = null;
+    
+    // Reset adding content flag when unlocking view
+    isAddingContent = false;
 
     // Exit editing mode
     isEditingMode = false;
     
     // Reset the transform mode
     transformMode = 'none';
-
+    
     // Reset cursor
     document.body.style.cursor = cursors.default;
-
+    
     // Re-enable camera controls
     toggleCameraControls(true);
-
-    Logger.log('Unlocked from view');
-
+    
     // Update texture to remove highlighted area
     updateShirt3DTexture();
+    
+    Logger.log('Unlocked from view');
 }
 
 /**
@@ -4673,6 +4736,9 @@ function handleDroppedFile(file, targetView, position) {
         return;
     }
 
+    // Set flag to show borders when adding photo
+    isAddingContent = true;
+
     const reader = new FileReader();
     reader.onload = (e) => {
         // Get UV coordinates from mouse position
@@ -4701,8 +4767,13 @@ function handleDroppedFile(file, targetView, position) {
                 if (state.cameraView !== targetView) {
                     changeCameraView(targetView);
                 }
+                
+                // Reset flag after adding content
+                isAddingContent = false;
             }).catch(error => {
                 showToast('Error adding image: ' + error.message);
+                // Reset flag on error
+                isAddingContent = false;
             });
         } else {
             // If no intersection, add to center of current view
@@ -4714,10 +4785,21 @@ function handleDroppedFile(file, targetView, position) {
             }).then(obj => {
                 showToast(`Image added to ${targetView} view`);
                 lastUsedView = targetView;
+                
+                // Reset flag after adding content
+                isAddingContent = false;
             }).catch(error => {
                 showToast('Error adding image: ' + error.message);
+                // Reset flag on error
+                isAddingContent = false;
             });
         }
+    };
+
+    reader.onerror = () => {
+        showToast('Error reading file');
+        // Reset flag on error
+        isAddingContent = false;
     };
 
     reader.readAsDataURL(file);
@@ -5867,6 +5949,39 @@ function onDoubleClick(event) {
             }
         }
     } 
+    // Add case for image/photo objects
+    else if (clickedObject && clickedObject.type === 'image') {
+        console.log('Image double-clicked:', clickedObject);
+        
+        // Create photo edit panel
+        const photoEditPanel = createPhotoEditOverlay(clickedObject);
+        
+        if (photoEditPanel) {
+            // Add the panel to the document
+            document.body.appendChild(photoEditPanel);
+            
+            // Position the panel
+            const screenPos = getButtonPosition('photo-upload-btn');
+            positionFloatingPanel(photoEditPanel, screenPos);
+            
+            // Show the panel
+            photoEditPanel.classList.add('active');
+            
+            // Set up the preview image
+            const previewImg = photoEditPanel.querySelector('#photo-preview');
+            if (previewImg && clickedObject.img) {
+                previewImg.src = clickedObject.img.src;
+                
+                // Apply any existing filters
+                if (clickedObject.currentFilters) {
+                    previewImg.style.filter = clickedObject.currentFilters;
+                }
+            }
+            
+            // Initialize photo filters
+            updatePhotoFilters(clickedObject, photoEditPanel);
+        }
+    }
     // Rest of the function for other object types
 }
 
@@ -6450,11 +6565,14 @@ export default {
 // Handle adding text from the UI
 async function handleAddText() {
     try {
-        await add3DText('', { fromButton: true });
+        isAddingContent = true; // Show borders when adding text
+        await addText('', { fromButton: true });
     } catch (error) {
         if (error !== 'cancelled') {
             console.error('Error handling text addition:', error);
         }
+    } finally {
+        isAddingContent = false; // Reset flag when done
     }
 }
 
@@ -7290,6 +7408,22 @@ function getCurrentActiveView() {
     }
     
     return currentView;
+}
+
+/**
+ * Handle adding shape from the UI
+ */
+async function handleAddShape() {
+    try {
+        isAddingContent = true; // Show borders when adding shape
+        await addShape('', { fromButton: true });
+    } catch (error) {
+        if (error !== 'cancelled') {
+            console.error('Error handling shape addition:', error);
+        }
+    } finally {
+        isAddingContent = false; // Reset flag when done
+    }
 }
 
 
